@@ -74,7 +74,7 @@ CREATE TABLE suppliers (
 );
 ```
 
-### 4. CREACION DE LA TABLA INCLUDED_SERVICES
+### 5. CREACION DE LA TABLA INCLUDED_SERVICES
 
 ![](images/clipboard-2949639763.png)
 
@@ -89,5 +89,23 @@ CREATE TABLE included_services (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (package_id) REFERENCES packages(id),
     FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+);
+```
+
+### 6. CREACION DE LA TABLA BOOKINGS
+
+![](images/clipboard-1197054540.png)
+
+``` SQL
+CREATE TABLE bookings (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    client_id INT NOT NULL,
+    departure_id INT NOT NULL,
+    start_date DATETIME NOT NULL,
+    end_date DATETIME,
+    observations VARCHAR(255),
+    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 ```
