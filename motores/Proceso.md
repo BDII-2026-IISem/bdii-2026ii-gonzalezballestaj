@@ -55,3 +55,21 @@ CREATE TABLE departures (
     FOREIGN KEY (package_id) REFERENCES packages(id)
 );
 ```
+
+### 3. CREACION DE LA TABLA SUPPLIERS
+
+![](images/clipboard-916313055.png)
+
+``` SQL
+CREATE TABLE suppliers (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nit VARCHAR(100) NOT NULL UNIQUE,
+    razon_social VARCHAR(255) NOT NULL,
+    phone VARCHAR(30),
+    email VARCHAR(150) UNIQUE,
+    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP
+);
+```
