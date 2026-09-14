@@ -56,7 +56,7 @@ CREATE TABLE departures (
 );
 ```
 
-### 3. CREACION DE LA TABLA SUPPLIERS
+### 4. CREACION DE LA TABLA SUPPLIERS
 
 ![](images/clipboard-916313055.png)
 
@@ -71,5 +71,23 @@ CREATE TABLE suppliers (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+### 4. CREACION DE LA TABLA INCLUDED_SERVICES
+
+![](images/clipboard-2949639763.png)
+
+``` SQL
+CREATE TABLE included_services (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    package_id INT NOT NULL,
+    supplier_id INT NOT NULL,
+    relation_data VARCHAR(255),
+    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (package_id) REFERENCES packages(id),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
 );
 ```
