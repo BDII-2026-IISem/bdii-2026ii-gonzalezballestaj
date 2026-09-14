@@ -36,3 +36,22 @@ CREATE TABLE packages (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 ```
+
+### 3. CREACION DE LA TABLA DEPARTURES
+
+### ![](images/clipboard-3817368070.png) 
+
+``` SQL
+CREATE TABLE departures (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    package_id INT NOT NULL,
+    departure_date DATETIME NOT NULL,
+    capacity INT NOT NULL,
+    available_capacity INT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (package_id) REFERENCES packages(id)
+);
+```
