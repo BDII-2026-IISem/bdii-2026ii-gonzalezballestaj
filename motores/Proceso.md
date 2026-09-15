@@ -327,3 +327,21 @@ CREATE TABLE included_services (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
+
+### 6. CREACION DE LA TABLA BOOKINGS
+
+![](images/clipboard-908690370.png)
+
+``` sql
+CREATE TABLE bookings (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    client_id INT NOT NULL,
+    departure_id INT NOT NULL,
+    start_date TIMESTAMP NOT NULL,
+    end_date TIMESTAMP,
+    observations VARCHAR(255),
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
