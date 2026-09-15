@@ -274,3 +274,23 @@ CREATE TABLE packages (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
+
+### 3. CREACION DE LA TABLA DEPARTURES
+
+![](images/clipboard-1011657939.png)
+
+``` sql
+CREATE TABLE departures (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    package_id INT NOT NULL,
+    departure_date TIMESTAMP NOT NULL,
+    capacity INT NOT NULL,
+    available_capacity INT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 
