@@ -558,3 +558,21 @@ CREATE TABLE included_services (
     updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
 );
 ```
+
+### 6. CREACION DE LA TABLA BOOKINGS
+
+![](images/clipboard-3394303976.png)
+
+``` sql
+CREATE TABLE bookings (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    client_id INT NOT NULL REFERENCES clients(id),
+    departure_id INT NOT NULL REFERENCES departures(id),
+    start_date DATETIME2 NOT NULL,
+    end_date DATETIME2,
+    observations VARCHAR(255),
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+);
+```
