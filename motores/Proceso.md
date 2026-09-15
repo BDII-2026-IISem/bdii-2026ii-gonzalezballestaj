@@ -479,11 +479,11 @@ CREATE TABLE cancellations (
 
 ``` sql
 CREATE TABLE clients (
-    id INT IDENTITY(1,1) NOT NULL,
+    id INT IDENTITY(1,1) PRIMARY KEY,
     name VARCHAR(150) NOT NULL,
-    email VARCHAR(150) NULL,
-    phone VARCHAR(30) NULL,
-    document VARCHAR(50) NULL,
+    email VARCHAR(150),
+    phone VARCHAR(30),
+    document VARCHAR(50),
     status VARCHAR(20) NOT NULL DEFAULT 'active',
     created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
     updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
@@ -495,10 +495,29 @@ CREATE TABLE clients (
 ![](images/clipboard-809885854.png)
 
 ``` sql
+
 CREATE TABLE packages (
-    id INT IDENTITY(1,1) NOT NULL,
+    id INT IDENTITY(1,1) PRIMARY KEY,
     name VARCHAR(150) NOT NULL,
-    description VARCHAR(255) NULL,
+    description VARCHAR(255),
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+);
+```
+
+### 3. CREACION DE LA TABLA DEPARTURES
+
+![](images/clipboard-1361951238.png)
+
+``` sql
+CREATE TABLE departures (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    package_id INT NOT NULL REFERENCES packages(id),
+    departure_date DATETIME2 NOT NULL,
+    capacity INT NOT NULL,
+    available_capacity INT NOT NULL,
+    is_active BIT NOT NULL DEFAULT 1,
     status VARCHAR(20) NOT NULL DEFAULT 'active',
     created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
     updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
