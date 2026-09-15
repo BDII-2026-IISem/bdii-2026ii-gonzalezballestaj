@@ -22,7 +22,7 @@ CREATE TABLE cliente (
 );
 ```
 
-### 2. CREACION DE LA TABLA PACKGES
+### 2. CREACION DE LA TABLA PACKAGES
 
 ![](images/clipboard-3584741441.png)
 
@@ -185,7 +185,7 @@ CREATE TABLE cancellations (
 
 ![](images/clipboard-1854287258.png)
 
-### 2.2 CREACION DE LA TABLA PACKGES
+### 2.2 CREACION DE LA TABLA PACKAGES
 
 ![](images/clipboard-3237409082.png)
 
@@ -260,7 +260,7 @@ CREATE TABLE clients (
 );
 ```
 
-### 2. CREACION DE LA TABLA PACKGES
+### 2. CREACION DE LA TABLA PACKAGES
 
 ![](images/clipboard-2336064163.png)
 
@@ -421,7 +421,7 @@ CREATE TABLE cancellations (
 
 ![](images/clipboard-2469146774.png)
 
-### 2.2 CREACION DE LA TABLA PACKGES
+### 2.2 CREACION DE LA TABLA PACKAGES
 
 ![](images/clipboard-2469893943.png)
 
@@ -433,4 +433,12 @@ CREATE TABLE cancellations (
 
 ![](images/clipboard-3133591742.png)
 
-### 
+### 4.4 CREACION DE LA TABLA SUPPLIERS
+
+![](images/clipboard-3133591742.png)![](images/clipboard-47416835.png)
+
+### 5.5 CREACION DE LA TABLA INCLUDED_SERVICES
+
+![](images/clipboard-1205398726.png)
+
+![](images/clipboard-4096540522.png)
