@@ -294,3 +294,20 @@ CREATE TABLE departures (
 ```
 
 ### 
+
+### 4. CREACION DE LA TABLA SUPPLIERS
+
+![](images/clipboard-3750965860.png)
+
+``` sql
+CREATE TABLE suppliers (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nit VARCHAR(100) NOT NULL UNIQUE,
+    razon_social VARCHAR(255) NOT NULL,
+    phone VARCHAR(30),
+    email VARCHAR(150) UNIQUE,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
