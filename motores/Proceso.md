@@ -489,3 +489,18 @@ CREATE TABLE clients (
     updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
 );
 ```
+
+### 2. CREACION DE LA TABLA PACKAGES
+
+![](images/clipboard-809885854.png)
+
+``` sql
+CREATE TABLE packages (
+    id INT IDENTITY(1,1) NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    description VARCHAR(255) NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+);
+```
