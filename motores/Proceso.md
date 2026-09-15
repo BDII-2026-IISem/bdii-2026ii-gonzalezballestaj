@@ -214,3 +214,9 @@ CREATE TABLE cancellations (
 ![](images/clipboard-2855572543.png)
 
 ![](images/clipboard-635019324.png)
+
+### 7.7 CREACION DE LA TABLA TRAVELERS
+
+![](images/clipboard-2039037022.png)
+
+![](images/clipboard-2119614780.png)
