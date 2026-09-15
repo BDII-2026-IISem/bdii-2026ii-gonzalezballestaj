@@ -202,3 +202,9 @@ CREATE TABLE cancellations (
 ![](images/clipboard-3469831276.png)
 
 ![](images/clipboard-405023470.png)
+
+### 5.5 CREACION DE LA TABLA INCLUDED_SERVICES
+
+![](images/clipboard-624732266.png)
+
+![](images/clipboard-1209932386.png)
