@@ -39,9 +39,9 @@ CREATE TABLE packages (
 
 ### 3. CREACION DE LA TABLA DEPARTURES
 
-### ![](images/clipboard-3817368070.png) 
+### ![](images/clipboard-3817368070.png)
 
-``` SQL
+``` sql
 CREATE TABLE departures (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     package_id INT NOT NULL,
@@ -60,7 +60,7 @@ CREATE TABLE departures (
 
 ![](images/clipboard-916313055.png)
 
-``` SQL
+``` sql
 CREATE TABLE suppliers (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nit VARCHAR(100) NOT NULL UNIQUE,
@@ -78,7 +78,7 @@ CREATE TABLE suppliers (
 
 ![](images/clipboard-2949639763.png)
 
-``` SQL
+``` sql
 CREATE TABLE included_services (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     package_id INT NOT NULL,
@@ -96,7 +96,7 @@ CREATE TABLE included_services (
 
 ![](images/clipboard-1197054540.png)
 
-``` SQL
+``` sql
 CREATE TABLE bookings (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     client_id INT NOT NULL,
@@ -114,7 +114,7 @@ CREATE TABLE bookings (
 
 ![](images/clipboard-2063264671.png)
 
-``` SQL
+``` sql
   CREATE TABLE travelers (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     booking_id INT NOT NULL,
@@ -130,7 +130,7 @@ CREATE TABLE bookings (
 
 ![](images/clipboard-1370832080.png)
 
-``` SQL
+``` sql
 CREATE TABLE payments (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     booking_id INT NOT NULL,
@@ -163,7 +163,7 @@ CREATE TABLE vouchers (
 
 ![](images/clipboard-2060199281.png)
 
-``` SQL
+``` sql
 CREATE TABLE cancellations (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     booking_id INT NOT NULL,
@@ -184,3 +184,9 @@ CREATE TABLE cancellations (
 ![](images/clipboard-1343015768.png)
 
 ![](images/clipboard-1854287258.png)
+
+### 2. CREACION DE LA TABLA PACKGES
+
+![](images/clipboard-3237409082.png)
+
+![](images/clipboard-2482493912.png)
