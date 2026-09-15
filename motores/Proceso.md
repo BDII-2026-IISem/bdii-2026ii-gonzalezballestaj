@@ -462,3 +462,9 @@ CREATE TABLE cancellations (
 ### 9.9 CREACION DE LA TABLA VOUCHERS
 
 ![![](images/clipboard-797820722.png)](images/clipboard-872950822.png)
+
+### 10.10 CREACION DE LA TABLA CANCELLATIONS
+
+![](images/clipboard-4236275177.png)
+
+![](images/clipboard-903196227.png)
