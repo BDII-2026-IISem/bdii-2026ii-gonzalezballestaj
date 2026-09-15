@@ -576,3 +576,19 @@ CREATE TABLE bookings (
     updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
 );
 ```
+
+### 7.7 CREACION DE LA TABLA TRAVELERS
+
+![](images/clipboard-2190532825.png)
+
+``` sql
+CREATE TABLE travelers (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    booking_id INT NOT NULL REFERENCES bookings(id),
+    name VARCHAR(150) NOT NULL,
+    description VARCHAR(255),
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+);
+```
