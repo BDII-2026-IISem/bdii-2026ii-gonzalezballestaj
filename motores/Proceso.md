@@ -220,3 +220,9 @@ CREATE TABLE cancellations (
 ![](images/clipboard-2039037022.png)
 
 ![](images/clipboard-2119614780.png)
+
+### 8.8 CREACION DE LA TABLA PAYMENTS 
+
+![](images/clipboard-3759498152.png)
+
+![](images/clipboard-311367302.png)
