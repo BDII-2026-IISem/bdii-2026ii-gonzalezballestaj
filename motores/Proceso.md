@@ -523,3 +523,22 @@ CREATE TABLE departures (
     updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
 );
 ```
+
+### 4. CREACION DE LA TABLA SUPPLIERS
+
+![](images/clipboard-203048720.png)
+
+``` sql
+CREATE TABLE suppliers (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    nit VARCHAR(100) NOT NULL UNIQUE,
+    razon_social VARCHAR(255) NOT NULL,
+    phone VARCHAR(30),
+    email VARCHAR(150) UNIQUE,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+);
+
+
+```
