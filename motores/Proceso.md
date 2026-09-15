@@ -311,3 +311,19 @@ CREATE TABLE suppliers (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
+
+### 5. CREACION DE LA TABLA INCLUDED_SERVICES
+
+![](images/clipboard-2839224848.png)
+
+``` sql
+CREATE TABLE included_services (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    package_id INT NOT NULL,
+    supplier_id INT NOT NULL,
+    relation_data VARCHAR(255),
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
