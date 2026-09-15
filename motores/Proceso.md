@@ -577,7 +577,7 @@ CREATE TABLE bookings (
 );
 ```
 
-### 7.7 CREACION DE LA TABLA TRAVELERS
+### 7. CREACION DE LA TABLA TRAVELERS
 
 ![](images/clipboard-2190532825.png)
 
@@ -587,6 +587,23 @@ CREATE TABLE travelers (
     booking_id INT NOT NULL REFERENCES bookings(id),
     name VARCHAR(150) NOT NULL,
     description VARCHAR(255),
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+);
+```
+
+### 8. CREACION DE LA TABLA PAYMENTS
+
+![](images/clipboard-2079734557.png)
+
+``` sql
+CREATE TABLE payments (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    booking_id INT NOT NULL REFERENCES bookings(id),
+    method VARCHAR(50) NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    payment_date DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
     status VARCHAR(20) NOT NULL DEFAULT 'active',
     created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
     updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
