@@ -542,3 +542,19 @@ CREATE TABLE suppliers (
 
 
 ```
+
+### 5. CREACION DE LA TABLA INCLUDED_SERVICES
+
+![](images/clipboard-766293714.png)
+
+``` sql
+CREATE TABLE included_services (
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    package_id INT NOT NULL REFERENCES packages(id),
+    supplier_id INT NOT NULL REFERENCES suppliers(id),
+    relation_data VARCHAR(255),
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+);
+```
