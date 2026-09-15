@@ -609,3 +609,19 @@ CREATE TABLE payments (
     updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
 );
 ```
+
+### 9. CREACION DE LA TABLA VOUCHERS
+
+![](images/clipboard-2989382658.png)
+
+``` sql
+CREATE TABLE vouchers (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    booking_id INT NOT NULL REFERENCES bookings(id),
+    name VARCHAR(150) NOT NULL,
+    description VARCHAR(250),
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+);
+```
