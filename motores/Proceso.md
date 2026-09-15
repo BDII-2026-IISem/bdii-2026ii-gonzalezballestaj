@@ -185,8 +185,14 @@ CREATE TABLE cancellations (
 
 ![](images/clipboard-1854287258.png)
 
-### 2. CREACION DE LA TABLA PACKGES
+### 2.2 CREACION DE LA TABLA PACKGES
 
 ![](images/clipboard-3237409082.png)
 
 ![](images/clipboard-2482493912.png)
+
+### 3.3 CREACION DE LA TABLA DEPARTURES
+
+![](images/clipboard-3270130399.png)
+
+![](images/clipboard-158725013.png)
