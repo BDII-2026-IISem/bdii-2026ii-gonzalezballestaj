@@ -196,3 +196,9 @@ CREATE TABLE cancellations (
 ![](images/clipboard-3270130399.png)
 
 ![](images/clipboard-158725013.png)
+
+### 4.4  CREACION DE LA TABLA SUPPLIERS
+
+![](images/clipboard-3469831276.png)
+
+![](images/clipboard-405023470.png)
