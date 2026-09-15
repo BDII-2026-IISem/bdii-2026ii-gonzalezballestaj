@@ -208,3 +208,9 @@ CREATE TABLE cancellations (
 ![](images/clipboard-624732266.png)
 
 ![](images/clipboard-1209932386.png)
+
+### 6.6 CREACION DE LA TABLA BOOKINGS
+
+![](images/clipboard-2855572543.png)
+
+![](images/clipboard-635019324.png)
