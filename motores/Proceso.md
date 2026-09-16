@@ -657,3 +657,9 @@ CREATE TABLE cancellations (
 ![](images/clipboard-3006707970.png)
 
 ![](images/clipboard-809966056.png)
+
+### 2.2 CREACION DE LA TABLA PACKAGES
+
+![](images/clipboard-3541759479.png)
+
+![](images/clipboard-2701260406.png)
