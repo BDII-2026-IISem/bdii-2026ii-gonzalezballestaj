@@ -673,3 +673,7 @@ CREATE TABLE cancellations (
 ### 4.4 CREACION DE LA TABLA SUPPLIERS
 
 ![![](images/clipboard-130576381.png)](images/clipboard-2577585410.png)
+
+### 5.5 CREACION DE LA TABLA INCLUDED_SERVICES
+
+![![](images/clipboard-241297228.png)](images/clipboard-81693572.png)
