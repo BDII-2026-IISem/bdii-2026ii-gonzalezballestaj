@@ -677,3 +677,7 @@ CREATE TABLE cancellations (
 ### 5.5 CREACION DE LA TABLA INCLUDED_SERVICES
 
 ![![](images/clipboard-241297228.png)](images/clipboard-81693572.png)
+
+### 6.6 CREACION DE LA TABLA BOOKINGS
+
+![![](images/clipboard-3180547654.png)](images/clipboard-2858328857.png)
