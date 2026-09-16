@@ -663,3 +663,7 @@ CREATE TABLE cancellations (
 ![](images/clipboard-3541759479.png)
 
 ![](images/clipboard-2701260406.png)
+
+### 3.3 CREACION DE LA TABLA DEPARTURES
+
+![![](images/clipboard-130576381.png)](images/clipboard-2577585410.png)
