@@ -685,3 +685,9 @@ CREATE TABLE cancellations (
 ### 7.7 CREACION DE LA TABLA TRAVELERS
 
 ![![](images/clipboard-843880461.png)](images/clipboard-2950560342.png)
+
+### 8.8 CREACION DE LA TABLA PAYMENTS
+
+![](images/clipboard-3442016329.png)
+
+![](images/clipboard-2418127969.png)
