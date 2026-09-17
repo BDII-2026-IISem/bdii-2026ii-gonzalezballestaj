@@ -945,6 +945,12 @@ CREATE TABLE cancellations (
 
 ![](images/clipboard-3584767036.png)
 
-### 3.3 CREACION DE LA TABLA DEPARTURES
+### 3.3 CREACION DE LA TABLA SUPPLIERS
 
 ![![](images/clipboard-3707067718.png)](images/clipboard-10124484.png)
+
+### 4.4 CREACION DE LA TABLA DEPARTURES
+
+![](images/clipboard-3919303720.png)
+
+![](images/clipboard-1716892563.png)
