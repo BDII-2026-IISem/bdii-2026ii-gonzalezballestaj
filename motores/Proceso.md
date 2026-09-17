@@ -820,7 +820,7 @@ CREATE TABLE included_services (
 );
 ```
 
-### 6. CREACION DE LA TABLA ITRAVELERS
+### 6. CREACION DE LA TABLA TRAVELERS
 
 ![](images/clipboard-317610843.png)
 
@@ -960,3 +960,9 @@ CREATE TABLE cancellations (
 ![](images/clipboard-4166679714.png)
 
 ![](images/clipboard-3188699786.png)
+
+### 6.6 CREACION DE LA TABLA TRAVELERS
+
+![](images/clipboard-2051321707.png)
+
+![](images/clipboard-2214952877.png)
