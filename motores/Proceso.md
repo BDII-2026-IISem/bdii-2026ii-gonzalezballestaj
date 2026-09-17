@@ -995,4 +995,14 @@ CREATE TABLE cancellations (
 
 ![](images/clipboard-3222819097.png)
 
-# 
+# CONCLUSION:
+
+### Este laboratorio me ayudó a fortalecer mis habilidades de programación, lógica y comprensión de la información. Además, me permitió ampliar y consolidar mis conocimientos sobre el manejo de diferentes motores y gestores de bases de datos, comprendiendo mejor su funcionamiento, estructura y las relaciones entre las diferentes tablas.
+
+# **Presentado por**
+
+**JAIME RAFAEL GONZALEZ**
+
+**Estudiante de Ingeniería de Sistemas**
+
+**Universidad de La Guajira**
