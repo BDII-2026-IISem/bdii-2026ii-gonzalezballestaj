@@ -984,3 +984,15 @@ CREATE TABLE cancellations (
 ![](images/clipboard-601851405.png)
 
 ![](images/clipboard-1272720727.png)
+
+### 10.10  CREACION DE LA TABLA CANCELLATIONS
+
+![](images/clipboard-3624527632.png)
+
+![](images/clipboard-1668014278.png)
+
+## DIAGRAMA ENTIDAD-RELACION DE LAS TABLAS DE LA BASE DE DATOS (WAYUUTRAVEL) ORACLE SQL DEVELOPER
+
+![](images/clipboard-3222819097.png)
+
+# 
