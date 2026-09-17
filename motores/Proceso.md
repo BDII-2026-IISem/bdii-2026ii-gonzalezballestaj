@@ -933,8 +933,14 @@ CREATE TABLE cancellations (
 
 ## CREACION DE TABLAS POR LA PARTE VISUAL EN ORACLE SQL DEVELOPER
 
-### 1. CREACION DE LA TABLA CLIENTS
+### 1.1  CREACION DE LA TABLA CLIENTS
 
 ![](images/clipboard-3015201699.png)
 
 ![](images/clipboard-2845399445.png)
+
+### 2.2 CREACION DE LA TABLA PACKAGES
+
+![](images/clipboard-3366476715.png)
+
+![](images/clipboard-3584767036.png)
