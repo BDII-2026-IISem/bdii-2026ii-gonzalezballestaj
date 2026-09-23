@@ -214,3 +214,33 @@ ORDER BY TotalSuma DESC;
 ```
 
 ![](images/clipboard-3103990757.png)
+
+# 6. Subconsultas y Teoría de Conjuntos (A-B)
+
+### 6.1: Clientes sin ventas en un rango usando subconsulta `NOT IN` (Forma 1)
+
+``` sql
+SELECT * FROM clients AS c 
+WHERE c.id NOT IN (
+SELECT b.client_id 
+FROM bookings AS b 
+JOIN payments AS p ON b.id = p.booking_id 
+WHERE p.payment_date BETWEEN "2026-03-01 00:00:00" AND "2026-03-2 23:59:59"
+);
+```
+
+![](images/clipboard-1213767510.png)
+
+### 6.2: Clientes sin ventas en un rango usando `LEFT JOIN` y `IS NULL` (Forma 2)
+
+``` sql
+SELECT c.* FROM clients AS c 
+LEFT JOIN (SELECT b.client_id 
+FROM bookings AS b 
+JOIN payments AS p ON b.id = p.booking_id 
+WHERE p.payment_date BETWEEN "2026-03-01 00:00:00" AND "2026-03-30 23:59:59"
+) AS v ON c.id = v.client_id 
+WHERE v.client_id IS NULL;
+```
+
+![](images/clipboard-1490188045.png)
