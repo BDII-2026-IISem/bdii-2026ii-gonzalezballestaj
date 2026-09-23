@@ -1,6 +1,6 @@
 # Consultas avanzadas en MYSQL
 
-## Evidencia de los registros de cada tabla 
+## Evidencia de los registros de cada tabla
 
 ![](images/clipboard-3724062.png)
 
@@ -32,7 +32,7 @@ SELECT id,name,phone,document_number   FROM clients;
 
 ![](images/clipboard-1096190889.png)
 
-###  1.3: Campos específicos usando alias en la tabla
+### 1.3: Campos específicos usando alias en la tabla
 
 ``` sql
 SELECT C.name, C.document_number , C.phone  FROM clients AS C;
@@ -50,7 +50,7 @@ SELECT * FROM clients, packages  WHERE clients.id = packages.id;
 
 ![](images/clipboard-2028166054.png)
 
-###  2.2: Relación mediante WHERE con alias
+### 2.2: Relación mediante WHERE con alias
 
 ``` sql
 SELECT * FROM clients AS C, packages AS P WHERE C.id = P.id;
@@ -66,7 +66,7 @@ SELECT C.name, C.email, P.* FROM clients AS C, packages  AS P WHERE C.id = P.id;
 
 ![](images/clipboard-2058742056.png)
 
-###  2.4: Relación mediante la cláusula JOIN ... ON (Forma 2)
+### 2.4: Relación mediante la cláusula JOIN ... ON (Forma 2)
 
 ``` sql
 SELECT C.name, C.email, B.* FROM clients AS C 
