@@ -39,3 +39,38 @@ SELECT C.name, C.document_number , C.phone  FROM clients AS C;
 ```
 
 ![](images/clipboard-3895929929.png)
+
+# 2. Consultar datos de varias tablas (Relaciones / Joins)
+
+### 2.1: Relación mediante la cláusula WHERE (Forma 1)
+
+``` sql
+SELECT * FROM clients, packages  WHERE clients.id = packages.id;
+```
+
+![](images/clipboard-2028166054.png)
+
+###  2.2: Relación mediante WHERE con alias
+
+``` sql
+SELECT * FROM clients AS C, packages AS P WHERE C.id = P.id;
+```
+
+![](images/clipboard-3741076282.png)
+
+### 2.3: Selección de campos específicos y comodín de tabla (`V.*`) usando WHERE
+
+``` sql
+SELECT C.name, C.email, P.* FROM clients AS C, packages  AS P WHERE C.id = P.id;
+```
+
+![](images/clipboard-2058742056.png)
+
+###  2.4: Relación mediante la cláusula JOIN ... ON (Forma 2)
+
+``` sql
+SELECT C.name, C.email, B.* FROM clients AS C 
+JOIN bookings AS B ON (C.id = B.client_id);
+```
+
+![](images/clipboard-1566588778.png)
