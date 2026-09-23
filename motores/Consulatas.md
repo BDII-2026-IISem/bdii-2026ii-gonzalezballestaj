@@ -13,3 +13,29 @@
 ![![](images/clipboard-1777094151.png)](images/clipboard-1839382769.png)
 
 ![](images/clipboard-2012684917.png)
+
+# 1. Consultar datos de una tabla (Consultas Básicas)
+
+### 1.1: Todos los campos de una tabla
+
+``` sql
+SELECT * FROM clients;
+```
+
+![](images/clipboard-321902976.png)
+
+### 1.2: Campos específicos
+
+``` sql
+SELECT id,name,phone,document_number   FROM clients;
+```
+
+![](images/clipboard-1096190889.png)
+
+###  1.3: Campos específicos usando alias en la tabla
+
+``` sql
+SELECT C.name, C.document_number , C.phone  FROM clients AS C;
+```
+
+![](images/clipboard-3895929929.png)
