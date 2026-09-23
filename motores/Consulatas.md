@@ -174,3 +174,43 @@ GROUP BY c.id, c.name, c.document_number;
 ```
 
 ![](images/clipboard-1511600026.png)
+
+# 5. Consultas de Agrupamiento con Filtro Post-Agregación (HAVING)
+
+### 5.1: Agrupamiento con condición de conteo HAVING (Forma 1 - WHERE)
+
+``` sql
+SELECT c.id AS client_id, c.name AS nombre_cliente,
+SUM(p.amount) AS TotalSuma, 
+COUNT(p.id) AS CuentaTotal, 
+AVG(p.amount) AS Promedio  
+FROM clients c, bookings b, payments p 
+WHERE c.id = b.client_id 
+  AND b.id = p.booking_id 
+  AND p.payment_date BETWEEN '2026-03-01 00:00:00' AND '2026-03-30 23:59:59'
+  AND p.status = 'active'
+  AND b.status = 'active'
+GROUP BY c.id, c.name 
+HAVING COUNT(p.id) >= 1 
+ORDER BY TotalSuma DESC;
+```
+
+![](images/clipboard-1007889671.png)
+
+###  5.2: Agrupamiento con condición de conteo `HAVING` (Forma 2 - JOIN)
+
+``` sql
+SELECT c.id AS client_id, c.name AS nombre_cliente,
+SUM(p.amount) AS TotalSuma, 
+COUNT(p.id) AS CuentaTotal, 
+AVG(p.amount) AS Promedio  
+FROM clients AS c
+JOIN bookings AS b ON c.id = b.client_id
+JOIN payments AS p ON b.id = p.booking_id
+WHERE p.payment_date BETWEEN "2026-03-01 00:00:00" AND "2026-03-30 23:59:59"
+GROUP BY c.id, c.name 
+HAVING COUNT(p.id) >= 0
+ORDER BY TotalSuma DESC;
+```
+
+![](images/clipboard-3103990757.png)
