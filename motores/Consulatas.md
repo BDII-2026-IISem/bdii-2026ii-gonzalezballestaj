@@ -74,3 +74,70 @@ JOIN bookings AS B ON (C.id = B.client_id);
 ```
 
 ![](images/clipboard-1566588778.png)
+
+# 3. Condiciones y Filtros en las Consultas
+
+### 3.1: Filtro por fecha en consulta multitabla (Forma 1 - WHERE)
+
+``` sql
+SELECT C.name, C.email, B.* FROM clients AS C, bookings  AS B 
+WHERE C.id = B.client_id AND B.created_at  = "2026-02-17 11:00:00";
+```
+
+![](images/clipboard-309924258.png)
+
+### 3.2: Filtro por fecha en consulta multitabla (Forma 2 - JOIN)
+
+``` sql
+SELECT C.name, C.email, B.* 
+FROM clients AS C JOIN bookings  AS B ON (C.id = B.id) 
+WHERE B.updated_at  = "2026-02-20 11:00:00";
+```
+
+![](images/clipboard-3476490450.png)
+
+### 3.3: Filtro por patrón con `LIKE` (comienza con 'j' o 'm')
+
+``` sql
+SELECT * FROM clients AS C 
+WHERE C.name LIKE 'm%' OR C.name LIKE 'j%';
+```
+
+![](images/clipboard-2724522030.png)
+
+### 3.4: Filtro por patrón con `LIKE` y `CONCAT` (contiene 'Diego Silva' o 'diego.silva58\@gmail.com')
+
+``` sql
+SELECT * FROM clients AS C 
+WHERE C.name LIKE '%Diego Silva%' or C.email LIKE '%diego.silva58@gmail.com%';
+```
+
+![](images/clipboard-1566591675.png)
+
+###  3.5: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 1 - WHERE)
+
+``` sql
+SELECT C.*, B.*, D.*, T.*, V.* 
+FROM clients AS C, bookings AS B, departures AS D, travelers AS T,  vouchers AS V 
+WHERE C.id = B.client_id 
+  AND D.id = B.departure_id 
+  AND T.id = B.traveler_id 
+  AND B.id = V.booking_id 
+  AND V.created_at BETWEEN "2026-05-03 08:22:00" AND "2026-07-03 11:04:00" 
+ORDER BY V.created_at ASC;
+```
+
+![](images/clipboard-2859133064.png)
+
+### 3.6: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 2 - JOIN)
+
+``` sql
+SELECT * 
+FROM clients AS C 
+JOIN bookings AS B ON (C.id = B.client_id) 
+JOIN vouchers AS V ON (B.id = V.booking_id) 
+WHERE B.created_at BETWEEN "2026-02-17 11:00:00" AND "2026-05-16 12:00:00" 
+ORDER BY B.created_at  ASC;
+```
+
+![](images/clipboard-2272254038.png)
