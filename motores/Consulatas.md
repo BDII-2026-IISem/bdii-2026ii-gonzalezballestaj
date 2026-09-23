@@ -114,7 +114,7 @@ WHERE C.name LIKE '%Diego Silva%' or C.email LIKE '%diego.silva58@gmail.com%';
 
 ![](images/clipboard-1566591675.png)
 
-###  3.5: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 1 - WHERE)
+### 3.5: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 1 - WHERE)
 
 ``` sql
 SELECT C.*, B.*, D.*, T.*, V.* 
@@ -141,3 +141,36 @@ ORDER BY B.created_at  ASC;
 ```
 
 ![](images/clipboard-2272254038.png)
+
+# 4. Consultas de Agrupamiento (`GROUP BY`)
+
+### 4.1: Suma, conteo y promedio por cliente en rango de fechas (Forma 1 - WHERE)
+
+``` sql
+SELECT b.client_id, COUNT(p.id) AS total_pagos, SUM(p.amount) AS suma_total_pagada,
+AVG(p.amount) AS promedio_por_pago
+FROM payments p
+INNER JOIN  bookings b ON p.booking_id = b.id
+WHERE  p.created_at BETWEEN '2026-01-01 00:00:00' AND '2026-03-31 23:59:59' AND p.status = 'active'AND b.status = 'active'
+GROUP BY  b.client_id;
+```
+
+![](images/clipboard-1027377177.png)
+
+### 4.2: Suma, conteo y promedio por cliente en rango de fechas (Forma 2 - JOIN)
+
+``` sql
+SELECT  c.id AS client_id,  c.name AS nombre_cliente,c.document_number,
+ COUNT(p.id) AS total_pagos,
+ SUM(p.amount) AS suma_total_pagada,
+ AVG(p.amount) AS promedio_por_pago
+FROM payments p
+INNER JOIN bookings b ON p.booking_id = b.id
+INNER JOIN clients c ON b.client_id = c.id
+WHERE p.created_at BETWEEN '2026-01-01 00:00:00' AND '2026-03-31 23:59:59' 
+  AND p.status = 'active'
+  AND b.status = 'active'
+GROUP BY c.id, c.name, c.document_number;
+```
+
+![](images/clipboard-1511600026.png)
