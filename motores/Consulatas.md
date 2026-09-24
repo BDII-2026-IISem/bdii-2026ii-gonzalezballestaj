@@ -260,3 +260,31 @@ WHERE v.client_id IS NULL;
 ![![](images/clipboard-1960159514.png)](images/clipboard-1638466390.png)
 
 ![](images/clipboard-3693015620.png)
+
+# 1. Consultar datos de una tabla (Consultas Básicas)
+
+### 1.1: Todos los campos de una tabla
+
+``` sql
+SELECT * FROM public.clients;
+```
+
+![](images/clipboard-2465519490.png)
+
+### 1.2: Campos específicos
+
+``` sql
+SELECT id, name, phone,  document_number 
+FROM public.clients;
+```
+
+![](images/clipboard-2770732586.png)
+
+### 1.3: Campos específicos usando alias en la tabla
+
+``` sql
+SELECT c.name, c.document_number, c.phone  
+FROM public.clients AS c;
+```
+
+![](images/clipboard-2670321724.png)
