@@ -831,3 +831,76 @@ JOIN packages p ON p.id = ins.package_id;
 ```
 
 ![](images/clipboard-4004254774.png)
+
+# 3. Condiciones y Filtros en las Consultas
+
+### 3.1: Filtro por fecha en consulta multitabla (Forma 1 - WHERE)
+
+``` sql
+SELECT  p.name AS paquete,   d.name AS salida,   d.departure_date 
+FROM packages p, departures d 
+WHERE p.id = d.package_id 
+  AND d.departure_date = TIMESTAMP '2026-11-21 22:45:00.000';
+```
+
+![](images/clipboard-3471898761.png)
+
+### 3.2: Filtro por fecha en consulta multitabla (Forma 2 - JOIN) 
+
+``` sql
+SELECT   s.razon_social,  p.name AS paquete,   ins.created_at 
+FROM suppliers s 
+JOIN included_services ins ON s.id = ins.supplier_id 
+JOIN packages p ON p.id = ins.package_id 
+WHERE ins.created_at = TIMESTAMP '2025-05-06 11:08:00.000';
+```
+
+![](images/clipboard-774844825.png)
+
+### 3.3: Filtro por patrón con LIKE (comienza con 'a' o 't') 
+
+``` sql
+SELECT * FROM suppliers s WHERE LOWER(s.razon_social) LIKE 'a%' 
+   OR LOWER(s.razon_social) LIKE 't%';
+```
+
+![](images/clipboard-3389684813.png)
+
+### 3.4: Filtro por patrón con LIKE y CONCAT (contiene 'Diego ' o 'negocios') 
+
+``` sql
+SELECT * 
+FROM packages p 
+WHERE LOWER(p.name) LIKE '%diego%' 
+   OR LOWER(p.description) LIKE '%negocios%';
+```
+
+![](images/clipboard-1771410062.png)
+
+### 3.5: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 1 - WHERE)
+
+``` {.sql .sq}
+SELECT  p.name AS paquete,  d.name AS salida,   c.name AS motivo_cancelacion,   s.razon_social AS proveedor,   c.created_at AS fecha_cancelacion 
+FROM packages p,   departures d, bookings b,  cancellations c, included_services ins, suppliers s 
+WHERE p.id = d.package_id 
+  AND d.id = b.departure_id 
+  AND b.id = c.booking_id 
+  AND p.id = ins.package_id 
+  AND s.id = ins.supplier_id 
+  AND c.created_at BETWEEN TIMESTAMP '2026-01-01 00:00:00' AND TIMESTAMP '2026-03-31 23:59:59' 
+ORDER BY c.created_at ASC;
+```
+
+![](images/clipboard-2364949727.png)
+
+###  3.6: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 2 - JOIN)
+
+``` sql
+SELECT  p.name AS paquete,  d.name AS salida,  d.departure_date,  d.capacity 
+FROM packages p 
+JOIN departures d ON p.id = d.package_id 
+WHERE d.departure_date BETWEEN TIMESTAMP '2026-06-01 00:00:00' AND TIMESTAMP '2026-12-31 23:59:59' 
+ORDER BY d.departure_date ASC;
+```
+
+![](images/clipboard-1578070925.png)
