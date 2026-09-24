@@ -587,3 +587,76 @@ INNER JOIN dbo.vouchers AS v ON b.id = v.booking_id;
 ```
 
 ![](images/clipboard-3238702931.png)
+
+# 3. Condiciones y Filtros en las Consultas
+
+### 3.1: Filtro por fecha en consulta multitabla (Forma 1 - WHERE)
+
+``` sql
+SELECT  c.name,  c.email, v.* FROM dbo.clients AS c, dbo.bookings AS b, dbo.vouchers AS v 
+WHERE c.id = b.client_id 
+AND b.id = v.booking_id 
+AND v.created_at = '2026-05-28 11:45:00.000';
+```
+
+![](images/clipboard-3813404552.png)
+
+### 3.2: Filtro por fecha en consulta multitabla (Forma 2 - JOIN) 
+
+``` sql
+SELECT  c.name AS nombre_cliente,  c.email AS email_cliente, t.name,  t.name,  b.updated_at AS fecha_actualizacion 
+FROM dbo.clients AS c 
+INNER JOIN dbo.bookings AS b ON c.id = b.client_id 
+INNER JOIN dbo.travelers AS t ON t.id = b.traveler_id 
+WHERE b.updated_at = '2026-02-20 11:00:00';
+```
+
+![](images/clipboard-2312908270.png)
+
+### 3.3: Filtro por patrón con LIKE (comienza con 'j' o 'm') 
+
+``` sql
+SELECT * FROM dbo.travelers AS t 
+WHERE t.name LIKE 'm%' 
+   OR t.name LIKE 'j%';
+```
+
+![](images/clipboard-1403433871.png)
+
+### 3.4: Filtro por patrón con LIKE y CONCAT (contiene 'Diego ' o 'Silva')
+
+``` sql
+SELECT * FROM dbo.travelers AS t 
+WHERE t.name LIKE '%Diego%' 
+ OR t.name LIKE '%Silva%';
+```
+
+![](images/clipboard-3198453224.png)
+
+### 3.5: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 1 - WHERE)
+
+``` sql
+SELECT c.name AS cliente, b.id AS reserva_id, d.id AS salida_id, t.name AS viajero_nombre,  v.id AS voucher_id 
+FROM dbo.clients AS c, dbo.bookings AS b, dbo.departures AS d, dbo.travelers AS t, dbo.vouchers AS v 
+WHERE c.id = b.client_id 
+  AND d.id = b.departure_id 
+  AND t.id = b.traveler_id 
+  AND b.id = v.booking_id 
+  AND b.created_at BETWEEN '2026-01-01 00:00:00' AND '2026-03-31 23:59:59' 
+ORDER BY b.created_at ASC;
+```
+
+![](images/clipboard-790228527.png)
+
+###  3.6: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 2 - JOIN)
+
+``` sql
+SELECT c.name AS cliente, t.name AS viajero_nombre,  t.name AS viajero_apellido,  b.created_at AS fecha_reserva 
+FROM dbo.clients AS c 
+INNER JOIN dbo.bookings AS b ON c.id = b.client_id 
+INNER JOIN dbo.travelers AS t ON t.id = b.traveler_id 
+WHERE b.created_at BETWEEN '2026-01-01 00:00:00' AND '2026-03-31 23:59:59' 
+ORDER BY b.created_at ASC;
+```
+
+![](images/clipboard-2849449600.png)
