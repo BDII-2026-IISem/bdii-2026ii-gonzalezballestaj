@@ -718,3 +718,33 @@ ORDER BY total_pasajeros DESC;
 ```
 
 ![](images/clipboard-951404611.png)
+
+# 6. Subconsultas y Teoría de Conjuntos (A-B)
+
+### 6.1: Clientes sin ventas en un rango usando subconsulta NOT IN (Forma 1)
+
+``` sql
+SELECT * FROM dbo.clients AS c 
+WHERE c.id NOT IN (
+    SELECT DISTINCT b.client_id 
+    FROM dbo.bookings AS b 
+    INNER JOIN dbo.travelers AS t ON t.id = b.traveler_id 
+    WHERE b.traveler_id IS NOT NULL
+);
+```
+
+![](images/clipboard-368262423.png)
+
+### 6.2: Clientes sin ventas en un rango usando LEFT JOIN y IS NULL (Forma 2)
+
+``` sql
+SELECT c.* FROM dbo.clients AS c 
+LEFT JOIN (
+    SELECT DISTINCT b.client_id 
+    FROM dbo.bookings AS b 
+    INNER JOIN dbo.travelers AS t ON t.id = b.traveler_id 
+) AS t_sub ON c.id = t_sub.client_id 
+WHERE t_sub.client_id IS NULL;
+```
+
+![](images/clipboard-1646379604.png)
