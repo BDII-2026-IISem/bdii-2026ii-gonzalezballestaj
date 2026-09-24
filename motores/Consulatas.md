@@ -504,3 +504,44 @@ WHERE v.id IS NULL;
 ```
 
 ![](images/clipboard-400852466.png)
+
+# Consultas en MySQL-Server
+
+## Evidencia de los registros de cada tabla
+
+![](images/clipboard-2654637116.png)
+
+![![](images/clipboard-2255537884.png)](images/clipboard-487159671.png)
+
+![![](images/clipboard-768630067.png)](images/clipboard-2464897793.png)
+
+![![](images/clipboard-3805527615.png)](images/clipboard-3283409493.png)
+
+![![](images/clipboard-303462504.png)](images/clipboard-1197245840.png)
+
+# 1.Consultar datos de una tabla (Consultas Básicas)
+
+### 1.1: Todos los campos de una tabla 
+
+``` sql
+SELECT * FROM dbo.suppliers;
+```
+
+![](images/clipboard-1847128631.png)
+
+### 1.2: Campos específicos 
+
+``` sql
+SELECT   id, name,  created_atFROM dbo.vouchers ;
+```
+
+![](images/clipboard-1531791340.png)
+
+### 1.3: Campos específicos usando alias en la tabla
+
+``` sql
+SELECT    v.name, v.name,  v.created_at,  v.descriptions 
+FROM dbo.vouchers  AS v;
+```
+
+![](images/clipboard-882133987.png)
