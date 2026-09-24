@@ -396,3 +396,40 @@ ORDER BY b.created_at ASC;
 ```
 
 ![](images/clipboard-362667778.png)
+
+# 4. Consultas de Agrupamiento (GROUP BY)
+
+### 4.1: Suma, conteo y promedio por cliente en rango de fechas (Forma 1 - WHERE) 
+
+``` sql
+SELECT c.id AS client_id,  c.name AS nombre_cliente,c.document_number,
+ COUNT(b.id) AS total_reservas,
+ SUM(d.id  ) AS suma_total_paquetes,
+ ROUND(AVG(d.id ), 2) AS promedio_por_reserva
+FROM public.bookings AS b
+JOIN public.departures AS d ON b.id = d.id
+JOIN public.clients AS c ON b.id = c.id
+WHERE b.created_at BETWEEN '2026-01-01 00:00:00' AND '2026-03-31 23:59:59' 
+  AND b.status = 'active'
+GROUP BY c.id, c.name, c.document_number;
+```
+
+![](images/clipboard-1120918786.png)
+
+### 4.2: Suma, conteo y promedio por cliente en rango de fechas (Forma 2 - JOIN)
+
+``` sql
+SELECT  c.id AS client_id,  c.name AS nombre_cliente, c.document_number,
+ COUNT(p.id) AS total_paquetes_reservados,
+ SUM(p.id) AS suma_total_paquetes,
+ ROUND(AVG(p.id), 2) AS promedio_precio_paquete
+FROM public.bookings AS b
+JOIN public.departures AS d ON b.id = d.id
+JOIN public.packages AS p ON d.package_id = p.id
+JOIN public.clients AS c ON b.id = c.id
+WHERE b.created_at BETWEEN '2026-01-01 00:00:00' AND '2026-03-31 23:59:59' 
+AND b.status = 'active'
+GROUP BY c.id, c.name, c.document_number;
+```
+
+![](images/clipboard-1133030761.png)
