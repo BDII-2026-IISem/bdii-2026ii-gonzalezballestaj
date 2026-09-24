@@ -280,7 +280,7 @@ FROM public.clients;
 
 ![](images/clipboard-2770732586.png)
 
-### 1.3: Campos específicos usando alias en la tabla
+### 1.3: Campos especificos usando alias en la tabla
 
 ``` sql
 SELECT c.name, c.document_number, c.phone  
