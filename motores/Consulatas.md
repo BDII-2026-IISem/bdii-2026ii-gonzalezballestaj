@@ -660,3 +660,29 @@ ORDER BY b.created_at ASC;
 ```
 
 ![](images/clipboard-2849449600.png)
+
+# 4. Consultas de Agrupamiento (GROUP BY)
+
+### 4.1: Suma, conteo y promedio por cliente en rango de fechas (Forma 1 - WHERE) 
+
+``` sql
+SELECT b.client_id, 
+COUNT(t.id) AS total_pasajeros_registrados 
+FROM dbo.bookings AS b 
+INNER JOIN dbo.travelers AS t ON t.id = b.traveler_id 
+GROUP BY b.client_id;
+```
+
+![](images/clipboard-1641510001.png)
+
+### 4.2: Suma, conteo y promedio por cliente en rango de fechas (Forma 2 - JOIN)
+
+``` sql
+SELECT b.client_id, 
+COUNT(t.id) AS total_pasajeros_registrados 
+FROM dbo.bookings AS b 
+INNER JOIN dbo.travelers AS t ON t.id = b.traveler_id 
+GROUP BY b.client_id;
+```
+
+![](images/clipboard-2984507267.png)
