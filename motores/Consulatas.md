@@ -288,3 +288,41 @@ FROM public.clients AS c;
 ```
 
 ![](images/clipboard-2670321724.png)
+
+# 2. Consultar datos de varias tablas (Relaciones / Joins)
+
+### 2.1: Relación mediante la cláusula WHERE (Forma 1)
+
+``` sql
+SELECT * FROM public.clients, public.bookings 
+WHERE clients.id = bookings.id;
+```
+
+![](images/clipboard-2587002953.png)
+
+### 2.2: Relación mediante WHERE con alias 
+
+``` sql
+SELECT * FROM public.clients AS c, public.bookings AS b 
+WHERE c.id = b.id;
+```
+
+![](images/clipboard-4083686690.png)
+
+### 2.3: Selección de campos específicos y comodín de tabla (V.\*) usando WHERE 
+
+``` sql
+SELECT c.name, c.email, b.* FROM public.clients AS c, public.bookings AS b 
+WHERE c.id = b.id;
+```
+
+![](images/clipboard-4167549657.png)
+
+### 2.4: Relación mediante la cláusula JOIN ... ON (Forma 2)
+
+``` sql
+SELECT  c.name, c.email, b.* FROM public.clients AS c 
+JOIN public.bookings AS b ON c.id = b.id;
+```
+
+![](images/clipboard-2026868771.png)
