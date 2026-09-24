@@ -686,3 +686,35 @@ GROUP BY b.client_id;
 ```
 
 ![](images/clipboard-2984507267.png)
+
+# 5 .Consultas de Agrupamiento con Filtro Post-Agregación (HAVING)
+
+### 5.1: Agrupamiento con condición de conteo HAVING (Forma 1 - WHERE) 
+
+``` sql
+SELECT c.id AS client_id, c.name AS nombre_cliente, 
+COUNT(t.id) AS total_pasajeros 
+FROM dbo.clients AS c, dbo.bookings AS b, dbo.travelers AS t 
+WHERE c.id = b.client_id 
+AND t.id = b.traveler_id 
+GROUP BY c.id, c.name 
+HAVING COUNT(t.id) >= 1 
+ORDER BY total_pasajeros DESC;
+```
+
+![](images/clipboard-2158419463.png)
+
+### 5.2: Agrupamiento con condición de conteo HAVING (Forma 2 - JOIN)
+
+``` {.sql .sq}
+SELECT   c.id AS client_id,  c.name AS nombre_cliente, 
+COUNT(t.id) AS total_pasajeros 
+FROM dbo.clients AS c 
+INNER JOIN dbo.bookings AS b ON c.id = b.client_id 
+INNER JOIN dbo.travelers AS t ON t.id = b.traveler_id 
+GROUP BY c.id, c.name 
+HAVING COUNT(t.id) >= 1 
+ORDER BY total_pasajeros DESC;
+```
+
+![](images/clipboard-951404611.png)
