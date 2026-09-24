@@ -326,3 +326,73 @@ JOIN public.bookings AS b ON c.id = b.id;
 ```
 
 ![](images/clipboard-2026868771.png)
+
+# 3. Condiciones y Filtros en las Consultas
+
+### 3.1: Filtro por fecha en consulta multitabla (Forma 1 - WHERE)
+
+``` sql
+SELECT  c.name, c.email, b.* FROM public.clients AS c, public.bookings AS b 
+WHERE c.id = b.id 
+AND b.created_at = '2026-02-17 11:00:00';
+```
+
+![](images/clipboard-1226621554.png)
+
+### 3.2: Filtro por fecha en consulta multitabla (Forma 2 - JOIN)
+
+``` sql
+ SELECT c.name,  c.email,  b.* FROM public.clients AS c 
+JOIN public.bookings AS b ON c.id = b.id 
+WHERE b.updated_at = '2026-02-20 11:00:00';
+```
+
+![](images/clipboard-3160335241.png)
+
+### 3.3: Filtro por patrón con LIKE (comienza con 'j' o 'm') 
+
+``` sql
+SELECT * FROM public.clients AS c 
+WHERE c.name ILIKE 'm%'  OR c.name ILIKE 'j%';
+```
+
+![](images/clipboard-81936110.png)
+
+### 3.4: Filtro por patrón con LIKE y CONCAT (contiene 'Diego Silva' o '[diego.silva58\@gmail.com](mailto:diego.silva58@gmail.com){.email}')
+
+``` sql
+SELECT * FROM public.clients AS c 
+WHERE c.name ILIKE '%Diego Silva%'  OR c.email ILIKE '%diego.silva58@gmail.com%';
+```
+
+![](images/clipboard-3344763516.png)
+
+###  3.5: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 1 - WHERE)
+
+``` sql
+SELECT c.*,  b.*,  d.*, t.*, v.* FROM public.clients AS c, 
+  public.bookings AS b, 
+  public.departures AS d, 
+  public.travelers AS t,  
+  public.vouchers AS v 
+WHERE c.id = b.id 
+  AND d.id = b.id 
+  AND t.id = b.id 
+  AND b.id = v.booking_id 
+  AND v.created_at BETWEEN '2026-05-03 08:22:00' AND '2026-07-03 11:04:00' 
+ORDER BY v.created_at ASC;
+```
+
+![](images/clipboard-2676951075.png)
+
+###  3.6: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 2 - JOIN)
+
+``` sql
+SELECT * FROM public.clients AS c 
+JOIN public.bookings AS b ON c.id = b.id 
+JOIN public.vouchers AS v ON b.id = v.booking_id 
+WHERE b.created_at BETWEEN '2026-02-17 11:00:00' AND '2026-05-16 12:00:00' 
+ORDER BY b.created_at ASC;
+```
+
+![](images/clipboard-362667778.png)
