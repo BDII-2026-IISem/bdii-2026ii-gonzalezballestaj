@@ -1,4 +1,4 @@
-# Consultas avanzadas en MYSQL
+#  Consultas avanzadas en MYSQL
 
 ## Evidencia de los registros de cada tabla
 
@@ -244,3 +244,19 @@ WHERE v.client_id IS NULL;
 ```
 
 ![](images/clipboard-1490188045.png)
+
+# Consultas avanzadas en postgres
+
+## Evidencia de los registros de cada tabla
+
+![](images/clipboard-3756967492.png)
+
+![![](images/clipboard-2509880491.png)](images/clipboard-3145780045.png)
+
+![![](images/clipboard-2762919528.png)](images/clipboard-1351705269.png)
+
+![![](images/clipboard-2016793502.png)](images/clipboard-3570937543.png)
+
+![![](images/clipboard-1960159514.png)](images/clipboard-1638466390.png)
+
+![](images/clipboard-3693015620.png)
