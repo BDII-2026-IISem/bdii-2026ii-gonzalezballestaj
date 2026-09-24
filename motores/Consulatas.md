@@ -790,3 +790,44 @@ FROM suppliers s;
 ```
 
 ![](images/clipboard-3815789114.png)
+
+# 2. Consultar datos de varias tablas (Relaciones / Joins)
+
+### 2.1: Relación mediante la cláusula WHERE (Forma 1) 
+
+``` sql
+SELECT * FROM suppliers s, included_services ins, packages p 
+WHERE s.id = ins.supplier_id 
+ AND p.id = ins.package_id;
+```
+
+![](images/clipboard-614642835.png)
+
+### 2.2: Relación mediante WHERE con alias 
+
+``` sql
+SELECT * FROM packages p, departures d 
+WHERE p.id = d.package_id;
+```
+
+![](images/clipboard-1607921149.png)
+
+### 2.3: Selección de campos específicos y comodín de tabla (V.\*) usando WHERE 
+
+``` sql
+SELECT p.name AS nombre_paquete,  p.description AS descripcion_paquete,  d.* FROM packages p, departures d 
+WHERE p.id = d.package_id;
+```
+
+![](images/clipboard-3366465703.png)
+
+### 2.4: Relación mediante la cláusula JOIN ... ON (Forma 2)
+
+``` {.sql .sq}
+SELECT  s.razon_social AS proveedor,  p.name AS paquete, ins.relation_data AS detalle_servicio 
+FROM suppliers s 
+JOIN included_services ins ON s.id = ins.supplier_id 
+JOIN packages p ON p.id = ins.package_id;
+```
+
+![](images/clipboard-4004254774.png)
