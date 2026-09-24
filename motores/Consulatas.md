@@ -969,3 +969,32 @@ ORDER BY capacidad_total DESC;
 ```
 
 ![](images/clipboard-4004608208.png)
+
+# 6. Subconsultas y Teoría de Conjuntos (A-B)
+
+### 6.1: Clientes sin ventas en un rango usando subconsulta NOT IN (Forma 1) 
+
+``` sql
+SELECT * FROM suppliers s 
+WHERE s.id NOT IN (
+    SELECT ins.supplier_id 
+    FROM included_services ins 
+    WHERE ins.created_at BETWEEN TIMESTAMP '2023-03-01 00:00:00' AND TIMESTAMP '2026-03-30 23:59:59'
+);
+```
+
+![](images/clipboard-1573422763.png)
+
+### 6.2: Clientes sin ventas en un rango usando LEFT JOIN y IS NULL (Forma 2)
+
+``` {.sql .sq}
+SELECT p.* FROM packages p 
+LEFT JOIN (
+    SELECT DISTINCT d.package_id 
+    FROM departures d 
+    WHERE d.departure_date >= TIMESTAMP '2026-01-01 00:00:00'
+) d_sub ON p.id = d_sub.package_id 
+WHERE d_sub.package_id IS NULL;
+```
+
+![](images/clipboard-660293381.png)
