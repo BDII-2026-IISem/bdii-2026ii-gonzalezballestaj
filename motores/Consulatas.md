@@ -904,3 +904,34 @@ ORDER BY d.departure_date ASC;
 ```
 
 ![](images/clipboard-1578070925.png)
+
+# 4. Consultas de Agrupamiento (GROUP BY)
+
+### 4.1: Suma, conteo y promedio por cliente en rango de fechas (Forma 1 - WHERE) 
+
+``` sql
+SELECT  p.id AS paquete_id, 
+COUNT(ins.id) AS total_servicios_incluidos, 
+AVG(d.capacity) AS capacidad_promedio_salidas 
+FROM packages p 
+JOIN included_services ins ON p.id = ins.package_id 
+JOIN departures d ON p.id = d.package_id 
+WHERE p.status = 'active' 
+GROUP BY p.id;
+```
+
+![](images/clipboard-3311406578.png)
+
+### 4.2: Suma, conteo y promedio por cliente en rango de fechas (Forma 2 - JOIN)
+
+``` sql
+SELECT s.id AS supplier_id,  s.razon_social,  s.nit, 
+COUNT(ins.id) AS total_servicios_ofrecidos, 
+COUNT(DISTINCT ins.package_id) AS total_paquetes_atendidos 
+FROM suppliers s 
+JOIN included_services ins ON s.id = ins.supplier_id 
+WHERE s.status = 'active' 
+GROUP BY s.id, s.razon_social, s.nit;
+```
+
+![](images/clipboard-2499697448.png)
