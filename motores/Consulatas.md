@@ -762,3 +762,31 @@ WHERE t_sub.client_id IS NULL;
 ![![](images/clipboard-3459086509.png)](images/clipboard-3623632094.png)
 
 ![![](images/clipboard-2172979299.png)](images/clipboard-2898357617.png)
+
+# 1. Consultar datos de una tabla (Consultas Básicas)
+
+### 1.1: Todos los campos de una tabla 
+
+``` sql
+SELECT * FROM suppliers;
+```
+
+![](images/clipboard-3826630184.png)
+
+### 1.2: Campos específicos 
+
+``` sql
+SELECT  id, nit,  razon_social, phone, email 
+FROM suppliers;
+```
+
+![](images/clipboard-1048353233.png)
+
+### 1.3: Campos específicos usando alias en la tabla
+
+``` sql
+SELECT   s.id,  s.nit,  s.razon_social,  s.status 
+FROM suppliers s;
+```
+
+![](images/clipboard-3815789114.png)
