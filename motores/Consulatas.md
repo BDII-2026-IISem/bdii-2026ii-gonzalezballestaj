@@ -545,3 +545,45 @@ FROM dbo.vouchers  AS v;
 ```
 
 ![](images/clipboard-882133987.png)
+
+# 2. Consultar datos de varias tablas (Relaciones / Joins)
+
+### 2.1: Relación mediante la cláusula WHERE (Forma 1)
+
+``` sql
+ SELECT * FROM dbo.clients, dbo.bookings, dbo.vouchers 
+WHERE clients.id = bookings.client_id 
+  AND bookings.id = vouchers.booking_id;
+```
+
+![](images/clipboard-1734300638.png)
+
+### 2.2: Relación mediante WHERE con alias 
+
+``` sql
+SELECT * FROM dbo.clients AS c, dbo.bookings AS b, dbo.vouchers AS v 
+WHERE c.id = b.client_id 
+  AND b.id = v.booking_id;
+```
+
+![](images/clipboard-3528385663.png)
+
+### 2.3: Selección de campos específicos y comodín de tabla (V.\*) usando WHERE 
+
+``` sql
+SELECT c.name,  c.email,  v.* FROM dbo.clients AS c, dbo.bookings AS b, dbo.vouchers AS v 
+WHERE c.id = b.client_id 
+AND b.id = v.booking_id;
+```
+
+![](images/clipboard-2562225168.png)
+
+### 2.4: Relación mediante la cláusula JOIN ... ON (Forma 2)
+
+``` sql
+SELECT  c.name,  c.email, v.* FROM dbo.clients AS c 
+INNER JOIN dbo.bookings AS b ON c.id = b.client_id 
+INNER JOIN dbo.vouchers AS v ON b.id = v.booking_id;
+```
+
+![](images/clipboard-3238702931.png)
