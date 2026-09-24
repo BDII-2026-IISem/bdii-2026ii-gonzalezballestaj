@@ -748,3 +748,17 @@ WHERE t_sub.client_id IS NULL;
 ```
 
 ![](images/clipboard-1646379604.png)
+
+# Consultas avanzadas en Oracle
+
+## Evidencia de los registros de cada tabla
+
+![](images/clipboard-1849090421.png)
+
+![![](images/clipboard-1645507781.png)](images/clipboard-2104359377.png)
+
+![![](images/clipboard-3000253599.png)](images/clipboard-3690301211.png)
+
+![![](images/clipboard-3459086509.png)](images/clipboard-3623632094.png)
+
+![![](images/clipboard-2172979299.png)](images/clipboard-2898357617.png)
