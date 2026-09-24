@@ -935,3 +935,37 @@ GROUP BY s.id, s.razon_social, s.nit;
 ```
 
 ![](images/clipboard-2499697448.png)
+
+# 5. Consultas de Agrupamiento con Filtro Post-Agregación (HAVING)
+
+### 5.1: Agrupamiento con condición de conteo HAVING (Forma 1 - WHERE)
+
+``` sql
+SELECT s.id AS supplier_id,  s.razon_social, 
+COUNT(ins.id) AS total_servicios 
+FROM suppliers s, included_services ins 
+WHERE s.id = ins.supplier_id 
+  AND ins.created_at BETWEEN TIMESTAMP '2023-01-01 00:00:00' AND TIMESTAMP '2026-03-31 23:59:59' 
+  AND ins.status = 'active' 
+GROUP BY s.id, s.razon_social 
+HAVING COUNT(ins.id) >= 1 
+ORDER BY total_servicios DESC;
+```
+
+![](images/clipboard-2894892436.png)
+
+###  5.2: Agrupamiento con condición de conteo HAVING (Forma 2 - JOIN)
+
+``` sql
+SELECT  p.id AS package_id,  p.name AS nombre_paquete, 
+COUNT(d.id) AS total_salidas, 
+SUM(d.capacity) AS capacidad_total 
+FROM packages p 
+JOIN departures d ON p.id = d.package_id 
+WHERE d.status = 'active' 
+GROUP BY p.id, p.name 
+HAVING COUNT(d.id) >= 2
+ORDER BY capacidad_total DESC;
+```
+
+![](images/clipboard-4004608208.png)
