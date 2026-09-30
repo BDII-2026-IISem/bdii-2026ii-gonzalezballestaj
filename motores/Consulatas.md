@@ -1853,7 +1853,7 @@ ORDER BY total_pasajeros DESC;
 \
 Hice exactamente el mismo cálculo de volumen de pasajeros por cliente pero estructurando la consulta con `INNER JOIN`. Apliqué el agrupamiento por cliente y usé la cláusula `HAVING` para filtrar los totales ordenados de forma descendente.
 
-``` {.sql .sq}
+``` sql
 SELECT   c.id AS client_id,  c.name AS nombre_cliente, 
 COUNT(t.id) AS total_pasajeros 
 FROM dbo.clients AS c 
