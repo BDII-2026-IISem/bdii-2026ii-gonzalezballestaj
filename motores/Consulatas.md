@@ -1,4 +1,4 @@
-# Consultas avanzadas en MYSQL
+# **Consultas avanzadas en MYSQL**
 
 ## Evidencia de los registros de cada tabla
 
@@ -785,7 +785,7 @@ END
 
 y aca en la tabla podemos ver la modificacion que se realizo y de que tipo fue (insert,update o delete).
 
-# Consultas avanzadas en postgres
+# **Consultas avanzadas en postgres**
 
 ## Evidencia de los registros de cada tabla
 
@@ -805,13 +805,23 @@ y aca en la tabla podemos ver la modificacion que se realizo y de que tipo fue (
 
 ### 1.1: Todos los campos de una tabla
 
+Invoqué el esquema explícito `public.clients` y manejé alias en minúsculas. En PostgreSQL me aseguré de invocar `public.clients` para mantener buenas prácticas y evitar problemas con la resolución de tablas.Al anteponer el nombre del esquema (`public.`) evito ambigüedades cuando existen múltiples esquemas dentro de la misma base de datos, garantizando que PostgreSQL apunte a la tabla correcta.
+
 ``` sql
 SELECT * FROM public.clients;
 ```
 
 ![](images/clipboard-2465519490.png)
 
+### Creacion del procedure
+
+![](images/clipboard-1261470345.png)
+
+![](images/clipboard-680206344.png)
+
 ### 1.2: Campos específicos
+
+Invoqué el esquema explícito `public.clients` y manejé alias en minúsculas. En PostgreSQL me aseguré de invocar `public.clients` para mantener buenas prácticas y evitar problemas con la resolución de tablas.Al anteponer el nombre del esquema (`public.`) evito ambigüedades cuando existen múltiples esquemas dentro de la misma base de datos, garantizando que PostgreSQL apunte a la tabla correcta ademas hice referencia a los datos que me interesaban conocer de l atabla clients.
 
 ``` sql
 SELECT id, name, phone,  document_number 
@@ -820,7 +830,17 @@ FROM public.clients;
 
 ![](images/clipboard-2770732586.png)
 
+### Creacion del procedure
+
+![](images/clipboard-1261470345.png)
+
+![](images/clipboard-680206344.png)
+
+### 
+
 ### 1.3: Campos especificos usando alias en la tabla
+
+Invoqué el esquema explícito `public.clients` y manejé alias en minúsculas. En PostgreSQL me aseguré de invocar `public.clients` para mantener buenas prácticas y evitar problemas con la resolución de tablas.Al anteponer el nombre del esquema (`public.`) evito ambigüedades cuando existen múltiples esquemas dentro de la misma base de datos, garantizando que PostgreSQL apunte a la tabla correcta ademas hice referencia a los datos que me interesaban conocer de l atabla clients pero usando alias.
 
 ``` sql
 SELECT c.name, c.document_number, c.phone  
@@ -833,6 +853,8 @@ FROM public.clients AS c;
 
 ### 2.1: Relación mediante la cláusula WHERE (Forma 1)
 
+Esta sentencia combina dos o más tablas enumerándolas directamente en la cláusula `FROM` . Genera un producto cartesiano que luego es filtrado en la cláusula `WHERE` igualando sus claves primarias y foráneas. Permite vincular registros relacionados, como asociar cada cliente con sus correspondientes paquetes o reservas. Es una sintaxis clásica y directa para realizar cruces de información básicos entre tablas.
+
 ``` sql
 SELECT * FROM public.clients, public.bookings 
 WHERE clients.id = bookings.id;
@@ -840,7 +862,15 @@ WHERE clients.id = bookings.id;
 
 ![](images/clipboard-2587002953.png)
 
+### Creacion del procedure
+
+![](images/clipboard-3803630708.png)
+
+![](images/clipboard-179913137.png)
+
 ### 2.2: Relación mediante WHERE con alias
+
+Esta consulta implementa la misma lógica de unión en el `WHERE` pero incorporando alias cortos para cada tabla relacionada. Simplifica la escritura de las condiciones de cruce haciendo que las comparaciones entre llaves sean más breves. Mejora la interpretación visual de la consulta cuando se trabaja con múltiples entidades en la base de datos. Reduce la probabilidad de cometer errores de sintaxis al referenciar campos de tablas distintas.
 
 ``` sql
 SELECT * FROM public.clients AS c, public.bookings AS b 
@@ -849,7 +879,17 @@ WHERE c.id = b.id;
 
 ![](images/clipboard-4083686690.png)
 
+### Creacion del procedure
+
+![](images/clipboard-3803630708.png)
+
+![](images/clipboard-179913137.png)
+
+### 
+
 ### 2.3: Selección de campos específicos y comodín de tabla (V.\*) usando WHERE
+
+Esta sentencia combina la proyección de atributos seleccionados de una tabla con la totalidad de columnas de otra usando `ALIAS.*`. Resulta ideal cuando se necesita identificar al titular (nombre y correo) y a la vez obtener la ficha completa del detalle. Mantiene la unión relacional mediante la cláusula `WHERE` vinculando las claves correspondientes de ambas entidades. Optimiza la consulta al evitar traer columnas repetidas o innecesarias de la primera tabla.
 
 ``` sql
 SELECT c.name, c.email, b.* FROM public.clients AS c, public.bookings AS b 
@@ -858,7 +898,15 @@ WHERE c.id = b.id;
 
 ![](images/clipboard-4167549657.png)
 
+### Creacion del procedure
+
+![](images/clipboard-1179681411.png)
+
+![](images/clipboard-1526542988.png)
+
 ### 2.4: Relación mediante la cláusula JOIN ... ON (Forma 2)
+
+Esta consulta utiliza la sintaxis moderna ANSI-99 declarando la vinculación de tablas mediante la cláusula explicita `JOIN`. Separa con claridad la condición de unión dentro del bloque `ON` de las condiciones de filtrado habituales. Mejora el rendimiento del motor de base de datos al construir planes de ejecución más estructurados y legibles. Es el estándar recomendado en el desarrollo profesional para conectar tablas relacionales de forma limpia.
 
 ``` sql
 SELECT  c.name, c.email, b.* FROM public.clients AS c 
@@ -867,9 +915,17 @@ JOIN public.bookings AS b ON c.id = b.id;
 
 ![](images/clipboard-2026868771.png)
 
+### Creacion del procedure
+
+![](images/clipboard-3931712032.png)
+
+![](images/clipboard-1925419385.png)
+
 # 3. Condiciones y Filtros en las Consultas
 
 ### 3.1: Filtro por fecha en consulta multitabla (Forma 1 - WHERE)
+
+Esta consulta une múltiples tablas en la cláusula `FROM` y evalúa una coincidencia de fecha exacta dentro del `WHERE`. Permite realizar auditorías puntuales para localizar registros creados o modificados en un segundo específico en la base de datos. Combina la condición de relación de las entidades mediante el operador lógico `AND` junto con el filtro temporal. Es útil para rastrear transacciones específicas o validar logs de eventos en el sistema.
 
 ``` sql
 SELECT  c.name, c.email, b.* FROM public.clients AS c, public.bookings AS b 
@@ -879,7 +935,15 @@ AND b.created_at = '2026-02-17 11:00:00';
 
 ![](images/clipboard-1226621554.png)
 
+### Creacion del procedure
+
+![](images/clipboard-1640001297.png)
+
+![](images/clipboard-235776206.png)
+
 ### 3.2: Filtro por fecha en consulta multitabla (Forma 2 - JOIN)
+
+Esta sentencia conecta las tablas utilizando la sintaxis `JOIN ... ON` y aplica el filtro temporal mediante la cláusula `WHERE`. Facilita el monitoreo operativo de registros modificados o creados en fechas y horas específicas dentro del sistema. Al mantener separada la lógica de unión en el `ON`, el filtro por fecha en el `WHERE` resulta mucho más claro de analizar. Garantiza que la búsqueda sea precisa al evaluar columnas de tipo fecha o fecha/hora.
 
 ``` sql
  SELECT c.name,  c.email,  b.* FROM public.clients AS c 
@@ -891,6 +955,8 @@ WHERE b.updated_at = '2026-02-20 11:00:00';
 
 ### 3.3: Filtro por patrón con LIKE (comienza con 'j' o 'm')
 
+Esta consulta evalúa columnas de texto utilizando el operador `LIKE` acompañado del comodín `%` al final de la cadena. Permite buscar y filtrar registros cuyo nombre o valor comience por letras específicas, como la 'j' o la 'm'. La condición lógica `OR` permite combinar múltiples patrones dentro de la misma sentencia de manera flexible. Es la base para implementar filtros alfabéticos y buscadores por iniciales dentro de la aplicación.
+
 ``` sql
 SELECT * FROM public.clients AS c 
 WHERE c.name ILIKE 'm%'  OR c.name ILIKE 'j%';
@@ -898,7 +964,15 @@ WHERE c.name ILIKE 'm%'  OR c.name ILIKE 'j%';
 
 ![](images/clipboard-81936110.png)
 
+### Creacion del procedure
+
+![](images/clipboard-2792059915.png)
+
+![](images/clipboard-229180439.png)
+
 ### 3.4: Filtro por patrón con LIKE y CONCAT (contiene 'Diego Silva' o '[diego.silva58\@gmail.com](mailto:diego.silva58@gmail.com){.email}')
+
+Esta sentencia realiza búsquedas flexibles en columnas de texto buscando coincidencias en cualquier posición con `'%Diego%'`. Permite localizar registros específicos comparando simultáneamente sobre campos como el nombre o el correo electrónico. Al utilizar la condición `OR`, la consulta devuelve los datos si coincide con cualquiera de los patrones evaluados. Es ampliamente utilizada para dar soporte a las barras de búsqueda globales en los sistemas web.
 
 ``` sql
 SELECT * FROM public.clients AS c 
@@ -907,7 +981,15 @@ WHERE c.name ILIKE '%Diego Silva%'  OR c.email ILIKE '%diego.silva58@gmail.com%'
 
 ![](images/clipboard-3344763516.png)
 
+### Creacion del procedure
+
+![](images/clipboard-3614494286.png)
+
+![](images/clipboard-3361529306.png)
+
 ### 3.5: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 1 - WHERE)
+
+Esta consulta enlaza cuatro tablas simultáneamente listándolas en el `FROM` e igualando sus claves en la cláusula `WHERE`. Utiliza el operador `BETWEEN` para acotar la búsqueda a un rango inclusivo de fechas de creación o emisión. Permite reconstruir la trazabilidad completa de una operación (cliente, reserva, viaje y comprobante) en un período. Ordena los resultados cronológicamente mediante `ORDER BY` para facilitar la lectura de los reportes.
 
 ``` sql
 SELECT c.*,  b.*,  d.*, t.*, v.* FROM public.clients AS c, 
@@ -927,6 +1009,8 @@ ORDER BY v.created_at ASC;
 
 ### 3.6: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 2 - JOIN)
 
+Esta sentencia encadena cuatro tablas mediante múltiples cláusulas `JOIN ... ON` conectando sus claves primarias y foráneas. Aplica el filtro de rango de fechas en la cláusula `WHERE` para acotar los resultados a un intervalo de tiempo exacto. Garantiza una trazabilidad operacional limpia al estructurar las uniones de forma modular y altamente legible. Finalmente, organiza la información de manera ascendente o descendente mediante la cláusula `ORDER BY`.
+
 ``` sql
 SELECT * FROM public.clients AS c 
 JOIN public.bookings AS b ON c.id = b.id 
@@ -937,9 +1021,17 @@ ORDER BY b.created_at ASC;
 
 ![](images/clipboard-362667778.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-2333040674.png)
+
+![](images/clipboard-2412326858.png)
+
 # 4. Consultas de Agrupamiento (GROUP BY)
 
 ### 4.1: Suma, conteo y promedio por cliente en rango de fechas (Forma 1 - WHERE)
+
+Esta consulta combina las tablas mediante la cláusula `WHERE` y agrupa la información por cliente usando `GROUP BY`. Aplica funciones de agregación como `COUNT()` para transacciones, `SUM()` para ingresos totales y `AVG()` para promedios. Acota la información analizada a un intervalo de tiempo específico mediante el filtro `BETWEEN` en la condición `WHERE`. Permite generar reportes financieros consolidados evaluando el comportamiento comercial de cada usuario.
 
 ``` sql
 SELECT c.id AS client_id,  c.name AS nombre_cliente,c.document_number,
@@ -956,7 +1048,15 @@ GROUP BY c.id, c.name, c.document_number;
 
 ![](images/clipboard-1120918786.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-3174038369.png)
+
+![](images/clipboard-1009899315.png)
+
 ### 4.2: Suma, conteo y promedio por cliente en rango de fechas (Forma 2 - JOIN)
+
+Esta sentencia vincula las tablas de ventas y clientes mediante la sintaxis explicita `JOIN ... ON` agrupando por identificador. Utiliza funciones matemáticas agregadas para calcular la facturación, volumen de pagos y promedios por cada cliente. Filtra el rango de fechas requerido dentro de la cláusula `WHERE` antes de realizar el proceso de agrupamiento. Entrega a la administración un resumen financiero limpio, optimizando el rendimiento en bases de datos grandes.
 
 ``` sql
 SELECT  c.id AS client_id,  c.name AS nombre_cliente, c.document_number,
@@ -974,9 +1074,17 @@ GROUP BY c.id, c.name, c.document_number;
 
 ![](images/clipboard-1133030761.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-3838401058.png)
+
+![](images/clipboard-3453444981.png)
+
 # 5. Consultas de Agrupamiento con Filtro Post-Agregación (HAVING)
 
 ### 5.1: Agrupamiento con condición de conteo HAVING (Forma 1 - WHERE)
+
+Esta consulta realiza el cruce de tablas en la cláusula `FROM` y agrupa los registros consolidados por cada cliente. Utiliza la cláusula `HAVING` para filtrar los resultados **después** de haber calculado las funciones de agregación. Permite aislar únicamente a los clientes que cumplan una condición, como tener un número de pagos mayor o igual a 1. Descarta automáticamente a los usuarios que no alcanzaron el umbral fijado dentro del reporte financiero.
 
 ``` sql
 SELECT c.id AS client_id,  c.name AS nombre_cliente,
@@ -995,7 +1103,15 @@ ORDER BY totalsuma DESC;
 
 ![](images/clipboard-3152601263.png)
 
+### Creacion de elprocedure
+
+![](images/clipboard-610027358.png)
+
+![](images/clipboard-1111087581.png)
+
 ### 5.2: Agrupamiento con condición de conteo HAVING (Forma 2 - JOIN)
+
+Esta sentencia une las tablas con la cláusula `JOIN ... ON`, filtra el rango de fechas en `WHERE` y agrupa mediante `GROUP BY`. Aplica la condición post-agregación `HAVING` para evaluar el resultado de funciones como `COUNT()` o `SUM()`. Es ideal para identificar clientes recurrentes o de alto valor que superen determinado volumen de compras en el mes. Muestra los resultados ordenados con `ORDER BY` de mayor a menor para destacar a los mejores clientes.
 
 ``` sql
 SELECT c.id AS client_id, c.name AS nombre_cliente,
@@ -1018,6 +1134,8 @@ ORDER BY totalsuma DESC;
 
 ### 6.1: Clientes sin ventas en un rango usando subconsulta NOT IN (Forma 1)
 
+Esta consulta aplica la teoría de conjuntos para extraer a los clientes registrados que no realizaron compras ($A - B$). Utiliza una subconsulta dentro de la cláusula `WHERE` con el operador `NOT IN` sobre la tabla de ventas o reservas. La subconsulta genera una lista con los IDs de clientes activos en el rango de fechas especificado para excluirlos. Es una técnica muy utilizada por el área de mercadeo para identificar e impactar a la cartera de clientes inactivos.
+
 ``` sql
 SELECT * FROM public.clients AS c 
 WHERE c.id NOT IN (
@@ -1030,7 +1148,15 @@ WHERE c.id NOT IN (
 
 ![](images/clipboard-3374582082.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-3336774259.png)
+
+![](images/clipboard-4174276522.png)
+
 ### 6.2: Clientes sin ventas en un rango usando LEFT JOIN y IS NULL (Forma 2)
+
+Esta sentencia realiza la resta de conjuntos ($A - B$) vinculando las tablas mediante un `LEFT JOIN` con filtro en las fechas. Mantiene a todos los clientes de la tabla izquierda y busca coincidencias en la tabla secundaria de reservas. Al aplicar la condición `WHERE B.id IS NULL`, conserva únicamente a los clientes que no tuvieron ningún cruce. Resulta ser una alternativa mucho más eficiente que `NOT IN` en términos de rendimiento para grandes volúmenes de datos.
 
 ``` sql
 SELECT c.* FROM public.clients AS c 
@@ -1044,6 +1170,378 @@ WHERE v.id IS NULL;
 ```
 
 ![](images/clipboard-400852466.png)
+
+# CREACION DE TRIGGERS
+
+- Vamos a crear el triggers para la tabla travelers la cual me guarda informacion de los viajes y registro de los clientes.
+
+### 1. Creamos la tabla travelers_audit
+
+``` sql
+CREATE TABLE public.travelers_audit (
+    id SERIAL PRIMARY KEY,
+    traveler_id INT,
+    operation VARCHAR(10),
+    name VARCHAR,
+    description TEXT,
+    status VARCHAR,
+    operation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+![](images/clipboard-198799917.png)
+
+### 2. Creamos la funcion para el triggers
+
+``` sql
+CREATE OR REPLACE FUNCTION public.auditar_travelers()
+RETURNS TRIGGER
+AS $$
+BEGIN
+
+    IF TG_OP = 'INSERT' THEN
+
+        INSERT INTO public.travelers_audit (
+            traveler_id,
+            operation,
+            name,
+            description,
+            status
+        )
+        VALUES (
+            NEW.id,
+            'INSERT',
+            NEW.name,
+            NEW.description,
+            NEW.status
+        );
+
+        RETURN NEW;
+
+    ELSIF TG_OP = 'UPDATE' THEN
+
+        INSERT INTO public.travelers_audit (
+            traveler_id,
+            operation,
+            name,
+            description,
+            status
+        )
+        VALUES (
+            NEW.id,
+            'UPDATE',
+            NEW.name,
+            NEW.description,
+            NEW.status
+        );
+
+        RETURN NEW;
+
+    ELSIF TG_OP = 'DELETE' THEN
+
+        INSERT INTO public.travelers_audit (
+            traveler_id,
+            operation,
+            name,
+            description,
+            status
+        )
+        VALUES (
+            OLD.id,
+            'DELETE',
+            OLD.name,
+            OLD.description,
+            OLD.status
+        );
+
+        RETURN OLD;
+
+    END IF;
+
+END;
+$$ LANGUAGE plpgsql;
+```
+
+![](images/clipboard-4085509621.png)
+
+### 3.Creo el triggers
+
+``` sql
+CREATE TRIGGER trigger_auditar_travelers
+AFTER INSERT OR UPDATE OR DELETE
+ON public.travelers
+FOR EACH ROW
+EXECUTE FUNCTION public.auditar_travelers();
+```
+
+![](images/clipboard-1305219804.png)
+
+### 4.Inserto nuevos valores a la tabla de travelers
+
+![](images/clipboard-47803527.png)
+
+### 5.Consulto en la nueva tabla de travelers_audit paar ver los cambios que se realizaron
+
+![](images/clipboard-1913177972.png)
+
+- Vamos a crear el triggers para la tabla vouchers la cual me guarda informacion de la tabla bookings y registro de los clientes.
+
+### 1. Creamos la tabla vouchers_audit
+
+``` sql
+CREATE TABLE public.vouchers_audit (
+    id SERIAL PRIMARY KEY,
+    voucher_id INT,
+    booking_id INT,
+    operation VARCHAR(10),
+    name VARCHAR,
+    descriptions TEXT,
+    status VARCHAR,
+    operation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+![](images/clipboard-2898739231.png)
+
+### 2. Creamos la funcion para el triggers
+
+``` sql
+CREATE OR REPLACE FUNCTION public.auditar_vouchers()
+RETURNS TRIGGER
+AS $$
+BEGIN
+
+    IF TG_OP = 'INSERT' THEN
+
+        INSERT INTO public.vouchers_audit (
+            voucher_id,
+            booking_id,
+            operation,
+            name,
+            descriptions,
+            status
+        )
+        VALUES (
+            NEW.id,
+            NEW.booking_id,
+            'INSERT',
+            NEW.name,
+            NEW.descriptions,
+            NEW.status
+        );
+
+        RETURN NEW;
+
+    ELSIF TG_OP = 'UPDATE' THEN
+
+        INSERT INTO public.vouchers_audit (
+            voucher_id,
+            booking_id,
+            operation,
+            name,
+            descriptions,
+            status
+        )
+        VALUES (
+            NEW.id,
+            NEW.booking_id,
+            'UPDATE',
+            NEW.name,
+            NEW.descriptions,
+            NEW.status
+        );
+
+        RETURN NEW;
+
+    ELSIF TG_OP = 'DELETE' THEN
+
+        INSERT INTO public.vouchers_audit (
+            voucher_id,
+            booking_id,
+            operation,
+            name,
+            descriptions,
+            status
+        )
+        VALUES (
+            OLD.id,
+            OLD.booking_id,
+            'DELETE',
+            OLD.name,
+            OLD.descriptions,
+            OLD.status
+        );
+
+        RETURN OLD;
+
+    END IF;
+
+END;
+$$ LANGUAGE plpgsql;
+```
+
+![](images/clipboard-1020707500.png)
+
+### 3.Creo el triggers
+
+``` sql
+CREATE TRIGGER trigger_auditar_vouchers
+AFTER INSERT OR UPDATE OR DELETE
+ON public.vouchers
+FOR EACH ROW
+EXECUTE FUNCTION public.auditar_vouchers();
+```
+
+![](images/clipboard-2793406971.png)
+
+### 4.Inserto nuevos valores a la tabla de vouchers
+
+![](images/clipboard-561628825.png)
+
+### 5.Consulto en la nueva tabla de vouchers_audit paar ver los cambios que se realizaron
+
+![](images/clipboard-492846934.png)
+
+- Vamos a crear el triggers para la tabla payments la cual me guarda informacion de la tabla bookings y registro de los clientes.
+
+### 1. Creamos la tabla payments_audit
+
+``` sql
+CREATE TABLE public.payments_audit (
+    id SERIAL PRIMARY KEY,
+    payment_id INT,
+    reference_type VARCHAR,
+    booking_id INT,
+    operation VARCHAR(10),
+    method VARCHAR,
+    amount NUMERIC,
+    payment_date TIMESTAMP,
+    status VARCHAR,
+    reference_id INT,
+    operation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+![](images/clipboard-12286280.png)
+
+### 2. Creamos la funcion para el triggers
+
+``` sql
+CREATE OR REPLACE FUNCTION public.auditar_payments()
+RETURNS TRIGGER
+AS $$
+BEGIN
+
+    IF TG_OP = 'INSERT' THEN
+
+        INSERT INTO public.payments_audit (
+            payment_id,
+            reference_type,
+            booking_id,
+            operation,
+            method,
+            amount,
+            payment_date,
+            status,
+            reference_id
+        )
+        VALUES (
+            NEW.id,
+            NEW.reference_type,
+            NEW.booking_id,
+            'INSERT',
+            NEW.method,
+            NEW.amount,
+            NEW.payment_date,
+            NEW.status,
+            NEW.reference_id
+        );
+
+        RETURN NEW;
+
+    ELSIF TG_OP = 'UPDATE' THEN
+
+        INSERT INTO public.payments_audit (
+            payment_id,
+            reference_type,
+            booking_id,
+            operation,
+            method,
+            amount,
+            payment_date,
+            status,
+            reference_id
+        )
+        VALUES (
+            NEW.id,
+            NEW.reference_type,
+            NEW.booking_id,
+            'UPDATE',
+            NEW.method,
+            NEW.amount,
+            NEW.payment_date,
+            NEW.status,
+            NEW.reference_id
+        );
+
+        RETURN NEW;
+
+    ELSIF TG_OP = 'DELETE' THEN
+
+        INSERT INTO public.payments_audit (
+            payment_id,
+            reference_type,
+            booking_id,
+            operation,
+            method,
+            amount,
+            payment_date,
+            status,
+            reference_id
+        )
+        VALUES (
+            OLD.id,
+            OLD.reference_type,
+            OLD.booking_id,
+            'DELETE',
+            OLD.method,
+            OLD.amount,
+            OLD.payment_date,
+            OLD.status,
+            OLD.reference_id
+        );
+
+        RETURN OLD;
+
+    END IF;
+
+END;
+$$ LANGUAGE plpgsql;
+```
+
+![](images/clipboard-927965722.png)
+
+### 3.Creo el triggers
+
+``` sql
+CREATE TRIGGER trigger_auditar_payments
+AFTER INSERT OR UPDATE OR DELETE
+ON public.payments
+FOR EACH ROW
+EXECUTE FUNCTION public.auditar_payments();
+```
+
+![](images/clipboard-998911783.png)
+
+### 4.Inserto nuevos valores a la tabla de payments
+
+![](images/clipboard-1919460696.png)
+
+### 5.Consulto en la nueva tabla de payments_audit paar ver los cambios que se realizaron
+
+# ![](images/clipboard-2984771441.png)
+
+Conclusion: los **triggers** sirven para ejecutar automáticamente una acción en la base de datos cuando ocurre un evento como **INSERT, UPDATE o DELETE**. En este proyecto lo utilice para **auditar los cambios** en las tablas `travelers`, `vouchers` y `payments`, almacenando información sobre la operación realizada y los datos afectados. Esto permite llevar un mejor control de los registros, mantener un historial de cambios y facilitar la supervisión de la información sin que el usuario tenga que realizar estas acciones manualmente.
 
 # Consultas en MySQL-Server
 
