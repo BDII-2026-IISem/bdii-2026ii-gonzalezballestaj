@@ -1541,7 +1541,7 @@ EXECUTE FUNCTION public.auditar_payments();
 
 # ![](images/clipboard-2984771441.png)
 
-Conclusion: los **triggers** sirven para ejecutar automáticamente una acción en la base de datos cuando ocurre un evento como **INSERT, UPDATE o DELETE**. En este proyecto lo utilice para **auditar los cambios** en las tablas `travelers`, `vouchers` y `payments`, almacenando información sobre la operación realizada y los datos afectados. Esto permite llevar un mejor control de los registros, mantener un historial de cambios y facilitar la supervisión de la información sin que el usuario tenga que realizar estas acciones manualmente.
+**Conclusion:** los **triggers** sirven para ejecutar automáticamente una acción en la base de datos cuando ocurre un evento como **INSERT, UPDATE o DELETE**. En este proyecto lo utilice para **auditar los cambios** en las tablas `travelers`, `vouchers` y `payments`, almacenando información sobre la operación realizada y los datos afectados. Esto permite llevar un mejor control de los registros, mantener un historial de cambios y facilitar la supervisión de la información sin que el usuario tenga que realizar estas acciones manualmente.
 
 # Consultas en MySQL-Server
 
@@ -1561,13 +1561,23 @@ Conclusion: los **triggers** sirven para ejecutar automáticamente una acción e
 
 ### 1.1: Todos los campos de una tabla
 
+Elegi esta tabal con el fin de conocer los registros almacenados dentro de ella, utilizo **\* from** para mostrar todos los campo correspondientes a la tabla con sus respectivos registros.
+
 ``` sql
 SELECT * FROM dbo.suppliers;
 ```
 
 ![](images/clipboard-1847128631.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-226353713.png)
+
+![](images/clipboard-3146869181.png)
+
 ### 1.2: Campos específicos
+
+Para esta consulta decidí seleccionar únicamente los campos que realmente necesito: `id`, `name` y `created_at` de la tabla `dbo.vouchers`. Así evito traer datos innecesarios, hago la consulta más rápida y mantengo la respuesta del sistema limpia.
 
 ``` sql
 SELECT   id, name,  created_atFROM dbo.vouchers ;
@@ -1575,7 +1585,15 @@ SELECT   id, name,  created_atFROM dbo.vouchers ;
 
 ![](images/clipboard-1531791340.png)
 
+### Creacion del procedure
+
+![](images/clipboard-3867026760.png)
+
+![](images/clipboard-740284464.png)
+
 ### 1.3: Campos específicos usando alias en la tabla
+
+Aquí volví a consultar la tabla `dbo.vouchers`, pero le asigné el alias `v` para escribir la consulta de forma más corta y clara. Seleccioné columnas puntuales como el nombre, la fecha de creación y las descripciones para tener un código bien estructurado.
 
 ``` sql
 SELECT    v.name, v.name,  v.created_at,  v.descriptions 
@@ -1584,9 +1602,13 @@ FROM dbo.vouchers  AS v;
 
 ![](images/clipboard-882133987.png)
 
+### Creacion de el procedure
+
 # 2. Consultar datos de varias tablas (Relaciones / Joins)
 
 ### 2.1: Relación mediante la cláusula WHERE (Forma 1)
+
+Necesitaba cruzar tres tablas: clientes, reservas y vouchers. Para lograrlo, hice la unión a la manera tradicional escribiendo las tablas en el `FROM` y relacionando sus llaves primarias y foráneas (`client_id` y `booking_id`) dentro del `WHERE`.
 
 ``` sql
  SELECT * FROM dbo.clients, dbo.bookings, dbo.vouchers 
@@ -1596,7 +1618,15 @@ WHERE clients.id = bookings.client_id
 
 ![](images/clipboard-1734300638.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-3494206344.png)
+
+![](images/clipboard-1103582767.png)
+
 ### 2.2: Relación mediante WHERE con alias
+
+Hice exactamente la misma relación del punto anterior entre clientes, reservas y vouchers, pero esta vez le asigné alias cortos a cada tabla (`c`, `b` y `v`). Esto me ayuda a que la consulta sea mucho más fácil de leer y escribir.
 
 ``` sql
 SELECT * FROM dbo.clients AS c, dbo.bookings AS b, dbo.vouchers AS v 
@@ -1606,7 +1636,15 @@ WHERE c.id = b.client_id
 
 ![](images/clipboard-3528385663.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-2104117739.png)
+
+![](images/clipboard-1751823313.png)
+
 ### 2.3: Selección de campos específicos y comodín de tabla (V.\*) usando WHERE
+
+En esta consulta quería saber a qué cliente le corresponde cada voucher. Para no saturar la pantalla con datos repetidos, seleccioné solo el nombre y correo del cliente (`c.name`, `c.email`), y combiné eso con todos los campos de la tabla voucher usando `v.*`.
 
 ``` sql
 SELECT c.name,  c.email,  v.* FROM dbo.clients AS c, dbo.bookings AS b, dbo.vouchers AS v 
@@ -1616,7 +1654,15 @@ AND b.id = v.booking_id;
 
 ![](images/clipboard-2562225168.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-20648354.png)
+
+![](images/clipboard-570449730.png)
+
 ### 2.4: Relación mediante la cláusula JOIN ... ON (Forma 2)
+
+Aquí apliqué la forma moderna y recomendada para unir tablas usando `INNER JOIN`. De esta manera separo claramente en la cláusula `ON` la lógica de cómo se conectan las tablas (`clients`, `bookings` y `vouchers`), dejando el código más limpio y profesional.
 
 ``` sql
 SELECT  c.name,  c.email, v.* FROM dbo.clients AS c 
@@ -1626,9 +1672,17 @@ INNER JOIN dbo.vouchers AS v ON b.id = v.booking_id;
 
 ![](images/clipboard-3238702931.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-3719844676.png)
+
+![](images/clipboard-3018415073.png)
+
 # 3. Condiciones y Filtros en las Consultas
 
 ### 3.1: Filtro por fecha en consulta multitabla (Forma 1 - WHERE)
+
+Para esta prueba busqué los comprobantes generados en una fecha y hora muy específica. Crucé las tablas en el `WHERE` y agregué una condición para filtrar exactamente los registros del 28 de mayo de 2026 a las 11:45 AM.
 
 ``` sql
 SELECT  c.name,  c.email, v.* FROM dbo.clients AS c, dbo.bookings AS b, dbo.vouchers AS v 
@@ -1639,7 +1693,15 @@ AND v.created_at = '2026-05-28 11:45:00.000';
 
 ![](images/clipboard-3813404552.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-4088996498.png)
+
+![](images/clipboard-842393592.png)
+
 ### 3.2: Filtro por fecha en consulta multitabla (Forma 2 - JOIN)
+
+Utilicé `INNER JOIN` para conectar clientes, reservas y viajeros, asignando nombres de alias a las columnas de salida (`nombre_cliente`, `email_cliente`). Filtré el resultado para obtener únicamente las reservas que fueron actualizadas el 20 de febrero de 2026 a las 11:00 AM.
 
 ``` sql
 SELECT  c.name AS nombre_cliente,  c.email AS email_cliente, t.name,  t.name,  b.updated_at AS fecha_actualizacion 
@@ -1653,6 +1715,8 @@ WHERE b.updated_at = '2026-02-20 11:00:00';
 
 ### 3.3: Filtro por patrón con LIKE (comienza con 'j' o 'm')
 
+Quería buscar viajeros cuyo nombre empezara por ciertas letras. Utilicé el operador `LIKE` con el comodín `%` para filtrar todos los viajeros cuyos nombres comiencen por la letra 'm' o por la letra 'j'.
+
 ``` sql
 SELECT * FROM dbo.travelers AS t 
 WHERE t.name LIKE 'm%' 
@@ -1661,7 +1725,15 @@ WHERE t.name LIKE 'm%'
 
 ![](images/clipboard-1403433871.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-102365329.png)
+
+![](images/clipboard-2179692996.png)
+
 ### 3.4: Filtro por patrón con LIKE y CONCAT (contiene 'Diego ' o 'Silva')
+
+Aquí busqué coincidencias en cualquier parte del nombre. Usé `%Diego%` y `%Silva%` para que la consulta me devuelva a cualquier viajero que tenga la palabra 'Diego' o el apellido 'Silva', sin importar en qué posición del texto se encuentre.
 
 ``` sql
 SELECT * FROM dbo.travelers AS t 
@@ -1671,7 +1743,15 @@ WHERE t.name LIKE '%Diego%'
 
 ![](images/clipboard-3198453224.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-786466118.png)
+
+![](images/clipboard-1433018641.png)
+
 ### 3.5: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 1 - WHERE)
+
+Construí una consulta para analizar el primer trimestre del año 2026. Uní cuatro tablas en el `WHERE` (`clients`, `bookings`, `departures`, `travelers` y `vouchers`), filtré la fecha de la reserva con `BETWEEN` entre enero y marzo, y ordené los resultados de la más antigua a la más reciente.
 
 ``` sql
 SELECT c.name AS cliente, b.id AS reserva_id, d.id AS salida_id, t.name AS viajero_nombre,  v.id AS voucher_id 
@@ -1688,6 +1768,8 @@ ORDER BY b.created_at ASC;
 
 ### 3.6: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 2 - JOIN)
 
+Hice el mismo reporte del primer trimestre de 2026, pero esta vez estructuré los cruces con `INNER JOIN`. Seleccioné solo los datos clave del cliente y viajero, apliqué el rango de fechas y ordené los resultados de forma ascendente según la fecha de creación.
+
 ``` sql
 SELECT c.name AS cliente, t.name AS viajero_nombre,  t.name AS viajero_apellido,  b.created_at AS fecha_reserva 
 FROM dbo.clients AS c 
@@ -1699,9 +1781,17 @@ ORDER BY b.created_at ASC;
 
 ![](images/clipboard-2849449600.png)
 
+### creacion de el procedure
+
+![](images/clipboard-4273448277.png)
+
+![](images/clipboard-1824677353.png)
+
 # 4. Consultas de Agrupamiento (GROUP BY)
 
 ### 4.1: Suma, conteo y promedio por cliente en rango de fechas (Forma 1 - WHERE)
+
+Para esta consulta quería saber cuántos pasajeros ha registrado cada cliente. Uní la tabla de reservas con la de viajeros y utilicé la función `COUNT(t.id)` junto con `GROUP BY` para agrupar los datos y obtener el total por cliente.
 
 ``` sql
 SELECT b.client_id, 
@@ -1713,7 +1803,15 @@ GROUP BY b.client_id;
 
 ![](images/clipboard-1641510001.png)
 
+### creacion de el procedure
+
+![](images/clipboard-3856898009.png)
+
+![](images/clipboard-301892686.png)
+
 ### 4.2: Suma, conteo y promedio por cliente en rango de fechas (Forma 2 - JOIN)
+
+Aquí repetí el agrupamiento por cliente usando un `INNER JOIN` explícito entre reservas y viajeros. Al agrupar por `b.client_id`, logro consolidar de forma clara cuántos pasajeros tiene contabilizados cada uno.
 
 ``` sql
 SELECT b.client_id, 
@@ -1729,6 +1827,8 @@ GROUP BY b.client_id;
 
 ### 5.1: Agrupamiento con condición de conteo HAVING (Forma 1 - WHERE)
 
+Buscaba listar a los clientes y ver cuántos viajeros tienen, pero filtrando el resultado final. Crucé las tablas en el `WHERE`, agrupé por el ID y nombre del cliente, y utilicé `HAVING COUNT(t.id) >= 1` para mostrar solo a los que tienen al menos un pasajero, ordenándolos de mayor a menor.
+
 ``` sql
 SELECT c.id AS client_id, c.name AS nombre_cliente, 
 COUNT(t.id) AS total_pasajeros 
@@ -1742,7 +1842,16 @@ ORDER BY total_pasajeros DESC;
 
 ![](images/clipboard-2158419463.png)
 
+### creacion del procedure
+
+![](images/clipboard-2367563901.png)
+
+![](images/clipboard-1306224468.png)
+
 ### 5.2: Agrupamiento con condición de conteo HAVING (Forma 2 - JOIN)
+
+\
+Hice exactamente el mismo cálculo de volumen de pasajeros por cliente pero estructurando la consulta con `INNER JOIN`. Apliqué el agrupamiento por cliente y usé la cláusula `HAVING` para filtrar los totales ordenados de forma descendente.
 
 ``` {.sql .sq}
 SELECT   c.id AS client_id,  c.name AS nombre_cliente, 
@@ -1761,6 +1870,8 @@ ORDER BY total_pasajeros DESC;
 
 ### 6.1: Clientes sin ventas en un rango usando subconsulta NOT IN (Forma 1)
 
+Esta consulta la pensé para encontrar la diferencia de conjuntos: clientes que NO tienen reservas registradas. Consulto la tabla de clientes y uso `NOT IN` comparando contra una subconsulta que obtiene la lista única (`DISTINCT`) de clientes que sí han realizado reservas con un viajero válido.
+
 ``` sql
 SELECT * FROM dbo.clients AS c 
 WHERE c.id NOT IN (
@@ -1773,7 +1884,15 @@ WHERE c.id NOT IN (
 
 ![](images/clipboard-368262423.png)
 
+### creacion de el procedure
+
+![](images/clipboard-2765038707.png)
+
+![](images/clipboard-2754354576.png)
+
 ### 6.2: Clientes sin ventas en un rango usando LEFT JOIN y IS NULL (Forma 2)
+
+Para resolver el mismo problema de buscar clientes sin ventas pero de forma más eficiente, utilicé un `LEFT JOIN` con una subconsulta. Al unir todos los clientes y filtrar con `WHERE t_sub.client_id IS NULL`, me quedo únicamente con aquellos clientes que no tuvieron ningún cruce o coincidencia en las reservas.
 
 ``` sql
 SELECT c.* FROM dbo.clients AS c 
@@ -1786,6 +1905,343 @@ WHERE t_sub.client_id IS NULL;
 ```
 
 ![](images/clipboard-1646379604.png)
+
+### creacion de el procedure
+
+![](images/clipboard-3565700500.png)
+
+![](images/clipboard-2301050791.png)
+
+# CREACION DE TRIGGERS
+
+- Quiero crear el triggers paar la tabla de clients con el fin de llevar un control del registro de los datos de los usuarios y asi consultar en tiempo real si hubo alguna modificacion en esta tabla.
+
+  ### 1.creo la tabla clients_audit
+
+  ``` sql
+  CREATE TABLE dbo.clients_audit (
+      id INT IDENTITY(1,1) PRIMARY KEY,
+      client_id INT,
+      operation VARCHAR(10),
+      name VARCHAR(255),
+      email VARCHAR(255),
+      phone VARCHAR(50),
+      document VARCHAR(100),
+      status VARCHAR(20),
+      created_at DATETIME,
+      updated_at DATETIME,
+      document_type VARCHAR(50),
+      document_number VARCHAR(100),
+      operation_date DATETIME DEFAULT GETDATE()
+  );
+  ```
+
+  ![](images/clipboard-2532163391.png)
+
+  ### 2.creo el triggers
+
+  ``` sql
+  CREATE TRIGGER dbo.trg_clients_audit
+  ON dbo.clients
+  AFTER INSERT, UPDATE, DELETE
+  AS
+  BEGIN
+      SET NOCOUNT ON;
+
+      INSERT INTO dbo.clients_audit
+      (
+          client_id,
+          operation,
+          name,
+          email,
+          phone,
+          document,
+          status,
+          created_at,
+          updated_at,
+          document_type,
+          document_number,
+          operation_date
+      )
+      SELECT
+          i.id,
+          CASE
+              WHEN d.id IS NULL THEN 'INSERT'
+              WHEN i.id IS NOT NULL THEN 'UPDATE'
+          END,
+          i.name,
+          i.email,
+          i.phone,
+          i.document,
+          i.status,
+          i.created_at,
+          i.updated_at,
+          i.document_type,
+          i.document_number,
+          GETDATE()
+      FROM inserted AS i
+      LEFT JOIN deleted AS d
+          ON i.id = d.id;
+
+      INSERT INTO dbo.clients_audit
+      (
+          client_id,
+          operation,
+          name,
+          email,
+          phone,
+          document,
+          status,
+          created_at,
+          updated_at,
+          document_type,
+          document_number,
+          operation_date
+      )
+      SELECT
+          d.id,
+          'DELETE',
+          d.name,
+          d.email,
+          d.phone,
+          d.document,
+          d.status,
+          d.created_at,
+          d.updated_at,
+          d.document_type,
+          d.document_number,
+          GETDATE()
+      FROM deleted AS d
+      LEFT JOIN inserted AS i
+          ON d.id = i.id
+      WHERE i.id IS NULL;
+  END;
+  ```
+
+![](images/clipboard-2661845095.png)
+
+### 3.registramos,modificamos y eliminamos un registro de la tabla clients con el fin de observar el funcionamiento de el triggers
+
+![](images/clipboard-718163908.png)
+
+### 4.Ahora consultamos en nuestra tabla clients_audit con el fin de observar que cambios se realizaron
+
+![](images/clipboard-3645903413.png)
+
+y podemos observar en nuestra tabla que el usuario realizo el proceso de insertar, eliminar y actualizar datos del usuario
+
+- Quiero crear el triggers para la tabla de included_services con el fin de llevar un control del registro de los servicios que adquieren los usuarios y asi consultar en tiempo real si hubo alguna modificacion en esta tabla.
+
+  ### 1.creo la tabla included_services_audit
+
+  ``` sql
+  CREATE TABLE dbo.included_services_audit (
+      id INT IDENTITY(1,1) PRIMARY KEY,
+      included_service_id INT,
+      operation VARCHAR(10),
+      package_id INT,
+      supplier_id INT,
+      relation_data VARCHAR(MAX),
+      status VARCHAR(20),
+      created_at DATETIME,
+      updated_at DATETIME,
+      operation_date DATETIME DEFAULT GETDATE()
+  );
+  ```
+
+  ![](images/clipboard-3772758628.png)
+
+  ### 2.creo el triggers
+
+  ``` sql
+  CREATE OR ALTER TRIGGER dbo.trg_included_services_audit
+  ON dbo.included_services
+  AFTER INSERT, UPDATE, DELETE
+  AS
+  BEGIN
+      SET NOCOUNT ON;
+
+      -- INSERT y UPDATE
+      INSERT INTO dbo.included_services_audit
+      (
+          included_service_id,
+          operation,
+          package_id,
+          supplier_id,
+          relation_data,
+          status,
+          created_at,
+          updated_at,
+          operation_date
+      )
+      SELECT
+          i.id,
+          CASE
+              WHEN d.id IS NULL THEN 'INSERT'
+              ELSE 'UPDATE'
+          END,
+          i.package_id,
+          i.supplier_id,
+          i.relation_data,
+          i.status,
+          i.created_at,
+          i.updated_at,
+          GETDATE()
+      FROM inserted AS i
+      LEFT JOIN deleted AS d
+          ON i.id = d.id;
+
+      -- DELETE
+      INSERT INTO dbo.included_services_audit
+      (
+          included_service_id,
+          operation,
+          package_id,
+          supplier_id,
+          relation_data,
+          status,
+          created_at,
+          updated_at,
+          operation_date
+      )
+      SELECT
+          d.id,
+          'DELETE',
+          d.package_id,
+          d.supplier_id,
+          d.relation_data,
+          d.status,
+          d.created_at,
+          d.updated_at,
+          GETDATE()
+      FROM deleted AS d
+      LEFT JOIN inserted AS i
+          ON d.id = i.id
+      WHERE i.id IS NULL;
+  END;
+  ```
+
+![](images/clipboard-337767117.png)
+
+### 3.registramos,modificamos y eliminamos un registro de la tabla included_services con el fin de observar el funcionamiento de el triggers
+
+![](images/clipboard-400498650.png)
+
+### 4.Ahora consultamos en nuestra tabla included_services_audit con el fin de observar que cambios se realizaron
+
+![](images/clipboard-216649272.png)
+
+y podemos observar en nuestra tabla que el usuario realizo el proceso de insertar y eliminar registros de la tabla included_services.
+
+- Ahora vamos a crear un triggers para tabla suppliers con el fin de conocer los registros de los provedores y evitar que se hagan modificaciones y en e, caso de que se hagan pues recurrir a una tabla donde veamos que registo se **elimino, actualizo o inserto.**
+
+  ### 1.creo la tabla suppliers_audit
+
+  ``` sql
+  CREATE TABLE dbo.suppliers_audit (
+      id INT IDENTITY(1,1) PRIMARY KEY,
+      supplier_id INT,
+      operation VARCHAR(10),
+      nit VARCHAR(50),
+      razon_social VARCHAR(255),
+      phone VARCHAR(50),
+      email VARCHAR(255),
+      status VARCHAR(20),
+      created_at DATETIME,
+      updated_at DATETIME,
+      operation_date DATETIME DEFAULT GETDATE()
+  );
+  ```
+
+  ![](images/clipboard-29653413.png)
+
+  ### 2.creo el triggers
+
+  ``` sql
+  CREATE OR ALTER TRIGGER dbo.trg_suppliers_audit
+  ON dbo.suppliers
+  AFTER INSERT, UPDATE, DELETE
+  AS
+  BEGIN
+      SET NOCOUNT ON;
+
+      -- INSERT y UPDATE
+      INSERT INTO dbo.suppliers_audit
+      (
+          supplier_id,
+          operation,
+          nit,
+          razon_social,
+          phone,
+          email,
+          status,
+          created_at,
+          updated_at,
+          operation_date
+      )
+      SELECT
+          i.id,
+          CASE
+              WHEN d.id IS NULL THEN 'INSERT'
+              ELSE 'UPDATE'
+          END,
+          i.nit,
+          i.razon_social,
+          i.phone,
+          i.email,
+          i.status,
+          i.created_at,
+          i.updated_at,
+          GETDATE()
+      FROM inserted AS i
+      LEFT JOIN deleted AS d
+          ON i.id = d.id;
+
+      -- DELETE
+      INSERT INTO dbo.suppliers_audit
+      (
+          supplier_id,
+          operation,
+          nit,
+          razon_social,
+          phone,
+          email,
+          status,
+          created_at,
+          updated_at,
+          operation_date
+      )
+      SELECT
+          d.id,
+          'DELETE',
+          d.nit,
+          d.razon_social,
+          d.phone,
+          d.email,
+          d.status,
+          d.created_at,
+          d.updated_at,
+          GETDATE()
+      FROM deleted AS d
+      LEFT JOIN inserted AS i
+          ON d.id = i.id
+      WHERE i.id IS NULL;
+  END;
+  ```
+
+![](images/clipboard-404949783.png)
+
+### 3.registramos,modificamos y eliminamos un registro de la tabla suppliers con el fin de observar el funcionamiento de el triggers
+
+![](images/clipboard-3922468899.png)
+
+### 4.Ahora consultamos en nuestra tabla suppliers_audit con el fin de observar que cambios se realizaron
+
+![](images/clipboard-3827458544.png)
+
+observamos que efectivamente que el registro que agregamos y el que modificamos se nos muestra en nuestra tabla adicional creada especificamente para estos casos con el fin de mantener el contro y evitar fraudes.
+
+**Conclusión:** Estos triggers nos permiten guardar un historial de los cambios realizados. Saber qué operación ocurrió: INSERT, UPDATE o DELETE. Conservar información de los registros incluso después de una modificación o eliminación. Facilitar el seguimiento y control de los datos. Mejorar la integridad y trazabilidad de la base de datos. Evitar que el usuario tenga que realizar manualmente estas acciones, ya que el trigger se ejecuta automáticamente.
 
 # Consultas avanzadas en Oracle
 
