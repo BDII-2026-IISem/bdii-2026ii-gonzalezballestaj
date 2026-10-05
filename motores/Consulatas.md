@@ -1134,7 +1134,7 @@ ORDER BY totalsuma DESC;
 
 ### 6.1: Clientes sin ventas en un rango usando subconsulta NOT IN (Forma 1)
 
-Esta consulta aplica la teoría de conjuntos para extraer a los clientes registrados que no realizaron compras ($A - B$). Utiliza una subconsulta dentro de la cláusula `WHERE` con el operador `NOT IN` sobre la tabla de ventas o reservas. La subconsulta genera una lista con los IDs de clientes activos en el rango de fechas especificado para excluirlos. Es una técnica muy utilizada por el área de mercadeo para identificar e impactar a la cartera de clientes inactivos.
+Esta consulta aplica la teoría de conjuntos para extraer a los clientes registrados que no realizaron compras ($A - B$\$A - B\$). Utiliza una subconsulta dentro de la cláusula `WHERE` con el operador `NOT IN` sobre la tabla de ventas o reservas. La subconsulta genera una lista con los IDs de clientes activos en el rango de fechas especificado para excluirlos. Es una técnica muy utilizada por el área de mercadeo para identificar e impactar a la cartera de clientes inactivos.
 
 ``` sql
 SELECT * FROM public.clients AS c 
@@ -2261,13 +2261,23 @@ observamos que efectivamente que el registro que agregamos y el que modificamos 
 
 ### 1.1: Todos los campos de una tabla
 
+Esta consulta permite visualizar toda la información almacenada en una tabla, mostrando todos sus registros y campos. Se utiliza para realizar una consulta general de los datos disponibles y verificar la información registrada en el sistema.
+
 ``` sql
 SELECT * FROM suppliers;
 ```
 
 ![](images/clipboard-3826630184.png)
 
+### Creacion del procedure
+
+![](images/clipboard-2561084301.png)
+
+![](images/clipboard-1999101198.png)
+
 ### 1.2: Campos específicos
+
+Esta consulta permite seleccionar únicamente los campos necesarios de una tabla, evitando mostrar información que no sea relevante para el usuario. Facilita la visualización de datos específicos y hace que los resultados sean más claros y organizados.
 
 ``` sql
 SELECT  id, nit,  razon_social, phone, email 
@@ -2276,7 +2286,15 @@ FROM suppliers;
 
 ![](images/clipboard-1048353233.png)
 
+### Creacion del procedure 
+
+![](images/clipboard-3117899485.png)
+
+![](images/clipboard-1199645342.png)
+
 ### 1.3: Campos específicos usando alias en la tabla
+
+Esta consulta permite asignar un alias a la tabla para simplificar la escritura y lectura de la sentencia SQL. Es especialmente útil cuando se trabaja con tablas que tienen nombres largos o cuando posteriormente se realizan relaciones entre varias tablas.
 
 ``` sql
 SELECT   s.id,  s.nit,  s.razon_social,  s.status 
@@ -2289,6 +2307,8 @@ FROM suppliers s;
 
 ### 2.1: Relación mediante la cláusula WHERE (Forma 1)
 
+Esta consulta permite obtener información relacionada entre dos o más tablas utilizando la cláusula `WHERE` para establecer la condición de relación entre las claves correspondientes. Su objetivo es combinar información almacenada en diferentes tablas mediante sus relaciones.
+
 ``` sql
 SELECT * FROM suppliers s, included_services ins, packages p 
 WHERE s.id = ins.supplier_id 
@@ -2297,7 +2317,15 @@ WHERE s.id = ins.supplier_id
 
 ![](images/clipboard-614642835.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-1118897626.png)
+
+![](images/clipboard-2745941870.png)
+
 ### 2.2: Relación mediante WHERE con alias
+
+En esta consulta relaciono varias tablas utilizando la cláusula `WHERE` y asignando alias a cada tabla. De esta manera puedo identificar más fácilmente los campos de cada tabla y obtener la información relacionada sin tener que escribir los nombres completos de las tablas.
 
 ``` sql
 SELECT * FROM packages p, departures d 
@@ -2306,7 +2334,15 @@ WHERE p.id = d.package_id;
 
 ![](images/clipboard-1607921149.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-3985953614.png)
+
+![](images/clipboard-4042567035.png)
+
 ### 2.3: Selección de campos específicos y comodín de tabla (V.\*) usando WHERE
+
+En esta consulta selecciono algunos campos específicos de las tablas relacionadas y utilizo `V.*` para mostrar todos los campos de una de las tablas. Esto me permite obtener información completa de una tabla y, al mismo tiempo, seleccionar únicamente los datos que necesito de las demás tablas.
 
 ``` sql
 SELECT p.name AS nombre_paquete,  p.description AS descripcion_paquete,  d.* FROM packages p, departures d 
@@ -2315,7 +2351,15 @@ WHERE p.id = d.package_id;
 
 ![](images/clipboard-3366465703.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-3009430334.png)
+
+![](images/clipboard-2379780690.png)
+
 ### 2.4: Relación mediante la cláusula JOIN ... ON (Forma 2)
+
+En esta consulta relaciono las tablas utilizando `JOIN ... ON`. Con esta estructura puedo establecer de forma más clara la relación entre las claves de las tablas y obtener la información que necesito de manera organizada.
 
 ``` {.sql .sq}
 SELECT  s.razon_social AS proveedor,  p.name AS paquete, ins.relation_data AS detalle_servicio 
@@ -2330,6 +2374,8 @@ JOIN packages p ON p.id = ins.package_id;
 
 ### 3.1: Filtro por fecha en consulta multitabla (Forma 1 - WHERE)
 
+En esta consulta relaciono varias tablas y utilizo la cláusula `WHERE` para filtrar los registros según una fecha determinada. De esta manera puedo consultar únicamente la información que corresponde al periodo que necesito analizar.
+
 ``` sql
 SELECT  p.name AS paquete,   d.name AS salida,   d.departure_date 
 FROM packages p, departures d 
@@ -2339,7 +2385,15 @@ WHERE p.id = d.package_id
 
 ![](images/clipboard-3471898761.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-2453994999.png)
+
+![](images/clipboard-1806948623.png)
+
 ### 3.2: Filtro por fecha en consulta multitabla (Forma 2 - JOIN)
+
+En esta consulta utilizo `JOIN ... ON` para relacionar las tablas y posteriormente aplico un filtro de fecha. Con esto puedo obtener información relacionada entre diferentes tablas, pero únicamente de los registros que pertenecen al periodo seleccionado.
 
 ``` sql
 SELECT   s.razon_social,  p.name AS paquete,   ins.created_at 
@@ -2351,7 +2405,15 @@ WHERE ins.created_at = TIMESTAMP '2025-05-06 11:08:00.000';
 
 ![](images/clipboard-774844825.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-464644365.png)
+
+![](images/clipboard-730028190.png)
+
 ### 3.3: Filtro por patrón con LIKE (comienza con 'a' o 't')
+
+En esta consulta utilizo `LIKE` para realizar una búsqueda mediante patrones. Esto me permite encontrar registros cuyos nombres comiencen con determinadas letras, en este caso con **J** o **M**, sin tener que escribir el nombre completo.
 
 ``` sql
 SELECT * FROM suppliers s WHERE LOWER(s.razon_social) LIKE 'a%' 
@@ -2360,7 +2422,15 @@ SELECT * FROM suppliers s WHERE LOWER(s.razon_social) LIKE 'a%'
 
 ![](images/clipboard-3389684813.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-1084364291.png)
+
+![](images/clipboard-4153490255.png)
+
 ### 3.4: Filtro por patrón con LIKE y CONCAT (contiene 'Diego ' o 'negocios')
+
+En esta consulta utilizo `LIKE` junto con `CONCAT` para realizar una búsqueda más específica. De esta manera puedo encontrar registros que contengan determinados datos, como el nombre **Diego Silva** o el correo electrónico **diego.silva58\@gmail.com**, dentro de los campos consultados.
 
 ``` sql
 SELECT * 
@@ -2371,7 +2441,15 @@ WHERE LOWER(p.name) LIKE '%diego%'
 
 ![](images/clipboard-1771410062.png)
 
+### Creacon de el procedure
+
+![](images/clipboard-1556298517.png)
+
+![](images/clipboard-2428867.png)
+
 ### 3.5: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 1 - WHERE)
+
+En esta consulta relaciono cuatro tablas utilizando la cláusula `WHERE`. También establezco un rango de fechas para limitar los resultados y utilizo un ordenamiento para presentar la información de una manera más organizada. Esto me permite analizar las operaciones realizadas durante un periodo específico.
 
 ``` {.sql .sq}
 SELECT  p.name AS paquete,  d.name AS salida,   c.name AS motivo_cancelacion,   s.razon_social AS proveedor,   c.created_at AS fecha_cancelacion 
@@ -2389,6 +2467,8 @@ ORDER BY c.created_at ASC;
 
 ### 3.6: Consulta entre 4 tablas unidas con rango de fechas y ordenamiento (Forma 2 - JOIN)
 
+En esta consulta relaciono cuatro tablas utilizando `JOIN ... ON`. Además, aplico un rango de fechas para obtener únicamente los registros que necesito y utilizo `ORDER BY` para organizar los resultados. La diferencia con la consulta anterior es principalmente la forma en que establezco las relaciones entre las tablas.
+
 ``` sql
 SELECT  p.name AS paquete,  d.name AS salida,  d.departure_date,  d.capacity 
 FROM packages p 
@@ -2403,6 +2483,8 @@ ORDER BY d.departure_date ASC;
 
 ### 4.1: Suma, conteo y promedio por cliente en rango de fechas (Forma 1 - WHERE)
 
+En esta consulta agrupo la información por cliente utilizando `GROUP BY`. También utilizo funciones de agregación como `SUM`, `COUNT` y `AVG` para obtener la suma, cantidad y promedio de las operaciones realizadas en un rango de fechas determinado. Esto me permite analizar el comportamiento de cada cliente.
+
 ``` sql
 SELECT  p.id AS paquete_id, 
 COUNT(ins.id) AS total_servicios_incluidos, 
@@ -2416,7 +2498,15 @@ GROUP BY p.id;
 
 ![](images/clipboard-3311406578.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-3808685935.png)
+
+![](images/clipboard-4054959814.png)
+
 ### 4.2: Suma, conteo y promedio por cliente en rango de fechas (Forma 2 - JOIN)
+
+En esta consulta realizo el mismo análisis de suma, conteo y promedio por cliente, pero utilizo `JOIN ... ON` para relacionar las tablas. De esta forma puedo combinar la información de las diferentes tablas y obtener los datos agrupados de cada cliente dentro del periodo establecido.
 
 ``` sql
 SELECT s.id AS supplier_id,  s.razon_social,  s.nit, 
@@ -2430,9 +2520,17 @@ GROUP BY s.id, s.razon_social, s.nit;
 
 ![](images/clipboard-2499697448.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-1716888756.png)
+
+![](images/clipboard-3919386490.png)
+
 # 5. Consultas de Agrupamiento con Filtro Post-Agregación (HAVING)
 
 ### 5.1: Agrupamiento con condición de conteo HAVING (Forma 1 - WHERE)
+
+En esta consulta agrupo los registros por cliente y utilizo `COUNT` para conocer la cantidad de operaciones realizadas. Después utilizo `HAVING` para filtrar los grupos y mostrar únicamente los clientes que cumplen con la cantidad de operaciones establecida.
 
 ``` sql
 SELECT s.id AS supplier_id,  s.razon_social, 
@@ -2448,7 +2546,15 @@ ORDER BY total_servicios DESC;
 
 ![](images/clipboard-2894892436.png)
 
+### Creacion de el procedure 
+
+![](images/clipboard-1999464015.png)
+
+![](images/clipboard-3722386645.png)
+
 ### 5.2: Agrupamiento con condición de conteo HAVING (Forma 2 - JOIN)
+
+En esta consulta relaciono las tablas mediante `JOIN ... ON`, agrupo los registros por cliente y utilizo `COUNT` para contar sus operaciones. Finalmente utilizo `HAVING` para mostrar únicamente los clientes que cumplen con la condición de cantidad establecida.
 
 ``` sql
 SELECT  p.id AS package_id,  p.name AS nombre_paquete, 
@@ -2468,6 +2574,8 @@ ORDER BY capacidad_total DESC;
 
 ### 6.1: Clientes sin ventas en un rango usando subconsulta NOT IN (Forma 1)
 
+En esta consulta utilizo una subconsulta con `NOT IN` para identificar los clientes que no realizaron ninguna operación dentro del rango de fechas establecido. De esta manera puedo encontrar los clientes que no tuvieron actividad durante el periodo seleccionado.
+
 ``` sql
 SELECT * FROM suppliers s 
 WHERE s.id NOT IN (
@@ -2479,7 +2587,15 @@ WHERE s.id NOT IN (
 
 ![](images/clipboard-1573422763.png)
 
+### Creacion de el procedure
+
+![](images/clipboard-3688332922.png)
+
+![](images/clipboard-3056513408.png)
+
 ### 6.2: Clientes sin ventas en un rango usando LEFT JOIN y IS NULL (Forma 2)
+
+En esta consulta utilizo `LEFT JOIN` para relacionar los clientes con sus operaciones y posteriormente utilizo `IS NULL` para identificar aquellos clientes que no tienen registros relacionados. Con esto puedo obtener los clientes que no realizaron operaciones durante el periodo indicado.
 
 ``` {.sql .sq}
 SELECT p.* FROM packages p 
@@ -2492,3 +2608,35 @@ WHERE d_sub.package_id IS NULL;
 ```
 
 ![](images/clipboard-660293381.png)
+
+# CREACION DE TRIGGERS
+
+- creo el triggers con el fin de llevar control de mi base de datos y poder consultar en cualquier momento si hubo alguna modificacion en alguna de sus tablas.
+
+### 1.Creo la tabla clients_audit para guardar los registros y consulatar 
+
+![](images/clipboard-1999464015.png)
+
+### 2.Creao el triggers para la tabla auditoria 
+
+![](images/clipboard-2238007526.png)
+
+### 3.creo el triggers que me ayudara a ver desde la interfaz grafica
+
+![](images/clipboard-7677392.png)
+
+- creo el triggers para esta tabla con el fin de que no se modifiquen los registros que se encuentran en ella y con el fin de que si en un momento necesito informacion precisa acceder a ella y consultar en la tabala de (audit) si se realizaron algunas modificacione sy poder recuperar la informacion anterior.
+
+### 1.Creo la tabla cancellations_audit
+
+![](images/clipboard-3251590077.png)
+
+### 2.creo el trigger para la tabla auditoria para poder realizar lo que viene siendo las inserciones, actualizaciones y eliminaciones
+
+![](images/clipboard-3342802310.png)
+
+### 3.creo el triggers que me ayudara a ver desde la interfaz grafica
+
+![](images/clipboard-3621311554.png)
+
+A lo largo de este laboratorio, logre implementar con exito una solución integral basada en procedimientos almacenados, triggers y un sistema de auditoría en mysql, postgres, mysql-server y oracle para la gestión del sistema. con la creación de los procedimientos almacenados utilicé parámetros dinámicos y la devolución de resultados. Esto me permitió estandarizar el consumo de consultas complejas (como JOINs, agregaciones y filtros por rangos de fecha), logrando un código modular, reutilizable y mucho más eficiente al separar la lógica de la base de datos de las aplicaciones externas.
