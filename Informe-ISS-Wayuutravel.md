@@ -1656,3 +1656,338 @@ En este ISS se verifican los criterios mediante pruebas de modelos y de integrid
 - AC-05-03: las restricciones de unicidad impiden duplicar los valores definidos como únicos. PASS cuando las pruebas comprueban el rechazo de duplicados.
 
 - AC-05-04: el campo `status` tiene el valor predeterminado `inactive`. PASS cuando se verifica en el modelo base y mediante una prueba.
+
+### ISS-06 — Bookings, Payments y Vouchers
+
+**Narrativa**
+
+Hasta aquí, WayuuTravel cuenta con sus clientes, viajeros, paquetes turísticos, salidas programadas, proveedores y servicios incluidos. Ahora se implementa el flujo principal del negocio: un cliente realiza una reserva para una salida turística y asocia a los viajeros correspondientes. Cada reserva puede tener pagos, cancelaciones y vouchers que permiten gestionar y documentar la experiencia turística.
+
+Las reservas no deben confundirse con una relación muchos-a-muchos simple, porque contienen información propia, como las fechas, las observaciones y el estado de la operación. Por eso, `bookings` funciona como una entidad del negocio relacionada con `clients`, `departures` y `travelers`.
+
+También se contempla la cancelación de reservas, manteniendo el historial de pagos y los registros asociados para facilitar la trazabilidad. Las reglas específicas para cancelar pagos o modificar su estado deben definirse de acuerdo con las políticas del negocio, sin eliminar automáticamente el historial financiero.
+
+**Objetivo**
+
+Representar las reservas, los pagos, las cancelaciones y los vouchers de Wayuu Travel, garantizando la integridad referencial entre clientes, viajeros, salidas programadas y las operaciones comerciales.
+
+Requisitos
+
+- ISS-05 superado: modelos principales creados y relaciones verificadas.
+
+- Terminal con el entorno virtual `.venv` activo.
+
+- `bookings` relaciona un cliente (`client_id`), una salida programada (`departure_id`) y un viajero (`traveler_id`).
+
+- `payments` registra los pagos asociados a una reserva mediante `booking_id`.
+
+- `cancellations` y `vouchers` mantienen la referencia a la reserva correspondiente.
+
+- Las claves foráneas y las restricciones de integridad deben coincidir con el diseño de la base de datos.
+
+#### Construcción
+
+**Paso 0. Activar el entorno virtual**
+
+``` sql
+source .venv/bin/activate 
+which python
+```
+
+![](images/clipboard-1928392190.png)
+
+**Paso 1. Crear el manager de reservas**
+
+El archivo `apps/sale/managers.py` es nuevo. En este ISS, el manager todavía no registra la reserva ni ejecuta operaciones del negocio: solo permite que el modelo `Booking` utilice un manager propio a través de `objects`.
+
+El método `register` se agregará más adelante, cuando se implemente el proceso de registro de reservas y se requiera manejar la operación de forma transaccional.
+
+Ruta del archivo: **apps/sale/managers.py**
+
+``` sql
+
+from django.db import models
+
+
+class BookingManager(models.Manager):
+    """Manager personalizado para las reservas de WayuuTravel."""
+    pass
+```
+
+![](images/clipboard-3140737751.png)
+
+### Paso 2. Escribir los modelos
+
+El archivo `apps/sale/models.py` ya existe. Se reescribe completo para definir los modelos `Booking`, `Payment`, `Cancellation` y `Voucher`, correspondientes al flujo comercial de WayuuTravel. No se utiliza `ManyToManyField`, ya que las relaciones entre clientes, viajeros, salidas programadas y reservas se representan mediante claves foráneas explícitas.
+
+Según el diseño de la base de datos, `Booking` relaciona un cliente, una salida programada y un viajero, además de almacenar las fechas y observaciones de la reserva. `Payment` registra el tipo de referencia, la reserva asociada, el método de pago, el importe, la fecha del pago y su estado.
+
+Por su parte, `Cancellation` permite registrar las cancelaciones asociadas a una reserva, mientras que `Voucher` conserva la información de los comprobantes correspondientes. Los modelos heredan del modelo base `Wayuutravel` para reutilizar los campos comunes definidos en el proyecto.
+
+Las relaciones y las restricciones de integridad se configuran de acuerdo con el esquema de la base de datos, evitando eliminar reservas que tengan registros relacionados y preservando la trazabilidad de las operaciones turísticas.
+
+``` sql
+
+from django.core.validators import MinValueValidator
+from django.db import models
+
+from apps.common.models import Wayuutravel
+from apps.client.models import Client, Traveler
+from apps.product.models import Departure
+
+
+class Booking(Wayuutravel):
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.PROTECT,
+        related_name="bookings",
+        db_column="client_id"
+    )
+    departure = models.ForeignKey(
+        Departure,
+        on_delete=models.PROTECT,
+        related_name="bookings",
+        db_column="departure_id"
+    )
+    traveler = models.ForeignKey(
+        Traveler,
+        on_delete=models.PROTECT,
+        related_name="bookings",
+        db_column="traveler_id"
+    )
+    start_date = models.DateField()
+    end_date = models.DateField()
+    observations = models.TextField(
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "bookings"
+        verbose_name = "reserva"
+        verbose_name_plural = "reservas"
+        ordering = ["-created_at", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("bookings_status_valid"),
+            models.CheckConstraint(
+                condition=models.Q(end_date__gte=models.F("start_date")),
+                name="bookings_end_date_gte_start_date"
+            ),
+        ]
+
+    def __str__(self):
+        return f"Reserva #{self.pk}"
+
+
+class Payment(Wayuutravel):
+    reference_type = models.CharField(max_length=50)
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.PROTECT,
+        related_name="payments",
+        db_column="booking_id"
+    )
+    method = models.CharField(max_length=50)
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(0.01)]
+    )
+    payment_date = models.DateTimeField()
+
+    class Meta:
+        db_table = "payments"
+        verbose_name = "pago"
+        verbose_name_plural = "pagos"
+        ordering = ["-payment_date", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("payments_status_valid")
+        ]
+
+    def __str__(self):
+        return f"Pago #{self.pk} - {self.amount}"
+
+
+class Cancellation(Wayuutravel):
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.PROTECT,
+        related_name="cancellations",
+        db_column="booking_id"
+    )
+    name = models.CharField(max_length=100)
+    descriptions = models.TextField(
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "cancellations"
+        verbose_name = "cancelación"
+        verbose_name_plural = "cancelaciones"
+        ordering = ["-created_at", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("cancellations_status_valid")
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class Voucher(Wayuutravel):
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.PROTECT,
+        related_name="vouchers",
+        db_column="booking_id"
+    )
+    name = models.CharField(max_length=100)
+    descriptions = models.TextField(
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "vouchers"
+        verbose_name = "comprobante"
+        verbose_name_plural = "comprobantes"
+        ordering = ["-created_at", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("vouchers_status_valid")
+        ]
+
+    def __str__(self):
+        return self.name
+```
+
+![](images/clipboard-1019738362.png)
+
+**Paso 3. Generar la migración y migrar**
+
+``` sql
+python manage.py makemigrations sale
+python manage.py migrate
+```
+
+![](images/clipboard-3603231565.png)
+
+El método `cancel()` ya está en tu modelo `Booking`; el endpoint que lo invoque puede implementarse en un ISS posterior. El manager personalizado `BookingManager` puede ampliarse más adelante con un método `register()` cuando implementes el registro transaccional de reservas.
+
+## Paso 4. Comprobar en el shell
+
+``` sql
+python manage.py shell
+```
+
+``` sql
+from datetime import date, timedelta
+from django.utils import timezone
+from apps.client.models import Client, Traveler
+from apps.product.models import Package, Departure
+from apps.sale.models import Booking, Payment, Cancellation, Voucher
+
+c = Client.objects.create(document_type="CC", document_number="WT-TEST-301", name="Cliente Prueba", email="prueba301@wayuutravel.com")
+
+t = Traveler.objects.create(name="Viajero Prueba", description="Viajero de prueba")
+
+p = Package.objects.create(name="Paquete Prueba", description="Paquete turístico de prueba")
+
+d = Departure.objects.create(name="Salida Prueba", description="Salida turística de prueba", package=p, departure_date=timezone.now() + timedelta(days=10), capacity=10, available_capacity=10)
+
+b = Booking.objects.create(client=c, departure=d, traveler=t, start_date=date.today() + timedelta(days=10), end_date=date.today() + timedelta(days=12), observations="Reserva de prueba")
+
+pay = Payment.objects.create(booking=b, reference_type="booking", method="efectivo", amount=80000, payment_date=timezone.now())
+
+can = Cancellation.objects.create(booking=b, name="Cancelación de prueba", descriptions="Cancelación de prueba")
+
+v = Voucher.objects.create(booking=b, name="Comprobante de prueba", descriptions="Comprobante de prueba")
+
+b.status
+
+```
+
+![](images/clipboard-2082449459.png)
+
+### Paso 4. Comprobar los resultados
+
+``` sql
+b.status
+b.payments.count()
+b.cancellations.count()
+b.vouchers.count()
+
+c.status
+t.status
+p.status
+d.status
+b.status
+pay.status
+can.status
+v.status
+```
+
+![](images/clipboard-1011488055.png)
+
+![](images/clipboard-1152462356.png)
+
+![](images/clipboard-2139984330.png)
+
+![](images/clipboard-2008107496.png)
+
+![](images/clipboard-3097961512.png)
+
+#### Explicación
+
+La reserva (`Booking`) es la entidad que relaciona a un cliente (`Client`), una salida turística (`Departure`) y un viajero (`Traveler`). Guarda sus propios datos, como las fechas de inicio y fin, las observaciones y el estado; por eso se representa como un modelo independiente y no mediante un `ManyToManyField`.
+
+Para navegar entre los registros relacionados se utilizan `booking.payments.all()`, `booking.cancellations.all()` y `booking.vouchers.all()`. Las claves foráneas usan `RESTRICT` para impedir la eliminación de registros que tengan dependencias relacionadas.
+
+El método `cancel()` desactiva la reserva dentro de una transacción y conserva los registros relacionados. En la implementación actual, no desactiva automáticamente los pagos. Si necesitas que los pagos activos también se desactiven al cancelar una reserva, habrá que incorporar esa lógica al método.
+
+```         
+Client 1 ───── N Booking N ───── 1 Departure Traveler 1 ─── N Booking Booking 1 ──── N Payment Booking 1 ──── N Cancellation Booking 1 ──── N Voucher Departure N ── 1 Package Package 1 ──── N IncludedService N ──── 1 Supplier
+```
+
+#### Criterios de aceptación
+
+- AC-06-01: existen las tablas `bookings`, `payments`, `cancellations` y `vouchers`.
+
+- AC-06-02: las claves foráneas correspondientes utilizan `RESTRICT`.
+
+- AC-06-03: la fecha de fin de una reserva no puede ser anterior a la fecha de inicio.
+
+- AC-06-04: cancelar una reserva cambia su estado a inactivo y conserva los registros relacionados.
+
+- AC-06-05: no se utiliza un `ManyToManyField` para relacionar clientes con salidas y viajeros; la reserva representa esa relación.
+
+- AC-06-06: los pagos, cancelaciones y comprobantes pueden consultarse desde su reserva.
+
+#### Verificación
+
+La guía comprueba estos criterios mediante las migraciones aplicadas y las pruebas realizadas en el shell de Django.
+
+``` sql
+python manage.py showmigrations sale
+```
+
+Luego
+
+``` sql
+python manage.py sqlmigrate sale 0001
+```
+
+Resulatdo
+
+![](images/clipboard-1097886204.png)
+
+#### **GATE**
+
+- **AC-06-01:** `sqlmigrate` muestra las tres tablas. **PASS**.
+
+- **AC-06-02:** `RestrictedError` al borrar el plan y la membresía. **PASS**.
+
+- **AC-06-03:** `IntegrityError` con fechas inválidas. **PASS**.
+
+- **AC-06-04:** `void()` deja `inactive inactive`. **PASS**.
+
+- **AC-06-05:** no hay `ManyToManyField` en `membership/models.py`. **P**
