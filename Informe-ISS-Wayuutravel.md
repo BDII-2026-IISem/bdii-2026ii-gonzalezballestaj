@@ -1036,3 +1036,172 @@ Se utiliza la suite de pruebas `AuthFlowTests` para verificar el flujo de autent
 | AC-03-02 | Revisión del modelo `Client` | Ausencia de campo para contraseñas | PASS |
 | AC-03-03 | Autenticación con usuario inactivo | Prueba que comprueba la respuesta `401` | PASS |
 | AC-03-04 | Verificación de contraseña y respuesta de login | Pruebas de autenticación y ausencia del hash en la respuesta | PASS |
+
+### **ISS-04 — Modelo Client**
+
+**Narrativa**
+
+Con el modelo de usuario del sistema ya definido y migrado, se desarrolla el primer modelo de negocio de WayuuTravel: el cliente. Antes de implementarlo, se creó una clase base común para los modelos del negocio, que centraliza los campos de fecha de creación, fecha de actualización y estado del registro (`active` / `inactive`). De esta manera, se evita duplicar estos campos en cada modelo y se mantiene una estructura consistente en la base de datos.
+
+Posteriormente, se definió el modelo `Client`, tomando como referencia la estructura de la tabla `clients` establecida en el diagrama de la base de datos. Este modelo contempla los datos de identificación del cliente, como tipo y número de documento, nombre completo, teléfono, correo electrónico y estado. Finalmente, se prepara y ejecuta la migración correspondiente para incorporar el modelo a la base de datos MySQL de WayuuTravel.
+
+**Objetivo**
+
+Persistir y administrar la información de los clientes de Wayuu Travel mediante el modelo `Client`, respetando el diccionario de datos y la estructura definida para la tabla `clients`.
+
+**Requisitos**
+
+- ISS-03 superado: modelo de usuario del sistema definido y migrado.
+
+- Terminal con el entorno virtual `.venv` activo.
+
+- Clase base común para los modelos del negocio, con los campos de auditoría temporal y estado del registro.
+
+- Un único `TextChoices` para los estados `active` e `inactive`, mediante `RecordStatus`, definido en el ISS-03 o en el módulo común correspondiente.
+
+- Aplicación `client` registrada correctamente en la configuración de Django.
+
+- Conexión a la base de datos MySQL `wayuutravel` configurada.
+
+#### **Construcción**
+
+**Paso 0. Activar el entorno virtual**
+
+``` sql
+source .venv/bin/activate 
+which python
+```
+
+![](images/clipboard-407376945.png)
+
+**Paso 1. Crear el modelo abstracto base**
+
+`RecordStatus` ya está en `apps/common/status.py` desde el ISS-03. El modelo abstracto es un archivo nuevo. No es una app: no entra en `INSTALLED_APPS` y no genera migración propia. `TimeStampedModel` aporta `created_at` y `updated_at`. `ActivaFitModel` añade `status` con valor por defecto `inactive` y un `CheckConstraint` reutilizable. Las apps de negocio heredan esta clase, por eso la tabla `clients` tendrá esas columnas.
+
+Archivo `apps/common/models.py`:
+
+``` sql
+  from django.db import models
+  
+  from apps.common.status import RecordStatus
+  
+  
+  class TimeStampedModel(models.Model):
+      created_at = models.DateTimeField(auto_now_add=True)
+      updated_at = models.DateTimeField(auto_now=True)
+  
+      class Meta:
+          abstract = True
+  
+  
+  class ActivaFitModel(TimeStampedModel):
+      status = models.CharField(
+          max_length=8,
+          choices=RecordStatus.choices,
+          default=RecordStatus.INACTIVE,
+      )
+  
+      class Meta:
+          abstract = True
+  
+      @classmethod
+      def status_constraint(cls, name):
+          return models.CheckConstraint(
+              condition=models.Q(status__in=RecordStatus.values),
+              name=name,
+          )
+```
+
+![](images/clipboard-3059793899.png)
+
+**Paso 2. Escribir el modelo `Client`**
+
+El archivo `apps/client/models.py` lo creó `startapp` vacío. Se reescribe entero: el comentario inicial no se conserva. `Client` hereda las fechas y el estado. `name` exige al menos 2 caracteres. `phone` y `email` pueden ir vacíos. El correo es único y `save()` lo guarda en minúsculas. La combinación de tipo y número de documento es única, para que no haya dos clientes con el mismo documento. `db_table = "clients"` fija el nombre físico de la tabla.
+
+``` sql
+from django.core.validators import MinLengthValidator
+from django.db import models
+
+from apps.common.models import wayuutravel
+
+
+class Client(wayuutravel):
+    document_number = models.CharField(max_length=30, validators=[MinLengthValidator(5)], unique=True,null=False)
+    name = models.CharField(max_length=150, validators=[MinLengthValidator(2)], null=False)
+    phone = models.CharField(max_length=30, null=True, blank=True)
+    email = models.EmailField(max_length=150, null=False, unique=True)
+    document_type = models.CharField(
+        max_length=10,
+        choices=[
+            ("CC", "Cédula de ciudadanía"),
+            ("CE", "Cédula de extranjería"),
+            ("TI", "Tarjeta de identidad"),
+            ("PASSPORT", "Pasaporte"),
+        ],
+        null=False,
+    )
+    class Meta:
+        db_table = "clients"
+        verbose_name = "cliente"
+        verbose_name_plural = "clientes"
+        ordering = ["name", "id"]
+        constraints = [
+            wayuutravel.status_constraint("clients_status_valid"),
+            models.UniqueConstraint(
+                fields=["document_type", "document_number"],
+                name="clients_document_unique",
+            ),
+        ]
+
+   
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if self.email:
+            self.email = self.email.strip().lower()
+        super().save(*args, **kwargs)
+```
+
+Los nombres de los constraints (`clients_status_valid` y `clients_document_unique`) caben en 30 caracteres.
+
+![](images/clipboard-4133179085.png)
+
+![](images/clipboard-863410400.png)
+
+La migración la escribe la CLI:
+
+``` sql
+python manage.py makemigrations client 
+python manage.py migrate 
+```
+
+![](images/clipboard-1691004285.png)
+
+### **Resultado**
+
+![](images/clipboard-4194241744.png)
+
+## **Criterios de aceptación**
+
+- AC-04-01: la tabla física es `clients`.
+
+- AC-04-02: sin `status` en el alta, el valor es `inactive`.
+
+- AC-04-03: `created_at` y `updated_at` se generan.
+
+- AC-04-04: el email duplicado se rechaza.
+
+- AC-04-05: un nombre de un carácter se rechaza.
+
+![](images/clipboard-652076875.png)
+
+## **GATE**
+
+| **AC**   | **Verificación**      | **Evidencia** | **Resultado** |
+|----------|-----------------------|---------------|---------------|
+| AC-04-01 | `db_table`            | migración     | PASS          |
+| AC-04-02 | POST sin status       | test de alta  | PASS          |
+| AC-04-03 | timestamps            | test de alta  | PASS          |
+| AC-04-04 | email duplicado = 400 | test          | PASS          |
+| AC-04-05 | nombre corto = 400    | test          | PASS          |
