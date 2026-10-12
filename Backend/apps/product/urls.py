@@ -1,5 +1,5 @@
 
-from rest_framework.routers import SimpleRouter
+from rest_framework.routers import DefaultRouter
 
 from apps.product.views import (
     PackageViewSet,
@@ -8,13 +8,13 @@ from apps.product.views import (
     IncludedServiceViewSet,
 )
 
-router = SimpleRouter()
+router = DefaultRouter()
 
-router.register("packages", PackageViewSet, basename="package")
-router.register("departures", DepartureViewSet, basename="departure")
-router.register("suppliers", SupplierViewSet, basename="supplier")
+router.register(r"packages", PackageViewSet, basename="package")
+router.register(r"departures", DepartureViewSet, basename="departure")
+router.register(r"suppliers", SupplierViewSet, basename="supplier")
 router.register(
-    "included-services",
+    r"included-services",
     IncludedServiceViewSet,
     basename="included-service",
 )

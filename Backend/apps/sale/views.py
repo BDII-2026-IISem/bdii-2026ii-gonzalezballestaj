@@ -1,24 +1,39 @@
 from rest_framework import viewsets
 from rest_framework.permissions import AllowAny
 
-from apps.client.models import Client
-from apps.client.serializers import ClientSerializer
-from apps.common.status import RecordStatus
+from apps.sale.models import (
+    Booking,
+    Payment,
+    Cancellation,
+    Voucher,
+)
+from apps.sale.serializers import (
+    BookingSerializer,
+    PaymentSerializer,
+    CancellationSerializer,
+    VoucherSerializer,
+)
 
 
-class ClientViewSet(viewsets.ModelViewSet):
-    queryset = Client.objects.all()
-    serializer_class = ClientSerializer
+class BookingViewSet(viewsets.ModelViewSet):
+    queryset = Booking.objects.all()
+    serializer_class = BookingSerializer
     permission_classes = [AllowAny]
-    lookup_value_converter = "int"
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        status_value = self.request.query_params.get("status")
-        if status_value:
-            queryset = queryset.filter(status=status_value)
-        return queryset
 
-    def perform_destroy(self, instance):
-        instance.status = RecordStatus.INACTIVE
-        instance.save(update_fields=["status", "updated_at"])
+class PaymentViewSet(viewsets.ModelViewSet):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [AllowAny]
+
+
+class CancellationViewSet(viewsets.ModelViewSet):
+    queryset = Cancellation.objects.all()
+    serializer_class = CancellationSerializer
+    permission_classes = [AllowAny]
+
+
+class VoucherViewSet(viewsets.ModelViewSet):
+    queryset = Voucher.objects.all()
+    serializer_class = VoucherSerializer
+    permission_classes = [AllowAny]

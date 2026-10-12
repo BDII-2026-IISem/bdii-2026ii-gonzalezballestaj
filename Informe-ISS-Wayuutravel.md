@@ -2863,3 +2863,490 @@ Las pruebas de `ClientApiTests`, con el comando del Paso 5.
 - **AC-08-03:** DELETE lógico, la fila permanece inactiva. **PASS**.
 
 - **AC-08-04:** nombre inválido responde 400. **PASS**.
+
+- 
+
+### **ISS-09 — Catálogo y seguimiento con ModelViewSet**
+
+**Narrativa**
+
+Con el CRUD de clientes funcionando, ActivaFit extiende el mismo patrón al resto de sus recursos homogéneos: planes, entrenadores, ejercicios, rutinas, ejercicios de rutina y medidas. Para no copiar `perform_destroy` y el filtro de estado en cada vista, se extrajo una vista base compartida, `CatalogViewSet`, que sigue siendo un `ModelViewSet`. Las medidas son la excepción: su tabla no tiene estado, así que no hay baja lógica posible y su vista usa el borrado real. El acceso sigue siendo abierto en esta fase; la seguridad llega en unidades posteriores.
+
+**Objetivo**
+
+Publicar los catálogos y el seguimiento de ActivaFit con el mismo criterio de CRUD homogéneo.
+
+**Requisitos**
+
+- ISS-08 superado.
+
+- Terminal con el entorno virtual `.venv` activo.
+
+#### **Construcción**
+
+## **Paso 0. Activar el entorno virtual**
+
+``` sql
+source .venv/bin/activate
+which python
+```
+
+![**Paso 1. Crear la vista base compartida**](images/clipboard-108157585.png)
+
+`apps/common` es un paquete, no una app, así que el archivo `views.py` es nuevo. Contiene la vista base con baja lógica y filtro `status=`. Archivo `apps/common/views.py`:
+
+``` sql
+from rest_framework import viewsets
+from rest_framework.permissions import AllowAny
+
+from apps.common.status import RecordStatus
+
+
+class CatalogViewSet(viewsets.ModelViewSet):
+    permission_classes = [AllowAny]
+    lookup_value_converter = "int"
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        status_value = self.request.query_params.get("status")
+        if status_value:
+            queryset = queryset.filter(status=status_value)
+        return queryset
+
+    def perform_destroy(self, instance):
+        instance.status = RecordStatus.INACTIVE
+        instance.save(update_fields=["status", "updated_at"])
+```
+
+![](images/clipboard-1901246444.png)
+
+## **Paso 2. Escribir las vistas de cada app**
+
+Los archivos `views.py` ya existen (los creó `startapp`) y se reescriben enteros. Las que tienen estado heredan de `CatalogViewSet`.
+
+Archivo `apps/product/views.py`:
+
+``` sql
+
+from rest_framework import viewsets
+from rest_framework.permissions import AllowAny
+
+from apps.product.models import (
+    Package,
+    Departure,
+    Supplier,
+    IncludedService,
+)
+from apps.product.serializers import (
+    PackageSerializer,
+    DepartureSerializer,
+    SupplierSerializer,
+    IncludedServiceSerializer,
+)
+
+
+class PackageViewSet(viewsets.ModelViewSet):
+    queryset = Package.objects.all()
+    serializer_class = PackageSerializer
+    permission_classes = [AllowAny]
+
+
+class DepartureViewSet(viewsets.ModelViewSet):
+    queryset = Departure.objects.select_related("package").all()
+    serializer_class = DepartureSerializer
+    permission_classes = [AllowAny]
+
+
+class SupplierViewSet(viewsets.ModelViewSet):
+    queryset = Supplier.objects.all()
+    serializer_class = SupplierSerializer
+    permission_classes = [AllowAny]
+
+
+class IncludedServiceViewSet(viewsets.ModelViewSet):
+    queryset = IncludedService.objects.select_related(
+        "package", "supplier"
+    ).all()
+    serializer_class = IncludedServiceSerializer
+    permission_classes = [AllowAny]
+```
+
+![](images/clipboard-51057659.png)
+
+## 3. Archivo `apps/sale/views.py`
+
+Esta versión habilita las operaciones CRUD para reservas, pagos, cancelaciones y vouchers. No agrega baja lógica automáticamente: si alguno de estos modelos tiene `status` y necesitas conservar el historial, habría que adaptar su `perform_destroy()`.
+
+``` sql
+from rest_framework import viewsets
+from rest_framework.permissions import AllowAny
+
+from apps.sale.models import (
+    Booking,
+    Payment,
+    Cancellation,
+    Voucher,
+)
+from apps.sale.serializers import (
+    BookingSerializer,
+    PaymentSerializer,
+    CancellationSerializer,
+    VoucherSerializer,
+)
+
+
+class BookingViewSet(viewsets.ModelViewSet):
+    queryset = Booking.objects.all()
+    serializer_class = BookingSerializer
+    permission_classes = [AllowAny]
+
+
+class PaymentViewSet(viewsets.ModelViewSet):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [AllowAny]
+
+
+class CancellationViewSet(viewsets.ModelViewSet):
+    queryset = Cancellation.objects.all()
+    serializer_class = CancellationSerializer
+    permission_classes = [AllowAny]
+
+
+class VoucherViewSet(viewsets.ModelViewSet):
+    queryset = Voucher.objects.all()
+    serializer_class = VoucherSerializer
+    permission_classes = [AllowAny]
+```
+
+![](images/clipboard-3070321649.png)
+
+## Paso 4. Crear las rutas de cada app
+
+Para que las API de `product` y `sale` funcionen en Wayuu Travel, debemos crear sus archivos `urls.py` y registrar las rutas de sus vistas mediante `DefaultRouter` o `SimpleRouter` de Django REST Framework.
+
+#### 4.1. Configurar las rutas de `product`
+
+`apps/product/urls.py`
+
+``` sql
+
+
+from rest_framework.routers import DefaultRouter
+
+from apps.product.views import (
+    PackageViewSet,
+    DepartureViewSet,
+    SupplierViewSet,
+    IncludedServiceViewSet,
+)
+
+router = DefaultRouter()
+
+router.register(r"packages", PackageViewSet, basename="package")
+router.register(r"departures", DepartureViewSet, basename="departure")
+router.register(r"suppliers", SupplierViewSet, basename="supplier")
+router.register(
+    r"included-services",
+    IncludedServiceViewSet,
+    basename="included-service",
+)
+
+urlpatterns = router.urls
+```
+
+![](images/clipboard-1330258049.png)
+
+Esto registra las rutas para consultar, crear, actualizar y eliminar paquetes, salidas, proveedores y servicios incluidos.
+
+#### 4.2. Configurar las rutas de `sale`
+
+`apps/sale/urls.py`
+
+``` sql
+
+
+from rest_framework.routers import DefaultRouter
+
+from apps.sale.views import (
+    BookingViewSet,
+    PaymentViewSet,
+    CancellationViewSet,
+    VoucherViewSet,
+)
+
+router = DefaultRouter()
+
+router.register(r"bookings", BookingViewSet, basename="booking")
+router.register(r"payments", PaymentViewSet, basename="payment")
+router.register(
+    r"cancellations",
+    CancellationViewSet,
+    basename="cancellation",
+)
+router.register(r"vouchers", VoucherViewSet, basename="voucher")
+
+urlpatterns = router.urls
+```
+
+![](images/clipboard-3258335608.png)
+
+### 4.3. Registrar las rutas en el proyecto principal
+
+`config/urls.py`
+
+Verifica que incluya las rutas de las tres apps. La configuración debería quedar así, conservando cualquier otra ruta que ya tengas:
+
+``` sql
+
+from django.contrib import admin
+from django.urls import include, path
+
+urlpatterns = [
+    path("admin/", admin.site.urls),
+    path("api/", include("apps.client.urls")),
+    path("api/product/", include("apps.product.urls")),
+    path("api/sale/", include("apps.sale.urls")),
+]
+```
+
+![](images/clipboard-3959609448.png)
+
+## Paso 5. Escribir las pruebas
+
+Vamos a crear pruebas automatizadas para las API de `product` y `sale`. El acceso es abierto, sin token, y los datos relacionados se crean mediante el ORM en `setUp()`.
+
+Usaremos `APITestCase` de Django REST Framework para probar las operaciones HTTP y las respuestas de la API.
+
+**5.1. Pruebas de `product`**
+
+Archivo `apps/product/tests.py`:
+
+``` sql
+
+from datetime import timedelta
+from decimal import Decimal
+
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from apps.product.models import (
+    Package,
+    Departure,
+    Supplier,
+    IncludedService,
+)
+
+
+class ProductAPITests(APITestCase):
+    def setUp(self):
+        self.package = Package.objects.create(
+            name="Tour Cabo de la Vela",
+            description="Experiencia turística en La Guajira",
+        )
+
+        self.supplier = Supplier.objects.create(
+            nit="900123456-7",
+            razon_social="Operador Turístico Wayuu",
+            phone="3001234567",
+            email="operador@example.com",
+        )
+
+        self.departure = Departure.objects.create(
+            name="Salida Cabo de la Vela",
+            description="Salida de prueba",
+            package=self.package,
+            departure_date=timezone.now() + timedelta(days=7),
+            capacity=20,
+            available_capacity=15,
+        )
+
+    def test_list_packages(self):
+        response = self.client.get("/api/product/packages/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_create_package(self):
+        data = {
+            "name": "Tour Punta Gallinas",
+            "description": "Recorrido turístico de prueba",
+        }
+
+        response = self.client.post(
+            "/api/product/packages/",
+            data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+        self.assertTrue(
+            Package.objects.filter(name="Tour Punta Gallinas").exists()
+        )
+
+    def test_list_departures(self):
+        response = self.client.get("/api/product/departures/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_list_suppliers(self):
+        response = self.client.get("/api/product/suppliers/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_list_included_services(self):
+        response = self.client.get(
+            "/api/product/included-services/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+```
+
+![](images/clipboard-3048784660.png)
+
+El código supone que `Package` y `Supplier` aceptan los campos indicados sin otros campos obligatorios. También supone que `IncludedService` puede listarse sin crear primero un registro de esa relación. Si tus modelos o serializadores exigen campos adicionales, ajustaremos los datos de prueba.
+
+#### 5.2. Pruebas de `sale`
+
+Abre `apps/sale/tests.py`
+
+``` sql
+
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+
+class SaleAPITests(APITestCase):
+    def test_list_bookings(self):
+        response = self.client.get("/api/sale/bookings/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_list_payments(self):
+        response = self.client.get("/api/sale/payments/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_list_cancellations(self):
+        response = self.client.get("/api/sale/cancellations/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_list_vouchers(self):
+        response = self.client.get("/api/sale/vouchers/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+```
+
+![](images/clipboard-1614378795.png)
+
+## Paso 6. Ejecutar las pruebas
+
+``` sql
+python manage.py test apps.client apps.product apps.sale
+```
+
+## ![](images/clipboard-2359107564.png)
+
+Debe terminar con `Ran 13 tests` y `OK`. Django crea una base de datos temporal para ejecutar las pruebas de forma aislada y luego la elimina. En tu ejecución, la creación y eliminación finalizaron correctamente.
+
+#### Explicación
+
+Las pruebas cubren las aplicaciones `client`, `product` y `sale`. Se ejecutaron 13 pruebas sin errores, y Django no detectó problemas de configuración.
+
+Las pruebas de `product` verifican las rutas de paquetes turísticos, salidas programadas, proveedores y servicios incluidos. Las pruebas de `sale` comprueban las rutas de reservas, pagos, cancelaciones y vouchers. Las pruebas de `client` completan el conjunto de pruebas ejecutado.
+
+El acceso está configurado sin autenticación mediante token, por lo que las pruebas pueden consultar los endpoints sin proporcionar credenciales. Esto no significa que el sistema deba permanecer abierto en producción; los permisos deberán revisarse antes de desplegar la aplicación.
+
+``` sql
+/api/clients/
+        │
+        ▼
+   ClientViewSet
+        │
+        ▼
+   ClientSerializer
+        │
+        ▼
+      clients
+
+
+/api/product/packages/
+/api/product/departures/
+/api/product/suppliers/
+/api/product/included-services/
+        │
+        ▼
+  ViewSet de cada recurso
+        │
+        ▼
+ Serializer correspondiente
+        │
+        ▼
+ packages · departures · suppliers · included_services
+
+
+/api/sale/bookings/
+/api/sale/payments/
+/api/sale/cancellations/
+/api/sale/vouchers/
+        │
+        ▼
+  ViewSet de cada recurso
+        │
+        ▼
+ Serializer correspondiente
+        │
+        ▼
+ bookings · payments · cancellations · vouchers
+```
+
+![](images/clipboard-3381289043.png)
+
+![](images/clipboard-2559678635.png)
+
+![](images/clipboard-2680168403.png)
+
+![![](images/clipboard-1851224723.png)](images/clipboard-3459155473.png)
+
+#### **Cómo probarlo**
+
+La prueba es de capa HTTP, con acceso abierto y sin `runserver`. Los datos de apoyo se crean con el ORM en `setUp`, sin pasar por la API.
+
+``` sql
+
+python manage.py test apps.client apps.product apps.sale
+        │
+        ▼
+ClientAPITests
+    POST · GET · PATCH · DELETE lógico · consultar clientes
+        │
+        ▼
+ProductAPITests
+    Packages: POST · GET · crear paquetes turísticos
+    Departures: GET · consultar salidas programadas
+    Suppliers: GET · consultar proveedores
+    Included Services: GET · consultar servicios incluidos
+        │
+        ▼
+SaleAPITests
+    Bookings: GET · consultar reservas
+    Payments: GET · consultar pagos
+    Cancellations: GET · consultar cancelaciones
+    Vouchers: GET · consultar vouchers
+```
+
+![](images/clipboard-3670878075.png)
+
+Las reservas y sus pagos (ISS-10), así como el registro de cancelaciones y vouchers (ISS-11), se verifican en sus respectivos ISS, para mantener separadas las pruebas según la funcionalidad de cada módulo.
+
+## GATE
+
+| **AC**   | **Verificación** | **Evidencia** | **Resultado** |
+|:---------|:-----------------|:--------------|:--------------|
+| AC-09-01 | POST producto    | EVI-09-01     | PASS          |
+| AC-09-02 | duplicado        | EVI-09-01     | PASS          |
+| AC-09-03 | defaults         | EVI-09-01     | PASS          |

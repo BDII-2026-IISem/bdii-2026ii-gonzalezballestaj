@@ -1,107 +1,80 @@
-import json
 
+from datetime import timedelta
+from decimal import Decimal
+
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.client.models import Client
-from apps.common.status import RecordStatus
+from apps.product.models import (
+    Package,
+    Departure,
+    Supplier,
+    IncludedService,
+)
 
 
-class ClientApiTests(APITestCase):
-    def test_create_defaults_and_persists(self):
+class ProductAPITests(APITestCase):
+    def setUp(self):
+        self.package = Package.objects.create(
+            name="Tour Cabo de la Vela",
+            description="Experiencia turística en La Guajira",
+        )
+
+        self.supplier = Supplier.objects.create(
+            nit="900123456-7",
+            razon_social="Operador Turístico Wayuu",
+            phone="3001234567",
+            email="operador@example.com",
+        )
+
+        self.departure = Departure.objects.create(
+            name="Salida Cabo de la Vela",
+            description="Salida de prueba",
+            package=self.package,
+            departure_date=timezone.now() + timedelta(days=7),
+            capacity=20,
+            available_capacity=15,
+        )
+
+    def test_list_packages(self):
+        response = self.client.get("/api/product/packages/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_create_package(self):
+        data = {
+            "name": "Tour Punta Gallinas",
+            "description": "Recorrido turístico de prueba",
+        }
+
         response = self.client.post(
-            "/api/clients/",
-            {
-                "document_type": "CC",
-                "document_number": "1234567890",
-                "name": "María García",
-                "email": "Maria@Example.com",
-                "phone": "3001234567",
-            },
+            "/api/product/packages/",
+            data,
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["status"], RecordStatus.INACTIVE)
-        self.assertEqual(response.data["email"], "maria@example.com")
-        wire = json.loads(response.content)
-        self.assertIn("createdAt", wire)
-        self.assertNotIn("created_at", wire)
-        stored = Client.objects.get(pk=response.data["id"])
-        self.assertEqual(stored.name, "María García")
 
-    def test_invalid_name_and_duplicate_email(self):
-        invalid = self.client.post(
-            "/api/clients/",
-            {
-                "document_type": "CC",
-                "document_number": "1111111111",
-                "name": "A",
-                "email": "a@example.com",
-            },
-            format="json",
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
         )
-        self.assertEqual(invalid.status_code, status.HTTP_400_BAD_REQUEST)
-        self.client.post(
-            "/api/clients/",
-            {
-                "document_type": "CC",
-                "document_number": "2222222222",
-                "name": "Ana Ruiz",
-                "email": "ana@example.com",
-            },
-            format="json",
+        self.assertTrue(
+            Package.objects.filter(name="Tour Punta Gallinas").exists()
         )
-        duplicate = self.client.post(
-            "/api/clients/",
-            {
-                "document_type": "CC",
-                "document_number": "3333333333",
-                "name": "Otra Ana",
-                "email": "ana@example.com",
-            },
-            format="json",
-        )
-        self.assertEqual(duplicate.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_soft_delete_keeps_the_row(self):
-        created = self.client.post(
-            "/api/clients/",
-            {
-                "document_type": "CC",
-                "document_number": "4444444444",
-                "name": "Pedro León",
-                "email": "pedro@example.com",
-            },
-            format="json",
-        )
-        deleted = self.client.delete(f"/api/clients/{created.data['id']}/")
-        self.assertEqual(deleted.status_code, status.HTTP_204_NO_CONTENT)
-        stored = Client.objects.get(pk=created.data["id"])
-        self.assertEqual(stored.status, RecordStatus.INACTIVE)
-        self.assertEqual(Client.objects.count(), 1)
+    def test_list_departures(self):
+        response = self.client.get("/api/product/departures/")
 
-    def test_list_retrieve_and_update(self):
-        created = self.client.post(
-            "/api/clients/",
-            {
-                "document_type": "CC",
-                "document_number": "5555555555",
-                "name": "Luisa Mora",
-                "email": "luisa@example.com",
-                "phone": "111",
-            },
-            format="json",
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_list_suppliers(self):
+        response = self.client.get("/api/product/suppliers/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_list_included_services(self):
+        response = self.client.get(
+            "/api/product/included-services/"
         )
-        pk = created.data["id"]
-        listed = self.client.get("/api/clients/")
-        self.assertEqual(listed.status_code, status.HTTP_200_OK)
-        detail = self.client.get(f"/api/clients/{pk}/")
-        self.assertEqual(detail.status_code, status.HTTP_200_OK)
-        self.assertEqual(detail.data["name"], "Luisa Mora")
-        updated = self.client.patch(
-            f"/api/clients/{pk}/",
-            {"phone": "222", "status": "active"},
-            format="json",
-        )
-        self.assertEqual(updated.status_code, status.HTTP_200_OK)
-        self.assertEqual(updated.data["status"], "active")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

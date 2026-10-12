@@ -21,8 +21,10 @@ from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import RedirectView
 urlpatterns = [
-    path("", RedirectView.as_view(url="/api/clients/", permanent=False)),
+    path("", RedirectView.as_view(url="/api/admin/", permanent=False)),
     path("admin/", admin.site.urls),
     path("api/", include("apps.client.urls")),
-    path("api/", include("apps.client.urls")),
+    path("api/product/", include("apps.product.urls")),
+    path("api/sale/", include("apps.sale.urls")),
+
 ]
