@@ -1,5 +1,7 @@
+
 from rest_framework import viewsets
 from rest_framework.permissions import AllowAny
+from rest_framework.generics import ListAPIView
 
 from apps.sale.models import (
     Booking,
@@ -37,3 +39,11 @@ class VoucherViewSet(viewsets.ModelViewSet):
     queryset = Voucher.objects.all()
     serializer_class = VoucherSerializer
     permission_classes = [AllowAny]
+
+
+class ActiveBookingListView(ListAPIView):
+    serializer_class = BookingSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        return Booking.objects.all()

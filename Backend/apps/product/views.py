@@ -1,6 +1,11 @@
+from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.permissions import AllowAny
+from rest_framework.generics import ListAPIView
+from rest_framework.permissions import AllowAny
 
+
+from apps.common.status import RecordStatus
 from apps.product.models import (
     Package,
     Departure,
@@ -39,3 +44,14 @@ class IncludedServiceViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = IncludedServiceSerializer
     permission_classes = [AllowAny]
+
+class AvailablePackageListAPIView(ListAPIView):
+    serializer_class = PackageSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        return Package.objects.filter(
+            status=RecordStatus.ACTIVE,
+            departures__available_capacity__gt=0,
+            departures__departure_date__gte=timezone.now(),
+        ).distinct()

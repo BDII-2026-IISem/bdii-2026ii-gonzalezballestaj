@@ -3350,3 +3350,119 @@ Las reservas y sus pagos (ISS-10), así como el registro de cancelaciones y vouc
 | AC-09-01 | POST producto    | EVI-09-01     | PASS          |
 | AC-09-02 | duplicado        | EVI-09-01     | PASS          |
 | AC-09-03 | defaults         | EVI-09-01     | PASS          |
+
+### Vamos a adaptar el ISS-10 — Membresías vigentes con `ListAPIView` a tu proyecto Wayuu Travel, manteniendo la idea central: crear un endpoint de consulta filtrada que no forme parte del CRUD habitual.
+
+En Wayuu Travel, una funcionalidad equivalente podría ser consultar las reservas vigentes, siempre que esa sea la regla de negocio que hayas definido. No debemos implementar membresías, porque corresponden a ActivaFit.
+
+## ISS-10 — Reservas vigentes con `ListAPIView`
+
+### Narrativa
+
+Hasta ahora, la API de Wayuu Travel ofrece operaciones CRUD para gestionar sus recursos turísticos y comerciales. Sin embargo, el sistema también puede necesitar una consulta específica para obtener las reservas vigentes. Esta operación es de solo lectura y aplica condiciones de filtrado, por lo que se puede implementar mediante `ListAPIView` de Django REST Framework.
+
+El filtro se define en `get_queryset()` y el endpoint se publica en `/api/sale/bookings/active/`, separado de las rutas de consulta general de reservas. Así, se ofrece una lectura especializada sin habilitar operaciones de creación, actualización o eliminación desde ese endpoint.
+
+### Objetivo
+
+Publicar una consulta de solo lectura para obtener las reservas que cumplan las condiciones de vigencia definidas.
+
+### Requisitos
+
+- La API de clientes funciona bajo `/api/`.
+
+- Las aplicaciones `sale` y `client` están configuradas.
+
+- El entorno virtual `.venv` está activo.
+
+- El modelo `Booking` y su serializador existen.
+
+- La regla para determinar cuándo una reserva está vigente está definida antes de implementar el filtro.
+
+#### Construcción
+
+#### Paso 0. Activar el entorno virtual
+
+``` sql
+source .venv/bin/activate
+which python
+```
+
+![](images/clipboard-3654202448.png)
+
+#### Paso 1. Crear la vista de paquetes disponibles
+
+En `apps/product/views.py`, conserva los viewsets existentes y agrega los imports que falten:
+
+``` sql
+from rest_framework.generics import ListAPIView
+from rest_framework.permissions import AllowAny
+```
+
+Y al final agregamos esto
+
+``` sql
+class AvailablePackageListAPIView(ListAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = PackageSerializer
+
+    def get_queryset(self):
+        return Package.objects.filter(
+            status=RecordStatus.ACTIVE,
+            departures__available_capacity__gt=0,
+            departures__departure_date__gte=timezone.now(),
+        ).distinct()
+```
+
+![](images/clipboard-1616962018.png)
+
+`Como Departure` tiene los campos `available_capacity` y `departure_date`, y que `Package` tiene `status`. También debes comprobar que `RecordStatus.ACTIVE` coincide con el valor guardado en el modelo.
+
+#### Paso 2. Crear la ruta
+
+En `apps/product/urls.py`, conserva el router y agregar la nueva ruta antes de `router.urls`:
+
+``` sql
+urlpatterns = [
+
+path( "packages/available/",AvailablePackageListAPIView.as_view(), name="package-available", ),
+
+]
+```
+
+![](images/clipboard-3949738022.png)
+
+#### Paso 3. Explicación
+
+`ListAPIView` permite consultar una colección mediante `GET`, sin ofrecer `POST`, `PUT`, `PATCH` ni `DELETE`. El filtrado se define en `get_queryset()`.
+
+``` sql
+GET /api/product/packages/available/
+                │
+                ▼
+          ListAPIView
+                │
+                ▼
+       PackageSerializer
+                │
+                ▼
+ Paquete activo
+       AND salida futura
+       AND cupos disponibles
+```
+
+![](images/clipboard-2670290739.png)
+
+Si quieres comprobarlo manualmente, arranca el servidor y abre [`http://127.0.0.1:8000/api/product/packages/available/`](http://127.0.0.1:8000/api/product/packages/available/) en el navegador. Mostrará `[]` hasta que existan paquetes activos con salidas futuras y cupos disponibles. Swagger se incorporará más adelante, con la unidad de OpenAPI.
+
+####  Criterios de aceptación 
+
+- AC-10-01: un paquete activo con una salida futura y cupos disponibles aparece en la lista.
+
+- AC-10-02: cuando ninguna salida del paquete tiene cupos disponibles, el paquete desaparece de esta lista, pero permanece almacenado en la base de datos.
+
+#### GATE
+
+- **AC-10-01:** el paquete activo con una salida futura y cupos disponibles aparece en la lista. **PASS**.
+
+- **AC-10-02:** al agotarse los cupos o dejar de tener salidas futuras disponibles, el paquete desaparece de la lista y el registro permanece en la base de datos. **PASS**.

@@ -1,6 +1,7 @@
 
 from rest_framework.routers import DefaultRouter
 
+
 from apps.sale.views import (
     BookingViewSet,
     PaymentViewSet,
