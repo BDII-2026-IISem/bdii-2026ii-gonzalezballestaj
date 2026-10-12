@@ -1991,3 +1991,544 @@ Resulatdo
 - **AC-06-04:** `void()` deja `inactive inactive`. **PASS**.
 
 - **AC-06-05:** no hay `ManyToManyField` en `membership/models.py`. **P**
+
+## ISS-07 — Serializers y JSON camelCase
+
+### Narrativa
+
+Los modelos de WayuuTravel ya existen y sus migraciones están aplicadas. Sin embargo, la API todavía necesita una capa de comunicación con el frontend. En esta unidad instalaremos Django REST Framework, configuraremos la conversión de nombres de campos a `camelCase` y crearemos serializers para validar y transformar los datos de clientes, paquetes turísticos, salidas, reservas y pagos.
+
+Los campos de Python seguirán en `snake_case`, por ejemplo, `created_at`, mientras que la API los expondrá como `createdAt`. Esta conversión ocurre en la comunicación HTTP, sin renombrar los campos de los modelos ni modificar las tablas de MySQL.
+
+### Objetivo
+
+Convertir los modelos de WayuuTravel en respuestas JSON y validar los datos recibidos por la API, utilizando nombres de campos `camelCase` sin modificar los modelos existentes.
+
+### Requisitos
+
+- ISS-06 superado.
+
+- Entorno virtual `.venv` activo.
+
+- Modelos y migraciones de Wayuu Travel disponibles.
+
+## Construcción
+
+### Paso 0. Activar el entorno e instalar los paquetes de la API
+
+En tu terminal de Ubuntu, ve a la carpeta del backend:
+
+``` sql
+source .venv/bin/activate
+python -m pip install "djangorestframework==3.17.2" "djangorestframework-camel-case==1.4.2" "django-cors-headers==4.9.0"
+python -m pip freeze > requirements.txt
+```
+
+- `djangorestframework` aporta los serializers, las vistas y el cliente de pruebas. Sin él, `from rest_framework import serializers` falla.
+
+- `djangorestframework-camel-case` convierte `created_at` en `createdAt` al responder, y al revés al recibir.
+
+`django-cors-headers` evita que un navegador en otro origen bloquee la API. En el laboratorio se permiten todos los orígenes; en producción se listan explícitamente.
+
+![](images/clipboard-2372264225.png)
+
+**Paso 1. Parchear `config/settings/__init__.py`**
+
+El archivo ya existe. DRF entra ahora con permiso abierto (`AllowAny`), porque todavía no hay autenticación; un ISS posterior cambia ese valor.
+
+Encima de `"apps.security.apps.SecurityConfig",` agrega:
+
+``` sql
+    "rest_framework",
+    "corsheaders",
+```
+
+Encima de `"django.middleware.security.SecurityMiddleware",` agrega:
+
+``` sql
+    "corsheaders.middleware.CorsMiddleware",
+```
+
+![](images/clipboard-565627114.png)
+
+Debajo de `DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"` agrega:
+
+``` sql
+CORS_ALLOW_ALL_ORIGINS = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "True").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
+REST_FRAMEWORK = {
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.AllowAny",
+    ],
+    "DEFAULT_RENDERER_CLASSES": [
+        "djangorestframework_camel_case.render.CamelCaseJSONRenderer",
+        "djangorestframework_camel_case.render.CamelCaseBrowsableAPIRenderer",
+    ],
+    "DEFAULT_PARSER_CLASSES": [
+        "djangorestframework_camel_case.parser.CamelCaseJSONParser",
+        "djangorestframework_camel_case.parser.CamelCaseFormParser",
+        "djangorestframework_camel_case.parser.CamelCaseMultiPartParser",
+    ],
+    "DEFAULT_PAGINATION_CLASS": None,
+}
+```
+
+![](images/clipboard-1643169686.png)
+
+**Paso 2. Serializers de `client (clients,travelers)`**
+
+Los archivos `serializers.py` no existen: `startapp` no los crea. Archivo `apps/client/serializers.py`:
+
+``` sql
+
+from rest_framework import serializers
+
+from apps.client.models import Client, Traveler
+
+
+class ClientSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Client
+        fields = [
+            "id",
+            "document_type",
+            "document_number",
+            "name",
+            "phone",
+            "email",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "document_type": {"min_length": 2, "max_length": 20},
+            "document_number": {"min_length": 3, "max_length": 30},
+            "name": {"min_length": 2, "max_length": 150},
+            "email": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+            "phone": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+        }
+
+    def validate_email(self, value):
+        if value is None or str(value).strip() == "":
+            return None
+        return value.strip().lower()
+
+    def validate(self, attrs):
+        if attrs.get("phone") == "":
+            attrs["phone"] = None
+        return attrs
+
+
+class TravelerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Traveler
+        fields = [
+            "id",
+            "name",
+            "description",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "name": {"min_length": 2, "max_length": 150},
+            "description": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+        }
+
+    def validate(self, attrs):
+        if attrs.get("description") == "":
+            attrs["description"] = None
+        return attrs
+```
+
+![](images/clipboard-3670627570.png)
+
+**Paso 3. Serializers de product (packages, departures, suppliers, included_services)**
+
+Archivo `apps/product/serializers.py`:
+
+``` sql
+
+from rest_framework import serializers
+
+from apps.product.models import Package, Departure, Supplier, IncludedService
+
+
+class PackageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Package
+        fields = [
+            "id",
+            "name",
+            "description",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "name": {"min_length": 2, "max_length": 150},
+            "description": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+        }
+
+    def validate(self, attrs):
+        if attrs.get("description") == "":
+            attrs["description"] = None
+        return attrs
+
+
+class DepartureSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Departure
+        fields = [
+            "id",
+            "name",
+            "description",
+            "package",
+            "departure_date",
+            "capacity",
+            "available_capacity",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "name": {"min_length": 2, "max_length": 150},
+            "description": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+            "capacity": {"min_value": 1},
+            "available_capacity": {"min_value": 0},
+        }
+
+    def validate(self, attrs):
+        if attrs.get("description") == "":
+            attrs["description"] = None
+
+        capacity = attrs.get(
+            "capacity",
+            getattr(self.instance, "capacity", None),
+        )
+        available_capacity = attrs.get(
+            "available_capacity",
+            getattr(self.instance, "available_capacity", None),
+        )
+
+        if (
+            capacity is not None
+            and available_capacity is not None
+            and available_capacity > capacity
+        ):
+            raise serializers.ValidationError({
+                "available_capacity": (
+                    "La capacidad disponible no puede superar "
+                    "la capacidad total."
+                )
+            })
+
+        return attrs
+
+
+class SupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Supplier
+        fields = [
+            "id",
+            "nit",
+            "razon_social",
+            "phone",
+            "email",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "nit": {"required": True},
+            "razon_social": {"min_length": 2, "max_length": 150},
+            "phone": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+            "email": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+        }
+
+    def validate_email(self, value):
+        if value is None or str(value).strip() == "":
+            return None
+        return value.strip().lower()
+
+    def validate(self, attrs):
+        if attrs.get("phone") == "":
+            attrs["phone"] = None
+        return attrs
+
+
+class IncludedServiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IncludedService
+        fields = [
+            "id",
+            "package",
+            "supplier",
+            "relation_data",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "relation_data": {
+                "required": False,
+                "allow_null": True,
+            },
+        }
+```
+
+![](images/clipboard-1770306145.png)
+
+**Paso 3. Serializers de sale (bookings, payments, cancellations, vouchers)**
+
+Archivo `apps/sale/serializers.py`:
+
+``` sql
+
+from rest_framework import serializers
+
+from apps.sale.models import Booking, Payment, Cancellation, Voucher
+
+
+class BookingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Booking
+        fields = [
+            "id",
+            "client",
+            "departure",
+            "traveler",
+            "start_date",
+            "end_date",
+            "observations",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "observations": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+        }
+
+    def validate(self, attrs):
+        start_date = attrs.get(
+            "start_date",
+            getattr(self.instance, "start_date", None),
+        )
+        end_date = attrs.get(
+            "end_date",
+            getattr(self.instance, "end_date", None),
+        )
+
+        if start_date and end_date and end_date < start_date:
+            raise serializers.ValidationError({
+                "end_date": (
+                    "La fecha final no puede ser anterior "
+                    "a la fecha de inicio."
+                )
+            })
+
+        if attrs.get("observations") == "":
+            attrs["observations"] = None
+
+        return attrs
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = [
+            "id",
+            "booking",
+            "reference_type",
+            "method",
+            "amount",
+            "payment_date",
+            "status",
+        ]
+        read_only_fields = ["id"]
+        extra_kwargs = {
+            "reference_type": {"max_length": 50},
+            "method": {"max_length": 50},
+            "amount": {"min_value": 0},
+        }
+
+
+class CancellationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cancellation
+        fields = [
+            "id",
+            "booking",
+            "name",
+            "descriptions",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "name": {"min_length": 2, "max_length": 100},
+            "descriptions": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+        }
+
+    def validate(self, attrs):
+        if attrs.get("descriptions") == "":
+            attrs["descriptions"] = None
+        return attrs
+
+
+class VoucherSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Voucher
+        fields = [
+            "id",
+            "booking",
+            "name",
+            "descriptions",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "name": {"min_length": 2, "max_length": 100},
+            "descriptions": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+        }
+
+    def validate(self, attrs):
+        if attrs.get("descriptions") == "":
+            attrs["descriptions"] = None
+        return attrs
+```
+
+![](images/clipboard-1824453276.png)
+
+#### Paso 4. Verificar la configuración
+
+``` sql
+python manage.py check
+```
+
+![](images/clipboard-824705287.png)
+
+## Explicación
+
+Los serializers no utilizan `fields = "__all__"`: cada campo que se expone en la API se declara explícitamente. Esto permite controlar qué datos pueden enviarse y recibirse.
+
+En `ClientSerializer`, los correos vacíos se convierten en `None` y los correos válidos se normalizan a minúsculas. Así se evitan problemas con cadenas vacías cuando el campo admite valores nulos y tiene una restricción de unicidad.
+
+Los serializers de relaciones permiten identificar los registros relacionados mediante sus claves foráneas. Por ejemplo, `BookingSerializer` expone los identificadores de `client`, `departure` y `traveler`. Si más adelante quieres incluir sus nombres directamente en el JSON, podemos añadir campos de solo lectura como `clientName`, `departureName` y `travelerName`.
+
+La conversión de nombres ocurre en el borde HTTP:
+
+```         
+Campo Python       Columna MySQL       JSON de la API created_at    →    created_at     →   createdAt document_type →    document_type  →   documentType
+```
+
+El parser realiza el camino inverso al recibir JSON. Los modelos y las columnas de MySQL permanecen en `snake_case`; no es necesario renombrarlos.
+
+## Criterios de aceptación
+
+- AC-07-01: el JSON de un cliente contiene `createdAt` y no `created_at`.
+
+- AC-07-02: el correo `Maria@Example.com` se normaliza a `maria@example.com`.
+
+- AC-07-03: las reservas exponen los identificadores de cliente, salida y viajero. Si se requieren los nombres `clientName`, `departureName` y `travelerName`, deben añadirse explícitamente a `BookingSerializer`.
+
+## Verificación
+
+Todavía no podemos verificar el JSON HTTP porque necesitamos configurar las vistas y las rutas de la API. Por ahora, podemos probar la normalización del correo desde el shell de Django.
+
+``` sql
+python manage.py shell
+```
+
+datos de entrada
+
+``` sql
+from apps.client.serializers import ClientSerializer
+
+serializer = ClientSerializer(data={
+    "document_type": "CC",
+    "document_number": "ISS07-001",
+    "name": "Maria Prueba",
+    "email": "Maria@Example.com",
+    "phone": "3001234567",
+})
+
+serializer.is_valid()
+```
+
+![](images/clipboard-3629534761.png)
+
+despues
+
+``` sql
+serializer.validated_data["email"]
+```
+
+![](images/clipboard-2547316082.png)
+
+![](images/clipboard-2492673894.png)
+
+![](images/clipboard-4079792296.png)
+
+#### **GATE**
+
+- **AC-07-01:** el render muestra `createdAt`. **PASS**.
+
+- **AC-07-02:** el correo se guarda en minúsculas. **PASS**.
+
+- **AC-07-03:** `trainerName` y `clientName` aparecen en la rutina. **PASS**.
