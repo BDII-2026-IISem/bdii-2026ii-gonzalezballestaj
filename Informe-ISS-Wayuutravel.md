@@ -1205,3 +1205,454 @@ python manage.py migrate
 | AC-04-03 | timestamps            | test de alta  | PASS          |
 | AC-04-04 | email duplicado = 400 | test          | PASS          |
 | AC-04-05 | nombre corto = 400    | test          | PASS          |
+
+### **ISS-05 — Models Package, Departure, Supplier, IncludedService y Booking**
+
+**Narrativa**
+
+Con el modelo `Client` ya implementado y migrado, WayuuTravel continúa con la construcción de los modelos principales que permiten administrar las experiencias turísticas responsables. Primero se modelan las entidades independientes o principales del catálogo: los paquetes turísticos (`Package`) y los proveedores de servicios turísticos (`Supplier`). Posteriormente, se desarrollan las entidades que dependen de ellas: las salidas programadas (`Departure`), los servicios incluidos (`IncludedService`) y las reservas (`Booking`).
+
+El modelo `Package` almacena la información general de cada experiencia turística, mientras que `Supplier` registra los prestadores de servicios vinculados a las actividades turísticas. Por su parte, `Departure` permite programar las fechas y condiciones de las experiencias; `IncludedService` registra los servicios que forman parte de cada paquete; y `Booking` relaciona a los clientes con las salidas turísticas que desean reservar.
+
+Se establecen reglas de integridad referencial para proteger la información relacionada. Por ejemplo, no se debe permitir eliminar un paquete que tenga salidas programadas o servicios incluidos asociados, ni un cliente que tenga reservas registradas. Para ello, se utiliza `on_delete=models.PROTECT` en las relaciones que deban impedir la eliminación de registros referenciados.
+
+**Objetivo**
+
+Modelar el catálogo de paquetes turísticos, los proveedores, las salidas programadas, los servicios incluidos y las reservas de Wayuu Travel, garantizando la integridad referencial entre clientes, paquetes, proveedores y salidas turísticas.
+
+**Requisitos**
+
+- ISS-04 superado: modelo `Client` implementado y migrado.
+
+- Terminal con el entorno virtual `.venv` activo.
+
+- Aplicaciones correspondientes registradas correctamente en la configuración de Django.
+
+- Relaciones entre modelos definidas de acuerdo con el diagrama entidad-relación de WayuuTravel.
+
+- Restricción de eliminación para los registros que tengan dependencias, mediante `on_delete=models.PROTECT` cuando corresponda.
+
+- Migraciones generadas y aplicadas correctamente en la base de datos MySQL `wayuutravel`.
+
+#### **Construcción**
+
+**Paso 0. Activar el entorno virtual**
+
+``` sql
+source .venv/bin/activate 
+which python
+```
+
+![](images/clipboard-2061436194.png)
+
+**Paso 1. Modelo client**
+
+El archivo `apps/client/models.py` lo creó `startapp` vacío. Se reescribe entero.
+
+``` sql
+
+from django.core.validators import MinLengthValidator
+from django.db import models
+
+from apps.common.models import Wayuutravel
+
+
+class Client(Wayuutravel):
+    document_type = models.CharField(
+        max_length=20,
+        validators=[MinLengthValidator(2)]
+    )
+
+    document_number = models.CharField(
+        max_length=30,
+        unique=True,
+        validators=[MinLengthValidator(3)]
+    )
+
+    name = models.CharField(
+        max_length=150,
+        validators=[MinLengthValidator(2)]
+    )
+
+    phone = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True
+    )
+
+    email = models.EmailField(
+        max_length=254,
+        blank=True,
+        null=True,
+        unique=True
+    )
+
+    class Meta:
+        db_table = "clients"
+        constraints = [
+            Wayuutravel.status_constraint("clients")
+        ]
+
+    def __str__(self):
+        return f"{self.name} - {self.document_number}"
+
+
+class Traveler(Wayuutravel):
+    name = models.CharField(
+        max_length=150,
+        validators=[MinLengthValidator(2)]
+    )
+
+    description = models.TextField(
+        blank=True,
+        null=True
+    )
+
+    class Meta:
+        db_table = "travelers"
+        constraints = [
+            Wayuutravel.status_constraint("travelers")
+        ]
+
+    def __str__(self):
+        return self.name
+```
+
+![](images/clipboard-3157010139.png)
+
+**Paso 2. Modelo product**
+
+El archivo `apps/product/models.py` lo creó `startapp` vacío. Se reescribe entero.
+
+``` sql
+from django.core.validators import MinLengthValidator, MinValueValidator
+from django.db import models
+
+from apps.common.models import Wayuutravel
+
+
+class Package(Wayuutravel):
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        validators=[MinLengthValidator(2)]
+    )
+    description = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "packages"
+        verbose_name = "paquete turístico"
+        verbose_name_plural = "paquetes turísticos"
+        ordering = ["name", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("packages_status_valid")
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class Departure(Wayuutravel):
+    name = models.CharField(
+        max_length=100,
+        validators=[MinLengthValidator(2)]
+    )
+    description = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+    package = models.ForeignKey(
+        Package,
+        on_delete=models.PROTECT,
+        related_name="departures",
+        db_column="package_id"
+    )
+    departure_date = models.DateTimeField()
+    capacity = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)]
+    )
+    available_capacity = models.PositiveIntegerField(
+        validators=[MinValueValidator(0)]
+    )
+
+    class Meta:
+        db_table = "departures"
+        verbose_name = "salida programada"
+        verbose_name_plural = "salidas programadas"
+        ordering = ["departure_date", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("departures_status_valid"),
+            models.CheckConstraint(
+                condition=models.Q(available_capacity__lte=models.F("capacity")),
+                name="departures_available_lte_capacity"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.name} - {self.departure_date:%Y-%m-%d}"
+
+
+class Supplier(Wayuutravel):
+    nit = models.CharField(
+        max_length=20,
+        unique=True
+    )
+    razon_social = models.CharField(
+        max_length=150
+    )
+    phone = models.CharField(
+        max_length=20
+    )
+    email = models.EmailField(
+        max_length=254,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "suppliers"
+        verbose_name = "proveedor"
+        verbose_name_plural = "proveedores"
+        ordering = ["razon_social", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("suppliers_status_valid")
+        ]
+
+    def __str__(self):
+        return self.razon_social
+
+
+class IncludedService(Wayuutravel):
+    package = models.ForeignKey(
+        Package,
+        on_delete=models.PROTECT,
+        related_name="included_services",
+        db_column="package_id"
+    )
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.PROTECT,
+        related_name="included_services",
+        db_column="supplier_id"
+    )
+    relation_data = models.JSONField(
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "included_services"
+        verbose_name = "servicio incluido"
+        verbose_name_plural = "servicios incluidos"
+        ordering = ["package_id", "supplier_id", "id"]
+        constraints = [
+            Wayuutravel.status_constraint(
+                "included_services_status_valid"
+            ),
+            models.UniqueConstraint(
+                fields=["package", "supplier"],
+                name="included_services_package_supplier_unique"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.supplier} - {self.package}"
+```
+
+![](images/clipboard-1524865175.png)
+
+**Paso 3. Modelo sale**
+
+El archivo `apps/sale/models.py` lo creó `startapp` vacío. Se reescribe entero.
+
+``` sql
+
+from django.core.validators import MinValueValidator
+from django.db import models
+
+from apps.common.models import Wayuutravel
+from apps.client.models import Client, Traveler
+from apps.product.models import Departure
+
+
+class Booking(Wayuutravel):
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.PROTECT,
+        related_name="bookings",
+        db_column="client_id"
+    )
+    departure = models.ForeignKey(
+        Departure,
+        on_delete=models.PROTECT,
+        related_name="bookings",
+        db_column="departure_id"
+    )
+    traveler = models.ForeignKey(
+        Traveler,
+        on_delete=models.PROTECT,
+        related_name="bookings",
+        db_column="traveler_id"
+    )
+    start_date = models.DateField()
+    end_date = models.DateField()
+    observations = models.TextField(
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "bookings"
+        verbose_name = "reserva"
+        verbose_name_plural = "reservas"
+        ordering = ["-created_at", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("bookings_status_valid"),
+            models.CheckConstraint(
+                condition=models.Q(end_date__gte=models.F("start_date")),
+                name="bookings_end_date_gte_start_date"
+            ),
+        ]
+
+    def __str__(self):
+        return f"Reserva #{self.pk}"
+
+
+class Payment(Wayuutravel):
+    reference_type = models.CharField(max_length=50)
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.PROTECT,
+        related_name="payments",
+        db_column="booking_id"
+    )
+    method = models.CharField(max_length=50)
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(0.01)]
+    )
+    payment_date = models.DateTimeField()
+
+    class Meta:
+        db_table = "payments"
+        verbose_name = "pago"
+        verbose_name_plural = "pagos"
+        ordering = ["-payment_date", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("payments_status_valid")
+        ]
+
+    def __str__(self):
+        return f"Pago #{self.pk} - {self.amount}"
+
+
+class Cancellation(Wayuutravel):
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.PROTECT,
+        related_name="cancellations",
+        db_column="booking_id"
+    )
+    name = models.CharField(max_length=100)
+    descriptions = models.TextField(
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "cancellations"
+        verbose_name = "cancelación"
+        verbose_name_plural = "cancelaciones"
+        ordering = ["-created_at", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("cancellations_status_valid")
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class Voucher(Wayuutravel):
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.PROTECT,
+        related_name="vouchers",
+        db_column="booking_id"
+    )
+    name = models.CharField(max_length=100)
+    descriptions = models.TextField(
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "vouchers"
+        verbose_name = "comprobante"
+        verbose_name_plural = "comprobantes"
+        ordering = ["-created_at", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("vouchers_status_valid")
+        ]
+
+    def __str__(self):
+        return self.name
+```
+
+![](images/clipboard-1392402582.png)
+
+**Paso 4. Generar las migraciones y migrar**
+
+Se generan juntas porque tienen depencias entre ellas. La CLI escribe las migraciones.
+
+``` sql
+python manage.py makemigrations client product sale
+python manage.py migrate
+```
+
+![](images/clipboard-1274338231.png)
+
+#### Explicación
+
+`RESTRICT` impide eliminar un registro padre mientras existan registros relacionados que dependan de él. En Django, se puede implementar este comportamiento mediante `on_delete=models.RESTRICT`; si se intenta eliminar un proveedor que tiene relaciones protegidas, se genera una excepción `RestrictedError`.
+
+Cada tabla de Wayuu Travel conserva sus propios campos y las claves foráneas utilizan los nombres físicos definidos en el modelo y la base de datos, como `client_id`, `departure_id`, `traveler_id`, `package_id`, `supplier_id` y `booking_id`.
+
+Las relaciones principales del sistema son:
+
+```         
+Client 1 ───── N Booking N ───── 1 Departure Traveler 1 ─── N Booking  Package 1 ──── N Departure Package 1 ──── N IncludedService N ──── 1 Supplier  Booking 1 ──── N Payment Booking 1 ──── N Cancellation Booking 1 ──── N Voucher
+```
+
+Los nombres de las restricciones deben respetar los límites admitidos por el motor de base de datos utilizado.
+
+#### Criterios de aceptación
+
+- AC-05-01: las claves foráneas obligatorias, como `client_id`, `departure_id`, `traveler_id`, `package_id`, `supplier_id` y `booking_id`, no permiten valores nulos.
+
+- AC-05-02: no se permite eliminar registros que tengan dependencias protegidas, de acuerdo con las reglas de integridad referencial del sistema.
+
+- AC-05-03: el número de documento del cliente (`document_number`) y el NIT del proveedor (`nit`) son únicos. El correo electrónico del cliente (`email`) también es único cuando se proporciona.
+
+- AC-05-04: el campo `status` tiene como valor predeterminado `inactive`, siempre que esta sea la regla definida para el modelo base `Wayuutravel`.
+
+#### Verificación
+
+La verificación se realiza mediante pruebas de los modelos de las aplicaciones `client`, `product` y `sale`, comprobando las relaciones, las restricciones de unicidad, los valores predeterminados y el comportamiento al eliminar registros relacionados.
+
+En este ISS se verifican los criterios mediante pruebas de modelos y de integridad de datos, antes de incorporar las pruebas de API en las siguientes etapas del proyecto.
+
+#### GATE
+
+- AC-05-01: las claves foráneas obligatorias están configuradas con `null=False`. PASS cuando se comprueba en los modelos.
+
+- AC-05-02: los registros con dependencias protegidas no se pueden eliminar mediante las operaciones correspondientes de Django. PASS cuando la prueba confirma el comportamiento esperado.
+
+- AC-05-03: las restricciones de unicidad impiden duplicar los valores definidos como únicos. PASS cuando las pruebas comprueban el rechazo de duplicados.
+
+- AC-05-04: el campo `status` tiene el valor predeterminado `inactive`. PASS cuando se verifica en el modelo base y mediante una prueba.
