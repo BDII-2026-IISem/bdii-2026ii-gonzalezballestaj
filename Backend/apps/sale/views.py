@@ -2,6 +2,10 @@
 from rest_framework import viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework.generics import ListAPIView
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
 
 from apps.sale.models import (
     Booking,
@@ -47,3 +51,37 @@ class ActiveBookingListView(ListAPIView):
 
     def get_queryset(self):
         return Booking.objects.all()
+
+class BookingRegistrationAPIView(APIView):
+    """Registra una reserva junto con sus pagos."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = BookingSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            booking = serializer.save()
+        except DjangoValidationError as exc:
+            if hasattr(exc, "message_dict"):
+                errors = exc.message_dict
+            else:
+                errors = {"detail": exc.messages}
+
+            return Response(
+                errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        response_serializer = BookingSerializer(booking)
+
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )

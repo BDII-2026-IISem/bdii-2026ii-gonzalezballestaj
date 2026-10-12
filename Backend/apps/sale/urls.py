@@ -1,12 +1,13 @@
 
+from django.urls import path
 from rest_framework.routers import DefaultRouter
-
 
 from apps.sale.views import (
     BookingViewSet,
     PaymentViewSet,
     CancellationViewSet,
     VoucherViewSet,
+    BookingRegistrationAPIView,
 )
 
 router = DefaultRouter()
@@ -20,4 +21,12 @@ router.register(
 )
 router.register(r"vouchers", VoucherViewSet, basename="voucher")
 
-urlpatterns = router.urls
+urlpatterns = [
+    path(
+        "bookings/register/",
+        BookingRegistrationAPIView.as_view(),
+        name="booking-register",
+    ),
+]
+
+urlpatterns += router.urls

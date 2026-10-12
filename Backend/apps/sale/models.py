@@ -1,13 +1,15 @@
 
 from django.core.validators import MinValueValidator
 from django.db import models
-
 from apps.common.models import Wayuutravel
 from apps.client.models import Client, Traveler
 from apps.product.models import Departure
+from apps.sale.managers import BookingManager
 
 
 class Booking(Wayuutravel):
+    objects = BookingManager()
+    
     client = models.ForeignKey(
         Client,
         on_delete=models.PROTECT,

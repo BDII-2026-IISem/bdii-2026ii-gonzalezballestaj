@@ -3466,3 +3466,533 @@ Si quieres comprobarlo manualmente, arranca el servidor y abre [`http://127.0.0.
 - **AC-10-01:** el paquete activo con una salida futura y cupos disponibles aparece en la lista. **PASS**.
 
 - **AC-10-02:** al agotarse los cupos o dejar de tener salidas futuras disponibles, el paquete desaparece de la lista y el registro permanece en la base de datos. **PASS**.
+
+### ISS-11 — Registro de reserva con APIView
+
+**Narrativa**
+
+Hasta ahora todo era CRUD o consulta. Registrar una reserva es distinto: implica crear la reserva, asociarla con un cliente y una salida programada, registrar los viajeros y comprobar que el cliente esté activo y que existan cupos disponibles. Si cualquier paso falla, no puede quedar nada a medias: ni una reserva incompleta ni una salida con los cupos descontados incorrectamente. Por eso el registro se realiza como una sola transacción, dentro del manager del modelo, y se expone mediante una `APIView` en `POST /api/bookings/`. El serializer valida la forma de los datos; el manager protege la regla de negocio, de modo que se cumpla aunque otra vista llame al mismo método.
+
+**Objetivo**
+
+Registrar una reserva como una sola transacción: cliente, salida programada, viajeros y control de cupos.
+
+**Requisitos**
+
+- ISS-10 superado.
+
+- La aplicación `sale` dispone de los modelos necesarios para gestionar reservas.
+
+- Terminal con el entorno virtual `.venv` activo.
+
+- Si cualquier paso falla, no queda una reserva incompleta ni se descuentan cupos incorrectamente.
+
+#### Construcción
+
+**Paso 0. Activar el entorno virtual**
+
+``` sql
+source .venv/bin/activate which python
+```
+
+#### Paso 1. Escribir el registro en el manager
+
+El archivo `apps/sale/managers.py` debe contener el `SaleQuerySet` o manager que utiliza el modelo de reservas. El método `register` centraliza el registro de una reserva y conserva el manager existente.
+
+El método bloquea el cliente y la salida programada mediante `select_for_update`, valida que el cliente esté activo y que existan cupos disponibles, y ejecuta toda la operación dentro de `transaction.atomic()`.
+
+De esta manera, si falla la creación de la reserva, el registro de los viajeros o la actualización de los cupos, la transacción se revierte y no quedan cambios parciales en la base de datos.
+
+``` sql
+
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
+
+from apps.common.status import RecordStatus
+from apps.client.models import Client, Traveler
+from apps.product.models import Departure
+
+
+class BookingManager(models.Manager):
+    """Manager personalizado para las reservas de Wayuu Travel."""
+
+    def register(
+        self,
+        *,
+        client_id,
+        departure_id,
+        traveler_id,
+        start_date,
+        end_date,
+        payments,
+        observations=None,
+    ):
+        if not payments:
+            raise ValidationError({
+                "payments": ["La reserva requiere al menos un pago."]
+            })
+
+        with transaction.atomic():
+            # Bloquear y validar el cliente.
+            try:
+                client = Client.objects.select_for_update().get(
+                    pk=client_id
+                )
+            except Client.DoesNotExist:
+                raise ValidationError({
+                    "client_id": ["El cliente no existe."]
+                })
+
+            if client.status != RecordStatus.ACTIVE:
+                raise ValidationError({
+                    "client_id": ["El cliente debe estar activo."]
+                })
+
+            # Bloquear y validar la salida.
+            try:
+                departure = Departure.objects.select_for_update().get(
+                    pk=departure_id
+                )
+            except Departure.DoesNotExist:
+                raise ValidationError({
+                    "departure_id": ["La salida programada no existe."]
+                })
+
+            if departure.status != RecordStatus.ACTIVE:
+                raise ValidationError({
+                    "departure_id": ["La salida debe estar activa."]
+                })
+
+            if departure.available_capacity < 1:
+                raise ValidationError({
+                    "departure_id": ["No hay cupos disponibles."]
+                })
+
+            # Validar el viajero.
+            try:
+                traveler = Traveler.objects.get(pk=traveler_id)
+            except Traveler.DoesNotExist:
+                raise ValidationError({
+                    "traveler_id": ["El viajero no existe."]
+                })
+
+            # Crear la reserva.
+            booking = self.model(
+                client=client,
+                departure=departure,
+                traveler=traveler,
+                start_date=start_date,
+                end_date=end_date,
+                observations=observations,
+                status=RecordStatus.INACTIVE,
+            )
+            booking.save()
+
+            # Crear los pagos dentro de la misma transacción.
+            from apps.sale.models import Payment
+
+            for payment_data in payments:
+                Payment.objects.create(
+                    booking=booking,
+                    reference_type=payment_data["reference_type"],
+                    method=payment_data["method"],
+                    amount=payment_data["amount"],
+                    payment_date=payment_data["payment_date"],
+                    status=RecordStatus.ACTIVE,
+                )
+
+            # Confirmar reserva y descontar un cupo.
+            booking.status = RecordStatus.ACTIVE
+            booking.save(update_fields=["status", "updated_at"])
+
+            departure.available_capacity -= 1
+            departure.save(
+                update_fields=["available_capacity", "updated_at"]
+            )
+
+            return booking
+```
+
+![](images/clipboard-1824012913.png)
+
+#### Paso 2. Asociar el manager con el modelo
+
+Para que `Booking.objects.register(...)` funcione, el modelo `Booking` debe usar el manager personalizado.
+
+En `apps/sale/models.py`, dentro de la clase `Booking`, agregamos:
+
+``` sql
+objects = BookingManager()
+```
+
+![](images/clipboard-2582445226.png)
+
+#### Paso 3. Verificar el código
+
+``` sql
+python manage.py check
+```
+
+![](images/clipboard-3585511497.png)
+
+registro de una reserva mediante una APIView. Ya tenemos el manager para registrar la reserva, crear los pagos y descontar un cupo dentro de una transacción.
+
+#### 4. Actualizar `apps/sale/serializers.py`
+
+Reemplaza únicamente la clase `BookingSerializer` y agregamos el nuevo serializer `BookingPaymentInputSerializer` antes de ella. Dejamos las clases `PaymentSerializer`, `CancellationSerializer` y `VoucherSerializer` como están.
+
+``` sql
+
+from decimal import Decimal
+
+from rest_framework import serializers
+
+from apps.sale.models import Booking, Payment, Cancellation, Voucher
+
+
+class BookingPaymentInputSerializer(serializers.Serializer):
+    """Valida los datos de cada pago enviado al registrar una reserva."""
+
+    reference_type = serializers.CharField(max_length=50)
+    method = serializers.CharField(max_length=50)
+    amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
+    payment_date = serializers.DateTimeField()
+
+
+class BookingSerializer(serializers.ModelSerializer):
+    payments = BookingPaymentInputSerializer(
+        many=True,
+        write_only=True,
+        required=False,
+        allow_empty=False,
+    )
+
+    class Meta:
+        model = Booking
+        fields = [
+            "id",
+            "client",
+            "departure",
+            "traveler",
+            "start_date",
+            "end_date",
+            "observations",
+            "payments",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        extra_kwargs = {
+            "observations": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+        }
+
+    def validate(self, attrs):
+        start_date = attrs.get(
+            "start_date",
+            getattr(self.instance, "start_date", None),
+        )
+        end_date = attrs.get(
+            "end_date",
+            getattr(self.instance, "end_date", None),
+        )
+
+        if start_date and end_date and end_date < start_date:
+            raise serializers.ValidationError({
+                "end_date": (
+                    "La fecha final no puede ser anterior "
+                    "a la fecha de inicio."
+                )
+            })
+
+        if attrs.get("observations") == "":
+            attrs["observations"] = None
+
+        return attrs
+
+    def create(self, validated_data):
+        payments = validated_data.pop("payments", [])
+
+        client = validated_data.pop("client")
+        departure = validated_data.pop("departure")
+        traveler = validated_data.pop("traveler")
+
+        return Booking.objects.register(
+            client_id=client.pk,
+            departure_id=departure.pk,
+            traveler_id=traveler.pk,
+            start_date=validated_data["start_date"],
+            end_date=validated_data["end_date"],
+            observations=validated_data.get("observations"),
+            payments=payments,
+        )
+
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = [
+            "id",
+            "booking",
+            "reference_type",
+            "method",
+            "amount",
+            "payment_date",
+            "status",
+        ]
+        read_only_fields = ["id"]
+        extra_kwargs = {
+            "reference_type": {"max_length": 50},
+            "method": {"max_length": 50},
+            "amount": {"min_value": Decimal("0.01")},
+        }
+
+
+class CancellationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cancellation
+        fields = [
+            "id",
+            "booking",
+            "name",
+            "descriptions",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "name": {"min_length": 2, "max_length": 100},
+            "descriptions": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+        }
+
+    def validate(self, attrs):
+        if attrs.get("descriptions") == "":
+            attrs["descriptions"] = None
+        return attrs
+
+
+class VoucherSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Voucher
+        fields = [
+            "id",
+            "booking",
+            "name",
+            "descriptions",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {
+            "name": {"min_length": 2, "max_length": 100},
+            "descriptions": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            },
+        }
+
+    def validate(self, attrs):
+        if attrs.get("descriptions") == "":
+            attrs["descriptions"] = None
+        return attrs
+
+```
+
+![](images/clipboard-1496059461.png)
+
+#### 5. Comprobamos que no haya errores
+
+``` sql
+python manage.py check
+```
+
+![](images/clipboard-4136005676.png)
+
+#### Paso 6. Añadimos la APIView de registro
+
+Abrimos `apps/sale/views.py` y agregamos los siguientes imports
+
+``` sql
+from django.core.exceptions import ValidationError as DjangoValidationError
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+```
+
+Después, agregamos esta clase al final del archivo, sin modificar las demas vistas existentes:
+
+``` sql
+
+class BookingRegistrationAPIView(APIView):
+    """Registra una reserva junto con sus pagos."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = BookingSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            booking = serializer.save()
+        except DjangoValidationError as exc:
+            if hasattr(exc, "message_dict"):
+                errors = exc.message_dict
+            else:
+                errors = {"detail": exc.messages}
+
+            return Response(
+                errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        response_serializer = BookingSerializer(booking)
+
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
+```
+
+#### Paso 7. Revisa el serializer
+
+En `apps/sale/serializers.py`, dentro de `BookingSerializer`, nos asegúramos de que `payments` sea obligatorio, porque el manager que preparamos rechaza las reservas sin pagos:
+
+``` sql
+payments = BookingPaymentInputSerializer(
+    many=True,
+    write_only=True,
+    required=True,
+    allow_empty=False,
+)
+```
+
+![](images/clipboard-720616906.png)
+
+#### Paso 8. Conectamos la URL
+
+Ahora necesitamos registrar la ruta de esta vista.
+
+``` sql
+
+from django.urls import path
+from rest_framework.routers import DefaultRouter
+
+from apps.sale.views import (
+    BookingViewSet,
+    PaymentViewSet,
+    CancellationViewSet,
+    VoucherViewSet,
+    BookingRegistrationAPIView,
+)
+
+router = DefaultRouter()
+
+router.register(r"bookings", BookingViewSet, basename="booking")
+router.register(r"payments", PaymentViewSet, basename="payment")
+router.register(
+    r"cancellations",
+    CancellationViewSet,
+    basename="cancellation",
+)
+router.register(r"vouchers", VoucherViewSet, basename="voucher")
+
+urlpatterns = [
+    path(
+        "bookings/register/",
+        BookingRegistrationAPIView.as_view(),
+        name="booking-register",
+    ),
+]
+
+urlpatterns += router.urls
+```
+
+### Explicación
+
+Un `ModelViewSet.create` convencional no garantiza por sí solo que la reserva, sus pagos y la actualización de los cupos se ejecuten como una única operación atómica. Por eso, se utiliza una `APIView` específica para registrar reservas que requieren varias operaciones relacionadas.
+
+El serializer es responsable de validar la estructura de la solicitud, los tipos de datos, las fechas y los montos de los pagos, así como de exigir al menos un pago. El manager `Booking.objects.register` centraliza las reglas de negocio: verifica que el cliente y la salida programada estén activos, comprueba que haya cupos disponibles, registra la reserva y sus pagos, y descuenta un cupo de la salida.
+
+Estas operaciones se ejecutan dentro de `transaction.atomic()`. Si ocurre un error durante el proceso, la transacción revierte los cambios realizados, evitando que quede una reserva incompleta o que se descuenten cupos sin completar el registro. El bloqueo mediante `select_for_update()` sobre la salida programada ayuda a evitar que dos solicitudes concurrentes asignen el mismo último cupo, siempre que la base de datos utilizada admita y aplique esos bloqueos.
+
+No se crea una clase adicional `BookingService`, porque el manager personalizado concentra la lógica de registro.
+
+El flujo de la operación es:
+
+`POST /api/sale/bookings/register/`
+
+↓ `BookingRegistrationAPIView`
+
+↓ `BookingSerializer`
+
+↓ `Booking.objects.register(...)`
+
+↓ `transaction.atomic()`
+
+↓ Crear reserva + crear pagos + descontar cupo
+
+↓ `COMMIT` si todo sale bien o `ROLLBACK` si ocurre un error.
+
+### Prueba manual
+
+Con el servidor Django en ejecución mediante `python manage.py runserver`, se puede probar el endpoint con `curl`. Los identificadores deben corresponder a registros existentes; el cliente y la salida deben estar activos y la salida debe tener cupos disponibles.
+
+``` sql
+curl -X POST http://127.0.0.1:8000/api/sale/bookings/register/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client": 1,
+    "departure": 1,
+    "traveler": 1,
+    "start_date": "2026-10-20",
+    "end_date": "2026-10-25",
+    "observations": "Reserva de prueba",
+    "payments": [
+      {
+        "reference_type": "booking",
+        "method": "efectivo",
+        "amount": "50000.00",
+        "payment_date": "2026-10-12T15:00:00Z"
+      }
+    ]
+  }'
+```
+
+Si el registro es válido, se espera una respuesta HTTP `201 Created` con los datos de la reserva. Si los datos no son válidos o no hay cupos, se espera una respuesta HTTP `400 Bad Request`.
+
+La prueba de concurrencia y reversión debe comprobarse mediante pruebas automatizadas y una base de datos que soporte correctamente los bloqueos de filas. Una segunda reserva con los mismos datos no necesariamente debe rechazarse, porque en Wayuu Travel la regla de negocio implementada hasta ahora controla la disponibilidad de cupos, no el cruce de fechas de membresías.
+
+**Pruebas**
+
+![](images/clipboard-1038941804.png)
+
+![](images/clipboard-2309290153.png)
+
+![](images/clipboard-4095229592.png)

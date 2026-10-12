@@ -1,10 +1,33 @@
 
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from apps.sale.models import Booking, Payment, Cancellation, Voucher
 
 
+class BookingPaymentInputSerializer(serializers.Serializer):
+    """Valida los datos de cada pago enviado al registrar una reserva."""
+
+    reference_type = serializers.CharField(max_length=50)
+    method = serializers.CharField(max_length=50)
+    amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
+    payment_date = serializers.DateTimeField()
+
+
 class BookingSerializer(serializers.ModelSerializer):
+    payments = BookingPaymentInputSerializer(
+        many=True,
+        write_only=True,
+        required=False,
+        allow_empty=False,
+    )
+
+
     class Meta:
         model = Booking
         fields = [
@@ -15,11 +38,17 @@ class BookingSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "observations",
+            "payments",
             "status",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
         extra_kwargs = {
             "observations": {
                 "required": False,
@@ -51,6 +80,24 @@ class BookingSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    def create(self, validated_data):
+        payments = validated_data.pop("payments", [])
+
+        client = validated_data.pop("client")
+        departure = validated_data.pop("departure")
+        traveler = validated_data.pop("traveler")
+
+        return Booking.objects.register(
+            client_id=client.pk,
+            departure_id=departure.pk,
+            traveler_id=traveler.pk,
+            start_date=validated_data["start_date"],
+            end_date=validated_data["end_date"],
+            observations=validated_data.get("observations"),
+            payments=payments,
+        )
+
+
 
 class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -68,7 +115,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "reference_type": {"max_length": 50},
             "method": {"max_length": 50},
-            "amount": {"min_value": 0},
+            "amount": {"min_value": Decimal("0.01")},
         }
 
 
