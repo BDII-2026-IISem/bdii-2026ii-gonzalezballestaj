@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'apps.client.apps.ClientConfig',
     'apps.product.apps.ProductConfig',
     'apps.sale.apps.SaleConfig',
+    "apps.security.apps.SecurityConfig", 
 ]
  
 MIDDLEWARE = [
@@ -72,7 +73,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
  
 DATABASES = database_from_environ(os.environ)
- 
+AUTH_USER_MODEL = "security.User" 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},

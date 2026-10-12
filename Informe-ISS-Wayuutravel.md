@@ -586,3 +586,453 @@ El proceso de configuración sigue esta secuencia:
 | AC-01-02 | Prueba con un motor no admitido | EVI-01-06 | PASS |
 | AC-01-03 | Prueba con una variable obligatoria vacía | EVI-01-06 | PASS |
 | AC-01-04 | Aserción para comprobar `SERVICE_NAME` | EVI-01-06 | PASS |
+
+## ISS-02 — Aplicaciones de Wayuu Travel
+
+### Narrativa
+
+Con la configuración del entorno y de la base de datos preparada, Wayuu Travel necesita una estructura que permita organizar las funcionalidades del sistema. Django utiliza aplicaciones (*apps*) para separar la lógica del proyecto en módulos independientes, cada uno enfocado en una parte específica del negocio. En esta unidad se crearon las aplicaciones correspondientes a la gestión turística y se organizaron dentro del paquete `apps/`, evitando que el directorio raíz se llene de carpetas dispersas. En esta etapa no se implementan modelos ni reglas de negocio; el trabajo se centra en establecer la estructura modular y registrar las aplicaciones en la configuración del proyecto.
+
+### Objetivo
+
+Crear las aplicaciones de negocio de Wayuu Travel mediante las herramientas de Django, organizarlas dentro del paquete `apps/` y registrarlas en la configuración para facilitar su desarrollo en las siguientes unidades.
+
+### Requisitos
+
+- Haber completado el ISS-01, correspondiente a la configuración del entorno y la selección del motor de base de datos.
+
+- Tener activo el entorno virtual `(.venv)` en la terminal.
+
+- Contar con el proyecto Django `config` creado y funcionando.
+
+- No implementar todavía los modelos de negocio. El modelo de usuario personalizado, si forma parte del diseño del proyecto, debe definirse antes de ejecutar la primera migración.
+
+### Construcción
+
+**1. Confirmar el entorno**
+
+Antes de ejecutar los comandos de esta unidad, se activó el entorno virtual y se comprobó que el intérprete de Python correspondiera a `.venv`. Esto garantiza que los comandos de Django utilicen las dependencias instaladas para Wayuu Travel y no las del Python global del sistema.
+
+Para comprobar el intérprete activo, se ejecuto
+
+La ruta obtenida debe apuntar al entorno virtual del proyecto. Después de esta comprobación, se puede continuar con la creación de las aplicaciones, su organización dentro de `apps/` y su registro en el archivo de configuración de Django.
+
+``` sql
+    source .venv/bin/activate
+    which python
+```
+
+![](images/clipboard-3063993636.png)
+
+**1. Crear los directorios y las apps con `startapp`**
+
+`startapp` exige que el directorio destino ya exista. Por eso primero se crean las carpetas y luego se genera cada app. No se copian `models.py`, `admin.py` ni `views.py` a mano: la CLI los deja listos. El archivo `urls.py` no lo crea; aparecerá cuando haya endpoints.
+
+``` sql
+mkdir -p apps/client apps/product apps/sale
+
+python manage.py startapp client apps/client
+python manage.py startapp product apps/product
+python manage.py startapp sale apps/sale
+```
+
+![](images/clipboard-2909942426.png)
+
+![](images/clipboard-4179634844.png)
+
+**2. Convertir `apps` en paquete**
+
+Se creó `apps/__init__.py`, vacío, para que Python trate la carpeta `apps` como un paquete.
+
+``` sql
+mkdir -p apps
+cat > apps/__init__.py <<'EOF'
+EOF
+```
+
+![](images/clipboard-893030579.png)
+
+![](images/clipboard-2003070490.png)
+
+**3. Parchear el `apps.py` de cada app**
+
+Cada `apps.py` ya existe, generado por `startapp`. Como las apps viven dentro de `apps/`, hay que indicarle a Django la ruta completa del paquete. Se mantiene el `label` corto para que las migraciones no arrastren el prefijo `apps.`
+
+``` sql
+ARCHIVO: apps/client/apps.py  UBICAR:     name = "client"  REEMPLAZAR POR:     name = "apps.client"     label = "client" 
+```
+
+**Para client:**
+
+![](images/clipboard-2218059323.png)
+
+**para product:**
+
+![](images/clipboard-545440269.png)
+
+**para sale:**
+
+![](images/clipboard-2353096180.png)
+
+El mismo parche se repite las apps:
+
+| **Archivo**            | **`name`**    | **`label`** |
+|------------------------|---------------|-------------|
+| `apps/client/apps.py`  | `apps.client` | client      |
+| `apps/product/apps.py` | apps.product  | `product`   |
+| `apps/`sale`/apps.py`  | apps.sale     | sale        |
+
+La clase de cada archivo conserva su nombre (`ClientConfig`, `ProductConfig`, `PaleConfig`).
+
+**4. Registrar las apps en `config/settings/__init__.py`**
+
+El archivo ya existe. Se agregan las apps al final de `INSTALLED_APPS`, todavía sin la app `security`, que llega en el ISS-03.
+
+text
+
+``` sql
+ARCHIVO: config/settings/__init__.py
+
+DEBAJO DE:
+    "django.contrib.staticfiles",
+
+AGREGAR:
+    "apps.client.apps.ClientConfig",
+    "apps.produt.apps.ProductConfig",
+    "apps.sale.apps.SaleConfig",
+```
+
+![](images/clipboard-4080957655.png)
+
+#### Explicación
+
+Django necesita conocer la ruta completa de cada aplicación para poder reconocerla y cargarla correctamente. En Wayuu Travel, las aplicaciones se encuentran dentro del directorio `apps/`, por lo que el atributo `AppConfig.name` debe especificar la ruta correspondiente, como `apps.client`.
+
+El atributo `label` conserva el nombre corto de cada aplicación, por ejemplo `client`, facilitando su identificación dentro del proyecto y evitando introducir el prefijo del paquete en las referencias de las migraciones.
+
+Cada aplicación representa un área funcional de Wayuu Travel y agrupa las responsabilidades relacionadas con la gestión de clientes, la oferta turística y las operaciones comerciales.
+
+```         
+apps/
+├── client/   clientes y viajeros
+├── product/  paquetes turísticos, servicios incluidos y proveedores
+└── sale/     reservas, pagos, cancelaciones y comprobantes
+```
+
+La aplicación `client` administra los datos de los clientes y viajeros; `product` organiza la oferta turística y los servicios asociados; y `sale` gestiona las reservas y sus operaciones relacionadas.
+
+En esta etapa se prepara la estructura de las aplicaciones, sin implementar todavía los modelos de negocio, ya que primero debe completarse el ISS-03, correspondiente al usuario personalizado.
+
+#### Criterios de aceptación
+
+- **AC-02-01:** verificar que las aplicaciones `client`, `product` y `sale` se hayan creado mediante el comando `startapp` de Django.
+
+- **AC-02-02:** comprobar que `python manage.py check` se ejecute sin errores relacionados con el registro o la configuración de las aplicaciones.
+
+- **AC-02-03:** confirmar que todavía no se hayan implementado modelos de negocio en esta etapa del desarrollo.
+
+### **Verificación**
+
+``` sql
+python manage.py check 
+```
+
+Para el GATE, además, puedes mostrar el árbol de las apps:
+
+``` sql
+tree apps -I "__pycache__" 
+```
+
+![](images/clipboard-3118716529.png)
+
+### **GATE**
+
+| **AC** | **Verificación** | **Evidencia** | **Resultado** |
+|----|----|----|----|
+| AC-02-01 | directorios de las apps | árbol de `apps/` (EVI-02-01) | PASS |
+| AC-02-02 | `manage.py check` | EVI-02-04 | PASS |
+| AC-02-03 | este ISS no escribe modelos | revisión de los `models.py` vacíos | PASS |
+
+## **ISS-03 — Custom User antes de la primera migración**
+
+Hasta aquí ActivaFit tiene su configuración y sus apps, pero todavía no ha tocado la base de datos. Antes de la primera migración hay que tomar una decisión que no se puede deshacer fácilmente: definir el modelo de usuario propio del sistema. Django trae uno por defecto, pero cambiarlo después de migrar obliga a borrar tablas. Por eso, en esta unidad se creó el usuario personalizado de ActivaFit sobre `django.contrib.auth`, se declaró en la configuración y solo entonces se hizo la primera migración. Así, las credenciales del sistema quedan en una tabla propia (`users`), separada de los clientes del gimnasio.
+
+**Objetivo**
+
+Definir el usuario de ActivaFit sobre `django.contrib.auth` y fijar `AUTH_USER_MODEL` antes de migrar.
+
+**Requisitos**
+
+- ISS-02 superado.
+
+- Terminal con el entorno virtual `.venv` activo.
+
+- Decisión explícita entre `AbstractUser` y `AbstractBaseUser`: se eligió `AbstractUser`.
+
+### **Construcción**
+
+**Paso 0. Activar el entorno virtual**
+
+Antes de ejecutar los comandos se activó el entorno y se confirmó que `python` apuntara a `.venv`.
+
+``` sql
+source .venv/bin/activate which python 
+```
+
+![](images/clipboard-2382987351.png)
+
+**Paso 1. Crear el paquete `apps/common` con `RecordStatus`**
+
+El estado "activo / inactivo" lo usarán el usuario y, desde el ISS-04, las tablas del negocio. Por eso se guardó en un paquete compartido. `apps/common` no es una app: no se registra en `INSTALLED_APPS` ni se crea con `startapp`.
+
+Archivo `apps/common/status.py`:
+
+``` sql
+mkdir -p apps/common
+cat > apps/common/__init__.py <<'EOF'
+EOF
+cat > apps/common/status.py <<'EOF'
+
+from django.db import models
+
+
+class RecordStatus(models.TextChoices):
+    ACTIVE = "active", "Active"
+    INACTIVE = "inactive", "Inactive"
+EOF
+```
+
+![](images/clipboard-1036777241.png)
+
+![](images/clipboard-3083135303.png)
+
+**Paso 2. Crear la app `security` con la CLI**
+
+Como el directorio destino debe existir, primero se crea.
+
+``` sql
+mkdir -p apps/security
+python manage.py startapp security apps/security 
+```
+
+![Luego se parchea `apps/security/apps.py`, igual que en las demás apps. Se busca la línea `name = "security"` y se reemplaza por estas dos:](images/clipboard-3843549808.png)
+
+``` sql
+    name = "apps.security"     label = "security" 
+```
+
+![](images/clipboard-2718376019.png)
+
+**Paso 3. Escribir el modelo de usuario**
+
+El archivo `apps/security/models.py` ya existe y solo tiene un comentario. Se reemplaza todo su contenido por esto. En este ISS contiene únicamente el usuario; los demás modelos de seguridad se agregan después, en la fase de autenticación.
+
+``` sql
+from django.contrib.auth.models import AbstractUser, UserManager
+from django.db import models
+
+from apps.common.status import RecordStatus
+
+
+class ActivaFitUserManager(UserManager):
+    def create_user(self, username, email=None, password=None, **extra_fields):
+        extra_fields.setdefault("status", RecordStatus.INACTIVE)
+        return super().create_user(username, email, password, **extra_fields)
+
+    def create_superuser(self, username, email=None, password=None, **extra_fields):
+        extra_fields.setdefault("status", RecordStatus.ACTIVE)
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+        return super().create_superuser(username, email, password, **extra_fields)
+
+
+class User(AbstractUser):
+    email = models.EmailField("correo electrónico", max_length=150, unique=True)
+    status = models.CharField(
+        max_length=8,
+        choices=RecordStatus.choices,
+        default=RecordStatus.INACTIVE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = ActivaFitUserManager()
+
+    class Meta:
+        db_table = "users"
+        verbose_name = "usuario"
+        verbose_name_plural = "usuarios"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=RecordStatus.values),
+                name="users_status_valid",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.email:
+            self.email = self.email.strip().lower()
+        self.is_active = self.status == RecordStatus.ACTIVE
+        super().save(*args, **kwargs)
+```
+
+`create_user` deja `status` en `inactive` si nadie lo indica. `create_superuser` lo fuerza a `active`, para que `save()` no desactive al superusuario.
+
+![](images/clipboard-992567173.png)
+
+**Paso 4. Registrar la app y fijar `AUTH_USER_MODEL`**
+
+En `config/settings/__init__.py`, la app de seguridad va delante de las de negocio. Se agrega esta línea justo encima de `"apps.client.apps.ClientConfig",`:
+
+``` sql
+    "apps.security.apps.SecurityConfig", 
+```
+
+Y debajo de la línea `DATABASES = database_from_environ(os.environ)` se agrega:
+
+``` sql
+AUTH_USER_MODEL = "security.User" 
+```
+
+![](images/clipboard-1949893514.png)
+
+![](images/clipboard-1211879828.png)
+
+**Paso 5. Escribir el test de selección del motor**
+
+El test prometido en el ISS-01 reemplaza el `tests.py` vacío que dejó `startapp`. Todavía no hay login, así que solo valida la selección del motor. Archivo `apps/security/tests.py`:
+
+``` sql
+from django.core.exceptions import ImproperlyConfigured
+from django.test import SimpleTestCase
+
+from config.database import database_from_environ
+
+
+class DatabaseSelectionTests(SimpleTestCase):
+    def _env(self, engine):
+        return {
+            "DB_ENGINE": engine,
+            "POSTGRES_DB": "wayuutravel",
+            "POSTGRES_USER": "wayuutravel",
+            "POSTGRES_PASSWORD": "wayuutravel",
+            "POSTGRES_HOST": "127.0.0.1",
+            "POSTGRES_PORT": "5432",
+            "MYSQL_DB": "wayuutravel",
+            "MYSQL_USER": "wayuutravel",
+            "MYSQL_PASSWORD": "123456",
+            "MYSQL_HOST": "127.0.0.1",
+            "MYSQL_PORT": "3306",
+            "MSSQL_DB": "wayuutravel",
+            "MSSQL_USER": "wayuutravel",
+            "MSSQL_PASSWORD": "wayuutravel",
+            "MSSQL_HOST": "127.0.0.1",
+            "MSSQL_PORT": "1433",
+            "ORACLE_DB": "wayuutravel",
+            "ORACLE_USER": "wayuutravel",
+            "ORACLE_PASSWORD": "jaime123!",
+            "ORACLE_HOST": "127.0.0.1",
+            "ORACLE_PORT": "1521",
+            "ORACLE_SERVICE_NAME": "FREEPDB1",
+        }
+
+
+    def test_postgresql_engine(self):
+        config = database_from_environ(self._env("postgresql"))
+        self.assertEqual(config["default"]["ENGINE"], "django.db.backends.postgresql")
+
+    def test_mysql_engine(self):
+        config = database_from_environ(self._env("mysql"))
+        self.assertEqual(config["default"]["ENGINE"], "django.db.backends.mysql")
+        self.assertEqual(config["default"]["OPTIONS"]["charset"], "utf8mb4")
+
+    def test_mssql_engine(self):
+        config = database_from_environ(self._env("mssql"))
+        self.assertEqual(config["default"]["ENGINE"], "mssql")
+
+    def test_oracle_uses_service_name(self):
+        config = database_from_environ(self._env("oracle"))
+        self.assertIn("SERVICE_NAME=FREEPDB1", config["default"]["NAME"])
+        self.assertEqual(config["default"]["PORT"], "")
+
+    def test_invalid_engine(self):
+        with self.assertRaises(ImproperlyConfigured):
+            database_from_environ({"DB_ENGINE": "sqlite"})
+
+    def test_missing_variable(self):
+        env = self._env("postgresql")
+        env["POSTGRES_DB"] = ""
+        with self.assertRaises(ImproperlyConfigured):
+            database_from_environ(env)
+```
+
+![](images/clipboard-2878774793.png)
+
+**Paso 6. Generar la migración, migrar y probar**
+
+Ahora sí se migra. La CLI escribe la migración; no se copia a mano.
+
+``` sql
+python manage.py makemigrations security
+python manage.py migrate
+python manage.py test apps.security.tests.DatabaseSelectionTests 
+```
+
+y pruebo si el motor esta funcionando correctamente
+
+``` sql
+python manage.py shell -c "from django.db import connection; connection.ensure_connection(); print('Motor:', connection.vendor); print('Base de datos:', connection.settings_dict['NAME']); print('Conexión: OK')"
+```
+
+![](images/clipboard-3828941915.png)
+
+Al ejecutar `createsuperuser`, Django te pide:
+
+- **Username**
+
+- **Email:** es obligatorio y único en wayuutravel, porque lo definimos así en el modelo.
+
+- **Password:** se escribe dos veces y no se ve en pantalla.
+
+  ``` sql
+  python manage.py createsuperuser
+  ```
+
+![](images/clipboard-769777720.png)
+
+### Explicación
+
+Se prefirió `AbstractUser` sobre `AbstractBaseUser` porque proporciona funcionalidades de autenticación ya implementadas por Django, como el hash de contraseñas, los validadores, los métodos `set_password()` y `check_password()`, y la integración con el panel administrativo. Utilizar `AbstractBaseUser` requeriría implementar manualmente varios componentes adicionales del sistema de autenticación.
+
+El campo `status` permite representar el estado funcional de la cuenta, mientras que `is_active` se conserva para mantener la compatibilidad con los mecanismos de autenticación de Django y las bibliotecas de autenticación utilizadas. Para garantizar el comportamiento esperado, ambos campos deben mantenerse sincronizados mediante la lógica del modelo o de los servicios correspondientes.
+
+En WayuuTravel, los usuarios del sistema se gestionan mediante la aplicación `security`. Los clientes que reservan experiencias turísticas se representan mediante la entidad `Client`, separada del modelo de autenticación cuando el diseño del sistema así lo establece. Por tanto, `Client` no necesita almacenar contraseñas si sus credenciales se gestionan exclusivamente en `security.User`.
+
+## Criterios de aceptación
+
+- **AC-03-01:** `AUTH_USER_MODEL` apunta a `security.User`.
+
+- **AC-03-02:** el modelo `Client` no contiene un campo para almacenar contraseñas.
+
+- **AC-03-03:** un usuario con estado `inactive` no puede iniciar sesión.
+
+- **AC-03-04:** una contraseña incorrecta devuelve una respuesta HTTP `401`, mientras que una autenticación correcta no expone el hash de la contraseña en la respuesta.
+
+## Verificación
+
+Se utiliza la suite de pruebas `AuthFlowTests` para verificar el flujo de autenticación, los estados de las cuentas y la protección de las credenciales.
+
+## Evidencias
+
+- **EVI-03-01:** migración inicial `security.0001_initial` aplicada correctamente en MySQL.
+
+- **EVI-03-02:** pruebas de inicio de sesión mediante nombre de usuario y correo electrónico superadas, siempre que ambas modalidades estén implementadas y verificadas en el proyecto.
+
+## GATE
+
+| **AC** | **Verificación** | **Evidencia** | **Resultado** |
+|----|----|----|----|
+| AC-03-01 | Configuración de `AUTH_USER_MODEL` | `config/settings.py` o módulo de configuración correspondiente | PASS |
+| AC-03-02 | Revisión del modelo `Client` | Ausencia de campo para contraseñas | PASS |
+| AC-03-03 | Autenticación con usuario inactivo | Prueba que comprueba la respuesta `401` | PASS |
+| AC-03-04 | Verificación de contraseña y respuesta de login | Pruebas de autenticación y ausencia del hash en la respuesta | PASS |
