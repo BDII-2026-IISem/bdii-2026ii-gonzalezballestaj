@@ -1,9 +1,8 @@
-"""Configuración de ActivaFit.
- 
+"""Configuración de Wayuutravel.
 El paquete sustituye al settings.py generado por startproject.
 DJANGO_SETTINGS_MODULE sigue siendo config.settings.
 """
- 
+from datetime import timedelta
 import os
 from pathlib import Path
  
@@ -43,6 +42,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "apps.security.apps.SecurityConfig", 
     "drf_spectacular",
+    "rest_framework_simplejwt",
 
 ]
  
@@ -127,4 +127,18 @@ SPECTACULAR_SETTINGS = {
     ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+}
+
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": False,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
 }

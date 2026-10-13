@@ -4982,3 +4982,352 @@ http://127.0.0.1:8000/api/schema/swagger-ui/
 | Transacción y stock | `SaleTransactionTests` | suite | PASS |
 | Serializers y camelCase | test de `response.content` | suite | PASS |
 | Tres estilos de vista usados con motivo | ISS-08, ISS-10, ISS-11 | código | PASS |
+
+### ISS-15 — RefreshToken
+
+#### Narrativa
+
+En esta unidad voy a preparar la gestión segura de sesiones mediante refresh tokens en WayuuTravel. Instalaré SimpleJWT para trabajar con tokens JWT y configuraré los tiempos de expiración del access token y del refresh token. Además, crearé las funciones encargadas de generar el valor secreto del refresh token y calcular su hash SHA-256.
+
+El objetivo es que Wayuu Travel no almacene el refresh token original en la base de datos. En su lugar, guardaré el hash en una tabla llamada `refresh_tokens`, relacionada con el usuario y con información que permita controlar su expiración, revocación y reemplazo.
+
+La unidad se integrará con el modelo `User` que ya existe en `apps/security/models.py`, sin reescribirlo. Antes de crear el modelo `RefreshToken`, verificaré las clases base y los estados definidos en el proyecto para mantener la coherencia con las convenciones de Wayuu Travel.
+
+Al finalizar, quedará configurada la base para implementar el ciclo de vida de los refresh tokens. La comprobación completa del login y de las respuestas JSON dependerá de que el flujo de autenticación esté conectado correctamente.
+
+#### Objetivo
+
+Implementar la base técnica para gestionar refresh tokens en Wayuu Travel, almacenando únicamente su hash SHA-256 en la base de datos y utilizando SimpleJWT para emitir y verificar los access tokens.
+
+#### Requisitos
+
+- Haber superado el cierre de negocio de la ISS-14 en el motor de base de datos utilizado.
+
+- Tener creado el modelo `User` desde la ISS-03.
+
+- Estar ubicado en el directorio `Backend` de Wayuu Travel.
+
+- Tener activado el entorno virtual `.venv`.
+
+- Tener Django y Django REST Framework instalados.
+
+- Tener configurada la base de datos y las migraciones previas del proyecto.
+
+- Verificar los modelos y estados existentes antes de añadir `RefreshToken`.
+
+#### Construcción
+
+#### 1. Comprobar la ubicación, la versión de Python y el estado de Django:
+
+``` sql
+pwd python --version python manage.py check
+```
+
+#### 2. Instalar SimpleJWT
+
+Instalar la versión especificada en la guía:
+
+``` sql
+python -m pip install "djangorestframework-simplejwt==5.5.1"
+```
+
+Actualizar el archivo `requirements.txt` ubicado en `Backend`:
+
+``` sql
+python -m pip freeze > requirements.txt
+```
+
+Verificar la instalación:
+
+``` sql
+python -m pip show djangorestframework-simplejwt
+```
+
+![](images/clipboard-2835150902.png)
+
+No instalar `rest_framework_simplejwt.token_blacklist`, porque Wayuu Travel utilizará su propia tabla `refresh_tokens` para almacenar el estado de los refresh tokens.
+
+#### 3. Crear las funciones de tokens
+
+Archivo: `apps/security/tokens.py`
+
+Crear el archivo con el siguiente contenido:
+
+``` sql
+import hashlib
+import secrets
+
+
+def generate_refresh_value():
+    return secrets.token_urlsafe(48)
+
+
+def hash_token(raw_token):
+    return hashlib.sha256(
+        raw_token.encode("utf-8")
+    ).hexdigest()
+```
+
+![](images/clipboard-1893494500.png)
+
+La función `generate_refresh_value()` genera un valor secreto aleatorio para el refresh token. La función `hash_token()` calcula su hash SHA-256 y devuelve una cadena hexadecimal de 64 caracteres.
+
+#### 4. Configurar SimpleJWT
+
+Archivo: `config/settings/__init__.py`
+
+Agregar el siguiente import si todavía no existe:
+
+``` sql
+from datetime import timedelta
+```
+
+Dentro de `INSTALLED_APPS`, agregamos una sola vez:
+
+``` sql
+"rest_framework_simplejwt",
+```
+
+![](images/clipboard-2725946057.png)
+
+Al final del archivo, añadir la configuración:
+
+``` sql
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": False,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+}
+```
+
+Esta configuración establece una duración de 60 minutos para el access token y de un día para el refresh token. La rotación automática y la blacklist de SimpleJWT permanecen desactivadas porque el control de los refresh tokens se realizará mediante la lógica propia del proyecto.
+
+#### 5. Incorporar el modelo `RefreshToken`
+
+Archivo: `apps/security/models.py`
+
+La clase `RefreshToken` debe añadirse después de la clase `User`, sin reemplazar el modelo existente.
+
+Antes de incorporarla, hay que confirmar los imports, la definición de `RecordStatus` y la estructura de los modelos de Wayuu Travel. Esto evita introducir referencias inexistentes o duplicar clases y convenciones del proyecto.
+
+``` sql
+
+    def save(self, *args, **kwargs):
+        if self.email:
+            self.email = self.email.strip().lower()
+        self.is_active = self.status == RecordStatus.ACTIVE
+        super().save(*args, **kwargs)
+
+
+class RefreshToken(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.RESTRICT,
+        related_name="refresh_tokens",
+        db_column="user_id",
+    )
+    token_hash = models.CharField(max_length=64, unique=True)
+    family_id = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        db_index=True,
+    )
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    replaced_by = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="replacements",
+    )
+    status = models.CharField(
+        max_length=8,
+        choices=RecordStatus.choices,
+        default=RecordStatus.ACTIVE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "refresh_tokens"
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=RecordStatus.values),
+                name="refresh_tokens_status_valid",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user} {self.family_id}"
+
+    @property
+    def is_usable(self):
+        return (
+            self.status == RecordStatus.ACTIVE
+            and self.revoked_at is None
+            and self.replaced_by_id is None
+            and self.expires_at > timezone.now()
+        )
+
+    @classmethod
+    def lifetime(cls):
+        return settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"]
+
+    @classmethod
+    def default_expiry(cls):
+        return timezone.now() + cls.lifetime()
+
+```
+
+#### 6. Generar y aplicar las migraciones
+
+Una vez integrado el modelo y comprobado que sus referencias son correctas, ejecutar:
+
+``` sql
+
+python manage.py makemigrations security
+```
+
+Django debería detectar el nuevo modelo y generar un archivo de migración dentro de la aplicación `security`, normalmente en:
+
+``` sql
+apps/security/migrations/
+```
+
+La migración describe los cambios necesarios para crear la tabla y sus campos. Todavía no significa que la tabla ya exista en MySQL.
+
+### Paso 6.3. Aplicar la migración
+
+``` sql
+python manage.py migrate
+```
+
+### Paso 6.4. Comprobar la migración
+
+``` sql
+python manage.py showmigrations security
+```
+
+## 7. Comprobar la generación del hash
+
+En la ISS-15, el refresh token original no debe almacenarse directamente en la base de datos.
+
+Tu archivo `apps/security/tokens.py` debe contener estas funciones:
+
+![](images/clipboard-1905163578.png)
+
+#### Explicación
+
+El *access token* es un JWT: se verifica mediante su firma y su fecha de expiración, por lo que no necesita una fila propia en la base de datos. En cambio, el *refresh token* debe poder revocarse y controlarse, por lo que necesita un registro persistente.
+
+Si guardara el refresh token en texto plano, cualquier persona que obtuviera acceso a la tabla podría intentar utilizarlo directamente. Por eso, Wayuu Travel guarda únicamente su hash SHA-256 en el campo `token_hash` de la tabla `refresh_tokens`. El valor original solo se entrega al cliente en la respuesta del inicio de sesión.
+
+``` sql
+Refresh token en texto plano
+        │
+        ├── Se entrega al cliente en la respuesta del login
+        │
+        ▼
+     SHA-256
+        │
+        ▼
+refresh_tokens.token_hash
+```
+
+Los campos `family_id` y `replaced_by` todavía no se utilizan para implementar la rotación de tokens. Su propósito es preparar el modelo para el ISS-18. El campo `family_id` permite agrupar los tokens que pertenecen a una misma familia de sesión, mientras que `replaced_by` permite identificar el token que reemplazó a otro.
+
+La propiedad `is_usable` reúne las condiciones necesarias para determinar si un refresh token puede utilizarse: debe estar activo, no haber sido revocado, no haber sido reemplazado y no haber expirado.
+
+El campo `status` de `RefreshToken` tiene como valor predeterminado `active`. Esta es una excepción a la regla general de Wayuu Travel, en la que los usuarios y otras entidades pueden comenzar con estado `inactive`. El refresh token se crea después de una autenticación válida, por lo que inicialmente debe estar activo.
+
+La clave foránea hacia el modelo `User` utiliza `on_delete=models.RESTRICT`. De esta manera, Django impide eliminar un usuario mientras existan registros de refresh tokens relacionados que restrinjan esa operación.
+
+#### Criterios de aceptación
+
+- **AC-15-01:** después del inicio de sesión, existe un registro en `refresh_tokens` y su campo `token_hash` no contiene el refresh token original.
+
+- **AC-15-02:** el hash almacenado coincide con el resultado de aplicar SHA-256 al refresh token original.
+
+- **AC-15-03:** la respuesta del inicio de sesión no contiene el campo `password` ni la contraseña del usuario.
+
+#### Verificación
+
+Los criterios relacionados con el inicio de sesión se comprobarán mediante la prueba `AuthFlowTests.test_login_with_username_and_email`, una vez implementado el endpoint de autenticación en el ISS-17.
+
+Mientras tanto, en este ISS verifico el funcionamiento del modelo `RefreshToken`, la generación del valor original y su hash mediante la consola de Django.
+
+Desde la terminal, con el entorno virtual `.venv` activado y ubicado en el directorio del backend de Wayuu Travel, ejecuto:
+
+```         
+python manage.py shell
+```
+
+Dentro de la consola de Django, ejecuto las siguientes instrucciones:
+
+``` sql
+import hashlib
+
+from apps.security.models import RefreshToken, User
+from apps.security.tokens import generate_refresh_value, hash_token
+
+user = User.objects.create_user(
+    username="prueba_rt",
+    email="rt@wayuutravel.com",
+    password="Prueba123*"
+)
+
+raw = generate_refresh_value()
+
+rt = RefreshToken.objects.create(
+    user=user,
+    token_hash=hash_token(raw),
+    expires_at=RefreshToken.default_expiry()
+)
+
+rt.token_hash != raw
+len(rt.token_hash)
+rt.token_hash == hashlib.sha256(raw.encode("utf-8")).hexdigest()
+rt.status
+rt.is_usable
+```
+
+Los resultados esperados son los siguientes:
+
+| Expresión | Resultado esperado | Significado |
+|----|----|----|
+| `rt.token_hash != raw` | `True` | El valor almacenado no es el token original. |
+| `len(rt.token_hash)` | `64` | El hash SHA-256 se representa con 64 caracteres hexadecimales. |
+| Comparación con `hashlib` | `True` | El hash coincide con el calculado a partir del token original. |
+| `rt.status` | `'active'` | El registro se crea con estado activo. |
+| `rt.is_usable` | `True` | El token cumple las condiciones iniciales de uso. |
+
+El correo `rt@wayuutravel.com` y el usuario `prueba_rt` son datos de prueba. Si ya existen en la base de datos, debo utilizar otros valores para evitar conflictos con las restricciones de unicidad.
+
+#### Limpieza de los datos de prueba
+
+Una vez realizadas las comprobaciones, elimino los registros de prueba en el orden correcto: primero el refresh token y después el usuario. Esto respeta la restricción de clave foránea configurada con `on_delete=models.RESTRICT`.
+
+``` sql
+rt.delete() user.delete() exit()
+```
+
+Esta verificación confirma el funcionamiento básico del modelo y del hash. No demuestra todavía que el inicio de sesión guarde automáticamente el refresh token, porque esa integración depende del endpoint de autenticación que se implementará posteriormente.
+
+#### GATE
+
+- **AC-15-01:** el registro existe en `refresh_tokens` y su campo `token_hash` es distinto del valor original del refresh token. **PASS parcial**: comprobado manualmente en la consola de Django. Queda pendiente verificar que el registro se cree automáticamente durante el inicio de sesión en el ISS-17.
+
+- **AC-15-02:** el hash almacenado coincide con el SHA-256 calculado a partir del refresh token original. **PASS parcial**: comprobado manualmente en la consola de Django. Queda pendiente confirmar la persistencia del hash mediante el flujo real de inicio de sesión en el ISS-17.
+
+- **AC-15-03:** la respuesta del inicio de sesión no contiene el campo `password` ni la contraseña del usuario. **Pendiente**: se verificará mediante el endpoint de autenticación y las pruebas correspondientes en el ISS-17.
+
+**Estado del GATE:** parcialmente verificado. El modelo `RefreshToken`, la persistencia manual del hash y las condiciones básicas de uso están comprobados. La integración con el inicio de sesión y la validación completa de los criterios de aceptación quedan pendientes del ISS-17.
