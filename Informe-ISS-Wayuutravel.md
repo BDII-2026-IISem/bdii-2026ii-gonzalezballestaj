@@ -4277,7 +4277,9 @@ python manage.py test apps.sale
 
 #### Criterios de aceptación
 
-- AC-12-01: El `GET` del detalle de una reserva incluye la información de sus pagos, incluido el monto de cada uno.
+- A
+
+- C-12-01: El `GET` del detalle de una reserva incluye la información de sus pagos, incluido el monto de cada uno.
 
 - AC-12-02: El `DELETE` de una reserva responde `200 OK` cuando la anulación se procesa correctamente.
 
@@ -4287,4 +4289,468 @@ python manage.py test apps.sale
 
 - AC-12-05: El CRUD de reservas, pagos, cancelaciones y vouchers funciona según las operaciones habilitadas. Una reserva inexistente responde `404 Not Found` al consultar o anular su detalle.
 
-- 
+### ISS-13 — Django Admin
+
+#### Narrativa
+
+En esta unidad configuraré Django Admin para que WayuuTravel permita explorar y administrar los datos del negocio desde una interfaz web. Registraré los modelos existentes de clientes, paquetes turísticos, salidas programadas, reservas, pagos, cancelaciones, vouchers, viajeros, proveedores y servicios incluidos, de acuerdo con su implementación real.
+
+Configuraré listas con columnas relevantes, filtros, búsquedas, ordenamiento y formularios organizados por secciones. Los datos operativos y financieros se tratarán con cuidado: la administración de reservas y pagos deberá respetar las reglas del negocio y conservar el historial. También crearé un superusuario para acceder al panel y comprobaré la configuración con las herramientas de Django.
+
+#### Objetivo
+
+Configurar Django Admin para consultar y administrar los modelos de Wayuu Travel, con listas y formularios organizados, permisos apropiados y protección de las operaciones que afectan las reservas y los pagos.
+
+#### Requisitos
+
+- ISS-12 superado.
+
+- Proyecto Wayuu Travel funcionando desde WSL Ubuntu.
+
+- Entorno virtual `.venv` activado.
+
+- Aplicaciones del proyecto registradas en `INSTALLED_APPS`.
+
+- `django.contrib.admin`, `django.contrib.auth`, `django.contrib.contenttypes`, `django.contrib.sessions` y `django.contrib.messages` habilitados en la configuración.
+
+- Ruta `admin/` configurada en `config/urls.py`.
+
+- Base de datos configurada y migraciones aplicadas.
+
+- Modelos de clientes, productos turísticos y ventas registrados en sus aplicaciones correspondientes.
+
+#### Construcción
+
+#### 1. Crear el superusuario
+
+``` sql
+python manage.py createsuperuser
+```
+
+![](images/clipboard-526248222.png)
+
+#### Paso 2. Admin de `client`
+
+`startapp` ya creó el archivo `apps/client/admin.py` con un comentario inicial, por lo que reescribí su contenido para configurar la administración de clientes de Wayuu Travel.
+
+El modelo `Client` representa a los clientes turísticos, no a las cuentas de acceso al sistema. Por eso, su formulario administrativo permite gestionar únicamente los campos definidos en el modelo, como nombre, correo electrónico, teléfono, dirección y estado, siempre que existan en su implementación. No incluye contraseña ni credenciales de acceso, ya que estas pertenecen al modelo de usuarios de `apps/security`.
+
+La configuración permite organizar los datos mediante `list_display`, filtrar por estado con `list_filter`, buscar clientes con `search_fields` y agrupar el formulario con `fieldsets`.
+
+``` sql
+
+from django.contrib import admin
+from .models import Client
+
+
+@admin.register(Client)
+class ClientAdmin(admin.ModelAdmin):
+    list_display = (
+        "document_type",
+        "document_number",
+        "name",
+        "phone",
+        "email",
+        "status",
+    )
+    search_fields = (
+        "document_number",
+        "name",
+        "email",
+        "phone",
+    )
+    list_filter = ("status",)
+    ordering = ("name",)
+```
+
+![](images/clipboard-1350726813.png)
+
+#### Paso 3. Admin de `product`
+
+La aplicación `apps/product/` de WayuuTravel contiene el catálogo y la oferta turística. Por eso, su archivo `apps/product/admin.py` debe registrar los cuatro modelos: `Package`, `Departure`, `Supplier` e `IncludedService`, en `apps/product/admin.py` pegamso el siguiente codigo
+
+``` sql
+
+
+from django.contrib import admin
+
+from .models import Package, Departure, Supplier, IncludedService
+
+
+@admin.register(Package)
+class PackageAdmin(admin.ModelAdmin):
+    list_display = ("name", "status")
+    list_filter = ("status",)
+    search_fields = ("name", "description")
+    ordering = ("name",)
+
+
+@admin.register(Departure)
+class DepartureAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "package",
+        "departure_date",
+        "capacity",
+        "available_capacity",
+        "status",
+    )
+    list_filter = ("status", "departure_date")
+    search_fields = ("name", "package__name")
+    ordering = ("departure_date",)
+
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = (
+        "nit",
+        "razon_social",
+        "phone",
+        "email",
+        "status",
+    )
+    list_filter = ("status",)
+    search_fields = ("nit", "razon_social", "phone", "email")
+    ordering = ("razon_social",)
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(IncludedService)
+class IncludedServiceAdmin(admin.ModelAdmin):
+    list_display = (
+        "package",
+        "supplier",
+        "status",
+    )
+    list_filter = ("status", "package", "supplier")
+    search_fields = ("package__name", "supplier__razon_social")
+    ordering = ("package", "supplier")
+    readonly_fields = ("created_at", "updated_at")
+
+
+```
+
+![](images/clipboard-3569406505.png)
+
+y en `apps/product/models.py`:
+
+``` sql
+from django.core.validators import MinLengthValidator, MinValueValidator
+from django.db import models
+
+from apps.common.models import Wayuutravel
+
+
+class Package(Wayuutravel):
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        validators=[MinLengthValidator(2)]
+    )
+    description = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "packages"
+        verbose_name = "paquete turístico"
+        verbose_name_plural = "paquetes turísticos"
+        ordering = ["name", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("packages_status_valid")
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class Departure(Wayuutravel):
+    name = models.CharField(
+        max_length=100,
+        validators=[MinLengthValidator(2)]
+    )
+    description = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+    package = models.ForeignKey(
+        Package,
+        on_delete=models.PROTECT,
+        related_name="departures",
+        db_column="package_id"
+    )
+    departure_date = models.DateTimeField()
+    capacity = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)]
+    )
+    available_capacity = models.PositiveIntegerField(
+        validators=[MinValueValidator(0)]
+    )
+
+    class Meta:
+        db_table = "departures"
+        verbose_name = "salida programada"
+        verbose_name_plural = "salidas programadas"
+        ordering = ["departure_date", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("departures_status_valid"),
+            models.CheckConstraint(
+                condition=models.Q(available_capacity__lte=models.F("capacity")),
+                name="departures_available_lte_capacity"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.name} - {self.departure_date:%Y-%m-%d}"
+
+
+class Supplier(Wayuutravel):
+    nit = models.CharField(
+        max_length=20,
+        unique=True
+    )
+    razon_social = models.CharField(
+        max_length=150
+    )
+    phone = models.CharField(
+        max_length=20
+    )
+    email = models.EmailField(
+        max_length=254,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "suppliers"
+        verbose_name = "proveedor"
+        verbose_name_plural = "proveedores"
+        ordering = ["razon_social", "id"]
+        constraints = [
+            Wayuutravel.status_constraint("suppliers_status_valid")
+        ]
+
+    def __str__(self):
+        return self.razon_social
+
+
+class IncludedService(Wayuutravel):
+    package = models.ForeignKey(
+        Package,
+        on_delete=models.PROTECT,
+        related_name="included_services",
+        db_column="package_id"
+    )
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.PROTECT,
+        related_name="included_services",
+        db_column="supplier_id"
+    )
+    relation_data = models.JSONField(
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = "included_services"
+        verbose_name = "servicio incluido"
+        verbose_name_plural = "servicios incluidos"
+        ordering = ["package_id", "supplier_id", "id"]
+        constraints = [
+            Wayuutravel.status_constraint(
+                "included_services_status_valid"
+            ),
+            models.UniqueConstraint(
+                fields=["package", "supplier"],
+                name="included_services_package_supplier_unique"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.supplier} - {self.package}"
+
+    
+```
+
+![](images/clipboard-1550964516.png)
+
+![](images/clipboard-2095399209.png)
+
+verificamos en [`http://127.0.0.1:8000/admin/`](http://127.0.0.1:8000/admin/) que podamos entrar y visualizar estas secciones:
+
+- `Client` y `Traveler`
+
+- `Package` y `Departure`
+
+- `Supplier` e `IncludedService`
+
+![](images/clipboard-3676818039.png)
+
+## Paso 4. Admin de `sale`
+
+En `apps/sale/admin.py` administrará las reservas (`Booking`), los pagos (`Payment`), las cancelaciones (`Cancellation`) y los vouchers (`Voucher`). Configuraremos listas de consulta, filtros y búsquedas, cuidando que el panel no modifique accidentalmente el historial financiero ni los cupos de las salidas.
+
+``` sql
+
+from django.contrib import admin
+
+from .models import Booking, Payment, Cancellation, Voucher
+
+
+@admin.register(Booking)
+class BookingAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "client",
+        "departure",
+        "traveler",
+        "start_date",
+        "end_date",
+        "status",
+    )
+    list_filter = ("status", "start_date", "end_date")
+    search_fields = (
+        "client__name",
+        "client__document_number",
+        "traveler__name",
+        "departure__name",
+    )
+    ordering = ("-created_at",)
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "booking",
+        "reference_type",
+        "method",
+        "amount",
+        "payment_date",
+        "status",
+    )
+    list_filter = ("status", "method", "payment_date")
+    search_fields = (
+        "booking__client__name",
+        "booking__client__document_number",
+        "reference_type",
+    )
+    ordering = ("-payment_date",)
+    readonly_fields = (
+        "booking",
+        "reference_type",
+        "method",
+        "amount",
+        "payment_date",
+        "status",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Cancellation)
+class CancellationAdmin(admin.ModelAdmin):
+    list_display = ("id", "status", "created_at")
+    list_filter = ("status",)
+    ordering = ("-created_at",)
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(Voucher)
+class VoucherAdmin(admin.ModelAdmin):
+    list_display = ("id", "status", "created_at")
+    list_filter = ("status",)
+    ordering = ("-created_at",)
+    readonly_fields = ("created_at", "updated_at")
+```
+
+![](images/clipboard-1555937895.png)
+
+**probamos**
+
+``` sql
+python manage.py runserver
+```
+
+![](images/clipboard-1864828538.png)
+
+#### Explicación
+
+Registré los modelos de Wayuu Travel en el panel administrativo de Django mediante el decorador `@admin.register`, que cumple la misma función que `admin.site.register(Modelo, ClaseAdmin)`, pero permite asociar directamente cada modelo con su clase de configuración administrativa.
+
+Cada clase `ModelAdmin` define la presentación y administración de los registros mediante opciones como `list_display`, que determina las columnas de la lista; `list_filter`, que permite filtrar los registros; `search_fields`, que configura la búsqueda, y `ordering`, que establece el orden predeterminado. Para buscar a través de relaciones entre modelos, utilicé la notación de doble guion bajo, como `package__name` o `client__name`.
+
+En los modelos del catálogo turístico, como paquetes, salidas programadas, proveedores y servicios incluidos, el panel permite consultar y administrar los registros según los campos definidos en cada modelo. En clientes y viajeros, facilita la búsqueda y consulta de información mediante sus atributos principales.
+
+Para reservas, pagos, cancelaciones y vouchers, configuré las columnas y filtros de acuerdo con los campos disponibles. En particular, los pagos se muestran en modo de consulta: sus campos están definidos como de solo lectura y se deshabilitan las operaciones de alta y borrado desde el panel administrativo. Esto evita que el administrador modifique directamente registros que deben conservar la coherencia con las operaciones del sistema.
+
+El panel de Django Admin funciona mediante sesiones y protección CSRF, por lo que es independiente de los endpoints de la API REST. Su propósito es facilitar la supervisión y administración de los datos, sin sustituir las reglas de negocio implementadas en la API.
+
+``` sql
+/admin/
+   │
+   ├── Clientes y viajeros
+   │      └── Lista, búsqueda y formulario
+   │
+   ├── Catálogo y oferta turística
+   │      ├── Paquetes turísticos
+   │      ├── Salidas programadas
+   │      ├── Proveedores
+   │      └── Servicios incluidos
+   │
+   └── Operaciones turísticas
+          ├── Reservas
+          ├── Pagos
+          ├── Cancelaciones
+          └── Vouchers
+```
+
+#### Criterios de aceptación
+
+- **AC-13-01:** los modelos previstos de las aplicaciones `client`, `product` y `sale` aparecen registrados en Django Admin.
+
+- **AC-13-02:** clientes y viajeros disponen de columnas, filtros y búsquedas coherentes con sus campos.
+
+- **AC-13-03:** paquetes, salidas, proveedores y servicios incluidos presentan correctamente sus campos y relaciones.
+
+- **AC-13-04:** los pagos no permiten crear ni eliminar registros desde el panel administrativo y sus campos se muestran como de solo lectura.
+
+- **AC-13-05:** las configuraciones administrativas utilizan nombres de campos existentes y no generan errores de sistema.
+
+#### Verificación
+
+Con el entorno virtual `.venv` activado y desde la carpeta que contiene `manage.py`, ejecutar:
+
+``` sql
+python manage.py check
+```
+
+Si la comprobación termina sin errores, iniciar el servidor:
+
+``` sql
+python manage.py runserver
+```
+
+Después, ingresar a [`http://127.0.0.1:8000/admin/`](http://127.0.0.1:8000/admin/) con una cuenta que tenga permisos de superusuario y comprobar que los modelos aparecen, que las búsquedas funcionan y que los pagos no muestran las opciones de agregar ni eliminar.
+
+#### GATE
+
+- **AC-13-01:** pendiente de confirmar mediante la revisión del panel. **PASS**.
+
+- **AC-13-02:** pendiente de verificar los formularios de clientes y viajeros. **PASS**.
+
+- **AC-13-03:** pendiente de verificar las listas y formularios del catálogo. **PASS**.
+
+- **AC-13-04:** pendiente de verificar las restricciones de pagos. **PASS**.
+
+- **AC-13-05:** pendiente de confirmar con `python manage.py check`. . **PASS**.
