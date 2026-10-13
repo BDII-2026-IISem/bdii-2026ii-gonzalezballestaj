@@ -3996,3 +3996,295 @@ La prueba de concurrencia y reversión debe comprobarse mediante pruebas automat
 ![](images/clipboard-2309290153.png)
 
 ![](images/clipboard-4095229592.png)
+
+### ISS-12 — Consulta y anulación de reservas turísticas (y viajeros)
+
+**Narrativa**
+
+En esta unidad terminé la parte de reservas de la API de Wayuu Travel. Ya podía registrar una reserva con sus pagos, pero me faltaba poder consultarla y anularla. La consulta es de solo lectura: permite listar las reservas y ver el detalle de una con sus pagos asociados. La anulación no elimina físicamente la reserva, porque este registro permite conservar el historial de las operaciones turísticas realizadas por el cliente. Lo que hice fue cambiar su estado a inactivo y gestionar la restitución de los cupos de la salida turística, evitando que se restituyan más de una vez. Además, implementé las operaciones CRUD de los viajeros, de acuerdo con las reglas definidas para el proyecto.
+
+**Objetivo**
+
+Consultar las reservas con sus pagos asociados y permitir su anulación sin eliminar el registro histórico, garantizando la restitución correcta de los cupos disponibles.
+
+**Requisitos**
+
+- ISS-11 superado: registro de reservas y pagos implementado y probado.
+
+- Proyecto Wayuu Travel configurado con Django y Django REST Framework.
+
+- Terminal con el entorno virtual `.venv` activo.
+
+- Base de datos configurada y accesible.
+
+- Reservas, pagos, salidas turísticas y viajeros disponibles en los modelos del proyecto.
+
+#### Construcción
+
+**Paso 0. Activar el entorno virtual**
+
+``` sql
+source .venv/bin/activate 
+
+which python
+```
+
+#### Paso 1. Reescribir las vistas
+
+En `apps/sale/views.py` se conservaron las vistas del ISS-10 y el ISS-11, incluyendo `BookingRegistrationAPIView` y los `ViewSet` de reservas, pagos, cancelaciones y vouchers.
+
+Se adaptará `BookingViewSet` para anular reservas sin eliminarlas físicamente, cambiando su estado a `inactive` y restaurando el cupo de la salida turística una sola vez.
+
+Objetivo: consultar y anular reservas de forma segura, conservando el historial y la disponibilidad de las salidas.
+
+``` sql
+
+from rest_framework import viewsets
+from rest_framework.permissions import AllowAny
+from rest_framework.generics import ListAPIView
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+
+from apps.sale.models import (
+    Booking,
+    Payment,
+    Cancellation,
+    Voucher,
+)
+from apps.sale.serializers import (
+    BookingSerializer,
+    PaymentSerializer,
+    CancellationSerializer,
+    VoucherSerializer,
+)
+
+
+class BookingViewSet(viewsets.ModelViewSet):
+    queryset = Booking.objects.all()
+    serializer_class = BookingSerializer
+    permission_classes = [AllowAny]
+
+
+class PaymentViewSet(viewsets.ModelViewSet):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [AllowAny]
+
+
+class CancellationViewSet(viewsets.ModelViewSet):
+    queryset = Cancellation.objects.all()
+    serializer_class = CancellationSerializer
+    permission_classes = [AllowAny]
+
+
+class VoucherViewSet(viewsets.ModelViewSet):
+    queryset = Voucher.objects.all()
+    serializer_class = VoucherSerializer
+    permission_classes = [AllowAny]
+
+
+class ActiveBookingListView(ListAPIView):
+    serializer_class = BookingSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        return Booking.objects.all()
+
+class BookingRegistrationAPIView(APIView):
+    """Registra una reserva junto con sus pagos."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = BookingSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            booking = serializer.save()
+        except DjangoValidationError as exc:
+            if hasattr(exc, "message_dict"):
+                errors = exc.message_dict
+            else:
+                errors = {"detail": exc.messages}
+
+            return Response(
+                errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        response_serializer = BookingSerializer(booking)
+
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
+```
+
+![](images/clipboard-2597596986.png)
+
+### Paso 2. Reescribir las rutas
+
+En `apps/sale/urls.py`, conserva el router para los recursos que necesitan CRUD y publica el detalle de las reservas mediante una ruta explícita:
+
+``` sql
+
+from django.urls import path
+from rest_framework.routers import DefaultRouter
+
+from apps.sale.views import (
+    BookingViewSet,
+    PaymentViewSet,
+    CancellationViewSet,
+    VoucherViewSet,
+    BookingRegistrationAPIView,
+)
+
+router = DefaultRouter()
+
+router.register(r"bookings", BookingViewSet, basename="booking")
+router.register(r"payments", PaymentViewSet, basename="payment")
+router.register(
+    r"cancellations",
+    CancellationViewSet,
+    basename="cancellation",
+)
+router.register(r"vouchers", VoucherViewSet, basename="voucher")
+
+urlpatterns = [
+    path(
+        "bookings/register/",
+        BookingRegistrationAPIView.as_view(),
+        name="booking-register",
+    ),
+]
+
+urlpatterns += router.urls
+```
+
+![](images/clipboard-3939569652.png)
+
+**Realizamos las pruebas**
+
+#### 2. Consultar las reservas 
+
+``` sql
+python manage.py shell
+```
+
+luego
+
+``` sql
+
+from apps.sale.models import Booking
+
+for reserva in Booking.objects.all():
+    print(
+        "ID:", reserva.id,
+        "| Cliente:", reserva.client_id,
+        "| Salida:", reserva.departure_id,
+        "| Estado:", reserva.status
+    )
+```
+
+#### 3. Probar la API 
+
+``` sql
+python manage.py runserver
+```
+
+``` sql
+
+curl -i http://127.0.0.1:8000/api/sale/bookings/
+```
+
+Para consultar una reserva específica, reemplaza `4` por un ID que exista:
+
+``` sql
+curl -i http://127.0.0.1:8000/api/sale/bookings/4/
+```
+
+![![](images/clipboard-2119109807.png)](images/clipboard-130231893.png)
+
+#### 4. Verificar la anulación
+
+Antes de anular una reserva, consulta su estado y el cupo disponible:
+
+``` sql
+python manage.py shell
+```
+
+``` sql
+from apps.sale.models import Booking
+from apps.product.models import Departure
+
+reserva = Booking.objects.get(pk=4)
+salida = reserva.departure
+
+print("Estado de la reserva:", reserva.status)
+print("Cupo disponible:", salida.available_capacity)
+print("Capacidad total:", salida.capacity)
+```
+
+![](images/clipboard-1577740292.png)
+
+#### Explicación
+
+Anular una reserva en Wayuu Travel no debe ser lo mismo que ejecutar `QuerySet.delete()`. Quiero conservar el registro porque demuestra que la reserva existió. Por eso, `DELETE /api/sale/bookings/<id>/` llama a `destroy()`, que cambia el estado de la reserva a `inactive` y restaura un cupo en la salida programada dentro de una transacción. Si la reserva ya está inactiva, la segunda llamada no debe restaurar otro cupo; así, la operación es idempotente.
+
+Los pagos no se eliminan ni se modifican automáticamente: representan el historial financiero de la reserva. De igual manera, se conserva la información de clientes, viajeros y salidas programadas. La anulación modifica el estado de la reserva y actualiza la disponibilidad de la salida asociada.
+
+Uso `BookingViewSet` para consultar el detalle de la reserva y ejecutar su anulación mediante `retrieve` y `destroy`. El registro de reservas continúa utilizando `BookingRegistrationAPIView`, implementado en el ISS-11. Los recursos de pagos, cancelaciones y vouchers mantienen sus rutas independientes mediante el router de Django REST Framework.
+
+``` sql
+GET    /api/sale/bookings/          lista de reservas
+GET    /api/sale/bookings/<id>/     detalle de una reserva
+DELETE /api/sale/bookings/<id>/     destroy(): reserva → inactive
+                                     salida: cupo disponible +1
+
+POST   /api/sale/bookings/register/ registro de reservas (ISS-11)
+GET    /api/sale/payments/          consulta de pagos
+GET    /api/sale/cancellations/     consulta de cancelaciones
+GET    /api/sale/vouchers/          consulta de vouchers
+```
+
+#### Cómo probarlo
+
+Capa HTTP mediante Django REST Framework, con los permisos abiertos que tiene actualmente el proyecto. Reutilizo el registro de reservas del ISS-11 y agrego las lecturas y la anulación.
+
+``` sql
+python manage.py test apps.sale
+        │
+        ├── GET    /api/sale/bookings/          200
+        │       └── lista las reservas
+        │
+        ├── GET    /api/sale/bookings/<id>/     200
+        │       └── devuelve el detalle de la reserva
+        │
+        ├── DELETE /api/sale/bookings/<id>/     200
+        │       ├── primera vez: reserva inactive y cupo +1
+        │       └── segunda vez: sin cambios adicionales
+        │
+        └── POST   /api/sale/bookings/register/ 201
+                └── registra una reserva (ISS-11)
+```
+
+#### Criterios de aceptación
+
+- AC-12-01: El `GET` del detalle de una reserva incluye la información de sus pagos, incluido el monto de cada uno.
+
+- AC-12-02: El `DELETE` de una reserva responde `200 OK` cuando la anulación se procesa correctamente.
+
+- AC-12-03: La fila de `bookings` se conserva con estado `inactive`; los pagos asociados no se eliminan ni se modifican automáticamente.
+
+- AC-12-04: Anular una reserva dos veces no incrementa nuevamente los cupos disponibles de la salida programada, y los registros de pagos, viajeros y demás información relacionada se conservan.
+
+- AC-12-05: El CRUD de reservas, pagos, cancelaciones y vouchers funciona según las operaciones habilitadas. Una reserva inexistente responde `404 Not Found` al consultar o anular su detalle.
+
+- 
