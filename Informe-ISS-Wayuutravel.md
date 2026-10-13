@@ -5331,3 +5331,250 @@ Esta verificación confirma el funcionamiento básico del modelo y del hash. No 
 - **AC-15-03:** la respuesta del inicio de sesión no contiene el campo `password` ni la contraseña del usuario. **Pendiente**: se verificará mediante el endpoint de autenticación y las pruebas correspondientes en el ISS-17.
 
 **Estado del GATE:** parcialmente verificado. El modelo `RefreshToken`, la persistencia manual del hash y las condiciones básicas de uso están comprobados. La integración con el inicio de sesión y la validación completa de los criterios de aceptación quedan pendientes del ISS-17.
+
+### ISS-16 — Role, RoleUser, Resource y ResourceRole
+
+#### Paso 1. Agregar los modelos de autorización
+
+El archivo `apps/security/models.py` de Wayuu Travel ya contiene los modelos `User` y `RefreshToken`. Por eso, agrego las cuatro clases nuevas y la enumeración `HttpMethod` al final del archivo, sin reescribir los modelos existentes.
+
+Los imports necesarios, como `models`, `settings` y `RecordStatus`, ya se utilizan en las unidades anteriores.
+
+Las nuevas tablas serán `roles`, `role_users`, `resources` y `resource_roles`. Todas tendrán el campo `status` con valor predeterminado `inactive`. Las parejas usuario-rol, recurso-rol y método-ruta serán únicas, y las claves foráneas utilizarán `on_delete=models.RESTRICT`.
+
+El campo `Resource.route` guardará el patrón de la ruta de la API, no una URL con el identificador sustituido. Por ejemplo, una ruta de detalle de clientes puede tener el patrón `api/clients/<int:pk>/`, mientras que una ruta real sería `api/clients/1/`.
+
+**Código:** agregar al final de `apps/security/models.py` las clases `HttpMethod`, `Role`, `RoleUser`, `Resource` y \`ResourceRole proporcionadas en la guía técnica.
+
+``` sql
+
+class HttpMethod(models.TextChoices):
+    GET = "GET", "GET"
+    POST = "POST", "POST"
+    PUT = "PUT", "PUT"
+    PATCH = "PATCH", "PATCH"
+    DELETE = "DELETE", "DELETE"
+
+
+class Role(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(
+        max_length=8,
+        choices=RecordStatus.choices,
+        default=RecordStatus.INACTIVE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "roles"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=RecordStatus.values),
+                name="roles_status_valid",
+            )
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class RoleUser(models.Model):
+    role = models.ForeignKey(
+        Role,
+        on_delete=models.RESTRICT,
+        related_name="assignments",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.RESTRICT,
+        related_name="role_links",
+    )
+    status = models.CharField(
+        max_length=8,
+        choices=RecordStatus.choices,
+        default=RecordStatus.INACTIVE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "role_users"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["role", "user"],
+                name="role_user_unique",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=RecordStatus.values),
+                name="role_users_status_valid",
+            ),
+        ]
+
+
+class Resource(models.Model):
+    name = models.CharField(max_length=150)
+    method = models.CharField(
+        max_length=10,
+        choices=HttpMethod.choices,
+    )
+    route = models.CharField(max_length=255)
+    status = models.CharField(
+        max_length=8,
+        choices=RecordStatus.choices,
+        default=RecordStatus.INACTIVE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "resources"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["method", "route"],
+                name="resource_method_route_uniq",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=RecordStatus.values),
+                name="resources_status_valid",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.method} {self.route}"
+
+
+class ResourceRole(models.Model):
+    resource = models.ForeignKey(
+        Resource,
+        on_delete=models.RESTRICT,
+        related_name="grants",
+    )
+    role = models.ForeignKey(
+        Role,
+        on_delete=models.RESTRICT,
+        related_name="grants",
+    )
+    status = models.CharField(
+        max_length=8,
+        choices=RecordStatus.choices,
+        default=RecordStatus.INACTIVE,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "resource_roles"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["resource", "role"],
+                name="resource_role_unique",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=RecordStatus.values),
+                name="resource_roles_status_valid",
+            ),
+        ]
+
+```
+
+#### Paso 2. Generar las migraciones y aplicarlas
+
+Desde la terminal, con el entorno virtual `.venv` activado y ubicado en el backend de Wayuu Travel, ejecuto:
+
+``` sql
+
+python manage.py makemigrations security python manage.py migrate
+```
+
+Django generará una nueva migración para los modelos incorporados. El número dependerá de las migraciones existentes en el proyecto.
+
+#### Paso 3. Verificar el sistema
+
+Ejecuto:
+
+```         
+python manage.py check 
+python manage.py showmigrations security
+```
+
+El primer comando comprueba la configuración del proyecto. El segundo permite verificar que las migraciones de la aplicación `security` estén aplicadas, identificadas con `[X]`.
+
+![](images/clipboard-1886826886.png)
+
+![](images/clipboard-2226922085.png)
+
+#### Explicación
+
+Wayuu Travel necesita administrar qué usuarios pueden acceder a los recursos de su API según los roles asignados. Para ello, implemento una matriz de autorización propia, en lugar de depender exclusivamente de los grupos y permisos predeterminados de Django.
+
+La relación es:
+
+`User → RoleUser → Role → ResourceRole → Resource(method, route)`
+
+Cada eslabón debe estar activo para conceder acceso. Como las relaciones nacen con estado `inactive`, el sistema aplica una política de denegación por defecto en los datos.
+
+Las restricciones únicas evitan asignar dos veces el mismo rol a un usuario, vincular dos veces un mismo recurso a un rol o registrar dos recursos con el mismo método HTTP y patrón de ruta. Las claves foráneas con `RESTRICT` impiden eliminar registros que todavía tengan relaciones protegidas.
+
+#### Criterios de aceptación
+
+- **AC-16-01:** existen las cuatro tablas de autorización.
+
+- **AC-16-02:** la base de datos rechaza las parejas rol-usuario y recurso-rol duplicadas.
+
+- **AC-16-03:** los recursos almacenan patrones de ruta, no rutas con identificadores concretos.
+
+#### Verificación
+
+#### Paso 4. Confirmar los cuatro modelos
+
+Ejecutamos:
+
+``` sql
+python manage.py shell -c "from apps.security.models import Role, RoleUser, Resource, ResourceRole; print([(m.__name__, m._meta.db_table) for m in [Role, RoleUser, Resource, ResourceRole]])"
+```
+
+Debes ver las cuatro tablas: `roles`, `role_users`, `resources` y `resource_roles`.
+
+#### Paso 5. Revisar las restricciones únicas
+
+Ejecuta este comando para consultar las restricciones definidas en cada modelo:
+
+``` sql
+python manage.py shell -c "from apps.security.models import Role, RoleUser, Resource, ResourceRole; print('RoleUser:', [c.name for c in RoleUser._meta.constraints]); print('Resource:', [c.name for c in Resource._meta.constraints]); print('ResourceRole:', [c.name for c in ResourceRole._meta.constraints])"
+```
+
+Debes encontrar estas restricciones:
+
+- `role_user_unique`
+
+- `resource_method_route_uniq`
+
+- `resource_role_unique`
+
+![](images/clipboard-1271087391.png)
+
+####  paso 6: probar las restricciones
+
+En la terminal de VS Code, asegúrate de estar en la carpeta `Backend` y de tener activo el entorno virtual `.venv`.
+
+Ejecuta:
+
+``` sql
+python manage.py shell
+```
+
+![](images/clipboard-4098557151.png)
+
+Prueba del duplicado
+
+![](images/clipboard-4158538421.png)
+
+#### GATE — ISS-16
+
+- **AC-16-01:** migración aplicada y cuatro tablas verificadas. **PASS** cuando se confirme su existencia en la base de datos.
+
+- **AC-16-02:** restricciones únicas verificadas mediante intentos de inserción duplicada. **PASS** cuando las tres pruebas sean rechazadas.
+
+- **AC-16-03:** patrones de ruta verificados. **PASS parcial** hasta comprobar los patrones reales de Wayuu Travel y su carga automatizada, prevista para el ISS-24.
