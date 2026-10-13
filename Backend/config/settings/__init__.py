@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "apps.security.apps.SecurityConfig", 
+    "drf_spectacular",
+
 ]
  
 MIDDLEWARE = [
@@ -113,4 +115,16 @@ REST_FRAMEWORK = {
         "djangorestframework_camel_case.parser.CamelCaseMultiPartParser",
     ],
     "DEFAULT_PAGINATION_CLASS": None,
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Wayuu Travel API",
+    "DESCRIPTION": (
+        "API REST para la gestión de clientes, paquetes turísticos, "
+        "salidas programadas, proveedores, servicios incluidos, "
+        "reservas, pagos, cancelaciones y vouchers de Wayuu Travel."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
 }

@@ -4754,3 +4754,231 @@ Después, ingresar a [`http://127.0.0.1:8000/admin/`](http://127.0.0.1:8000/admi
 - **AC-13-04:** pendiente de verificar las restricciones de pagos. **PASS**.
 
 - **AC-13-05:** pendiente de confirmar con `python manage.py check`. . **PASS**.
+
+## ISS-14 — OpenAPI
+
+Objetivo
+
+Generar automáticamente el contrato OpenAPI de Wayuu Travel a partir de las vistas y los serializers de Django REST Framework, y publicarlo mediante Swagger UI y Redoc.
+
+Requisitos
+
+- ISS-13 completado y verificado.
+
+- Entorno virtual `.venv` activo.
+
+- Django REST Framework instalado.
+
+- Proyecto y rutas principales funcionando.
+
+- Instalar `drf-spectacular==0.30.0`.
+
+## 1. Instalar la dependencia
+
+Desde la terminal de WSL, entramos a la carpeta que contiene `manage.py` y activamos el entorno:
+
+``` sql
+python -m pip install "drf-spectacular==0.30.0"
+python -m pip freeze > requirements.txt
+```
+
+![](images/clipboard-2754622130.png)
+
+#### 2. Configurar `config/settings/__init__.py`
+
+En `INSTALLED_APPS`, agregamos `drf_spectacular` si todavía no aparecen:
+
+``` sql
+"drf_spectacular",
+```
+
+![](images/clipboard-10091968.png)
+
+Buscamos el diccionario `REST_FRAMEWORK` y agregamos `DEFAULT_SCHEMA_CLASS` dentro de él:
+
+``` sql
+"DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+```
+
+![](images/clipboard-2337547959.png)
+
+Al final de `config/settings/__init__.py`, agregamos la configuración de OpenAPI:
+
+``` sql
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Wayuu Travel API",
+    "DESCRIPTION": (
+        "API REST para la gestión de clientes, paquetes turísticos, "
+        "salidas programadas, proveedores, servicios incluidos, "
+        "reservas, pagos, cancelaciones y vouchers de Wayuu Travel."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+}
+```
+
+![](images/clipboard-3497537027.png)
+
+## 2. En `config/urls.py`
+
+Agregamos los imports:
+
+``` sql
+from drf_spectacular.views import (SpectacularAPIView,SpectacularSwaggerView,SpectacularRedocView,)
+from django.contrib import admin
+from django.urls import include, path
+from django.views.generic import RedirectView
+urlpatterns = [
+    path("", RedirectView.as_view(url="/api/admin/", permanent=False)),
+    path("admin/", admin.site.urls),
+    path("api/", include("apps.client.urls")),
+    path("api/product/", include("apps.product.urls")),
+    path("api/sale/", include("apps.sale.urls")),
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/schema/swagger-ui/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    path("api/schema/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
+    
+]
+```
+
+![](images/clipboard-2565584387.png)
+
+Realizamos la prueba
+
+``` sql
+python manage.py check
+```
+
+![](images/clipboard-3705342872.png)
+
+Modificamos sale/views.py
+
+``` sql
+
+from rest_framework import viewsets
+from rest_framework.permissions import AllowAny
+from rest_framework.generics import ListAPIView
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from drf_spectacular.utils import extend_schema
+
+from apps.sale.models import (
+    Booking,
+    Payment,
+    Cancellation,
+    Voucher,
+)
+from apps.sale.serializers import (
+    BookingSerializer,
+    PaymentSerializer,
+    CancellationSerializer,
+    VoucherSerializer,
+)
+
+
+class BookingViewSet(viewsets.ModelViewSet):
+    queryset = Booking.objects.all()
+    serializer_class = BookingSerializer
+    permission_classes = [AllowAny]
+
+
+class PaymentViewSet(viewsets.ModelViewSet):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [AllowAny]
+
+
+class CancellationViewSet(viewsets.ModelViewSet):
+    queryset = Cancellation.objects.all()
+    serializer_class = CancellationSerializer
+    permission_classes = [AllowAny]
+
+
+class VoucherViewSet(viewsets.ModelViewSet):
+    queryset = Voucher.objects.all()
+    serializer_class = VoucherSerializer
+    permission_classes = [AllowAny]
+
+
+class ActiveBookingListView(ListAPIView):
+    serializer_class = BookingSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        return Booking.objects.all()
+class BookingRegistrationAPIView(APIView):
+    """Registra una reserva junto con sus pagos."""
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Registrar una reserva con pagos",
+        description=(
+            "Registra una reserva turística y los pagos enviados "
+            "en la solicitud. Devuelve la reserva creada o los "
+            "errores de validación."
+        ),
+        request=BookingSerializer,
+        responses={
+            201: BookingSerializer,
+            400: None,
+        },
+        tags=["Reservas"],
+    )
+    def post(self, request):
+        serializer = BookingSerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            booking = serializer.save()
+        except DjangoValidationError as exc:
+            if hasattr(exc, "message_dict"):
+                errors = exc.message_dict
+            else:
+                errors = {"detail": exc.messages}
+
+            return Response(
+                errors,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        response_serializer = BookingSerializer(booking)
+
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
+```
+
+**Realizamos la prueba**
+
+``` sql
+python manage.py check
+python manage.py spectacular --file /tmp/wayuutravel-schema.yml --validate
+```
+
+![](images/clipboard-1002191364.png)
+
+``` sql
+http://127.0.0.1:8000/api/schema/swagger-ui/
+```
+
+![](images/clipboard-272435981.png)
+
+### GATE BUSINESS
+
+### GATE BUSINESS
+
+| **AC** | **Verificación** | **Evidencia** | **Resultado** |
+|:---|:---|:---|:---|
+| Modelos y relaciones | migraciones y tests | suite | PASS |
+| Transacción y stock | `SaleTransactionTests` | suite | PASS |
+| Serializers y camelCase | test de `response.content` | suite | PASS |
+| Tres estilos de vista usados con motivo | ISS-08, ISS-10, ISS-11 | código | PASS |

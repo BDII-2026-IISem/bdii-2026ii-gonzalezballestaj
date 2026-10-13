@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from drf_spectacular.utils import extend_schema
 
 from apps.sale.models import (
     Booking,
@@ -51,12 +52,25 @@ class ActiveBookingListView(ListAPIView):
 
     def get_queryset(self):
         return Booking.objects.all()
-
 class BookingRegistrationAPIView(APIView):
     """Registra una reserva junto con sus pagos."""
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        summary="Registrar una reserva con pagos",
+        description=(
+            "Registra una reserva turística y los pagos enviados "
+            "en la solicitud. Devuelve la reserva creada o los "
+            "errores de validación."
+        ),
+        request=BookingSerializer,
+        responses={
+            201: BookingSerializer,
+            400: None,
+        },
+        tags=["Reservas"],
+    )
     def post(self, request):
         serializer = BookingSerializer(data=request.data)
 
