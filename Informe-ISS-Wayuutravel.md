@@ -6171,3 +6171,297 @@ El resultado esperado es que la prueba pase:
   | AC-18-03 | familia revocada | EVI-18-01     | PASS          |
 
 **Pendiente:** ejecutar el conjunto completo de pruebas de autenticación y corregir la advertencia sobre la longitud de la clave de firma JWT.
+
+## ISS-19 — Logout
+
+Vamos a implementar el cierre de sesión de Wayuu Travel reutilizando lo que ya construiste en ISS-17 (Login) e ISS-18 (Refresh con rotación).
+
+El objetivo es invalidar el `refresh token` de la sesión cuando el usuario cierra sesión, sin almacenar ni intentar eliminar el `access token` de la base de datos.
+
+#### 1. Cómo funcionará
+
+``` sql
+POST /api/auth/logout/
+        │
+        ▼
+Recibe el refresh token
+        │
+        ▼
+Busca su hash en refresh_tokens
+        │
+        ├── No existe → 401 Unauthorized
+        │
+        ├── Ya fue reemplazado
+        │       └── Revoca la familia → 401
+        │
+        └── Existe y no fue reemplazado
+                │
+                ▼
+          status = INACTIVE
+          revoked_at = ahora
+                │
+                ▼
+          204 No Content
+```
+
+El endpoint será `OPEN`: no requiere un Bearer token. La credencial que se invalida es el refresh que el cliente envía en el cuerpo de la petición.
+
+#### 2. Actualizamos `apps/security/auth_views.py`
+
+Primero, agrega `LogoutSerializer` al import de serializadores. Conserva los imports que ya tienes de ISS-17 e ISS-18.
+
+Debe incluir:
+
+``` sql
+from apps.security.serializers import LogoutSerializer
+```
+
+Ahora, encima de `def _find_user(username, email):`, agregamos esta clase:
+
+``` sql
+
+class LogoutAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=LogoutSerializer,
+        responses={204: None, 401: None},
+        description=(
+            "Cierra la sesión invalidando el refresh token presentado. "
+            "Si detecta un token reemplazado, revoca su familia."
+        ),
+        tags=["Autenticación"],
+    )
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        raw_refresh = serializer.validated_data["refresh"]
+
+        invalid = Response(
+            {"detail": "Refresh token inválido."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+        with transaction.atomic():
+            stored = (
+                RefreshToken.objects
+                .select_for_update()
+                .filter(token_hash=hash_token(raw_refresh))
+                .first()
+            )
+
+            if stored is None:
+                return invalid
+
+            now = timezone.now()
+
+            # Un token ya reemplazado indica posible reutilización.
+            if stored.replaced_by_id is not None:
+                RefreshToken.objects.filter(
+                    family_id=stored.family_id
+                ).update(
+                    status=RecordStatus.INACTIVE,
+                    revoked_at=now,
+                )
+                return invalid
+
+            # Invalidar el refresh presentado.
+            stored.status = RecordStatus.INACTIVE
+            stored.revoked_at = now
+            stored.save(
+                update_fields=["status", "revoked_at"]
+            )
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+```
+
+#### 3. Agrega la ruta del logout
+
+Abre `apps/security/urls`
+
+cambiamos el actual :
+
+``` sql
+from apps.security.auth_views import LoginAPIView, RefreshAPIView
+```
+
+Por este:
+
+``` sql
+from apps.security.auth_views import (    LoginAPIView,    LogoutAPIView,    RefreshAPIView,)
+```
+
+![](images/clipboard-134365188.png)
+
+Después, agregamos la ruta debajo de `auth/refre`
+
+``` sql
+path("auth/logout/", LogoutAPIView.as_view(), name="auth-logout"),
+```
+
+``` sql
+
+from django.urls import path
+
+from apps.security.auth_views import (
+    LoginAPIView,
+    LogoutAPIView,
+    RefreshAPIView,
+)
+
+urlpatterns = [
+    path("auth/login/", LoginAPIView.as_view(), name="auth-login"),
+    path("auth/refresh/", RefreshAPIView.as_view(), name="auth-refresh"),
+    path("auth/logout/", LogoutAPIView.as_view(), name="auth-logout"),
+]
+```
+
+#### 4. Agrega la prueba automatizada
+
+Abre `apps/security/tests.py` y, al final de la clase `AuthFlowTests`, agrega este método. No borres las pruebas anteriores.
+
+``` sql
+
+    def test_logout_invalidates_refresh(self):
+        login = self.client.post(
+            "/api/auth/login/",
+            {"username": "ana", "password": PASSWORD},
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+
+        raw = login.data["refresh"]
+
+        logout = self.client.post(
+            "/api/auth/logout/",
+            {"refresh": raw},
+            format="json",
+        )
+        self.assertEqual(
+            logout.status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+        again = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": raw},
+            format="json",
+        )
+        self.assertEqual(
+            again.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+```
+
+![](images/clipboard-3254503474.png)
+
+#### 5. Ejecuta la prueba 
+
+``` sql
+python manage.py test apps.security.tests.AuthFlowTests.test_logout_invalidates_refresh
+```
+
+![](images/clipboard-137934127.png)
+
+#### Explicación
+
+El logout de WayuuTravel permite cerrar una sesión utilizando únicamente el refresh token, sin necesidad de enviar el access token. Esto se debe a que el refresh token se almacena de forma segura en la base de datos mediante su hash, mientras que el access token es un JWT de corta duración que no se guarda en una tabla. Por esta razón, al cerrar sesión se invalida el refresh token presentado, pero el access token que ya fue emitido puede seguir funcionando hasta que expire, salvo que exista un mecanismo adicional para revocarlo.
+
+Cada inicio de sesión genera su propia familia de tokens. Por lo tanto, cerrar sesión en un dispositivo no debe cerrar las sesiones activas de otros dispositivos. Cuando el usuario presenta un refresh token válido que no ha sido reemplazado, el sistema lo marca como inactivo y registra la fecha de revocación. La operación responde con el código HTTP 204, que indica que el cierre de sesión se completó correctamente sin necesidad de devolver contenido.
+
+Si el refresh token presentado ya fue rotado, el sistema no lo trata como un logout normal. Un token reemplazado no debe volver a utilizarse, por lo que su presentación provoca la revocación de toda la familia de tokens relacionada. De esta manera, se evita que un token antiguo pueda seguir utilizándose para renovar la sesión. Si el token no existe o se encuentra en una situación que requiere rechazo, el sistema devuelve una respuesta HTTP 401 con un mensaje genérico, sin revelar detalles sobre el estado interno del token. Además, repetir el logout de un token que no fue reemplazado debe seguir respondiendo con HTTP 204.
+
+#### Cómo probarlo
+
+Para comprobar el funcionamiento del logout y verificar que un refresh token invalidado ya no pueda utilizarse, se ejecutan las pruebas automatizadas de autenticación desde la terminal de WSL, dentro de la carpeta `Backend` y con el entorno virtual `.venv` activo:
+
+``` sql
+python manage.py test apps.security.tests.AuthFlowTests
+```
+
+La prueba automatizada realiza el siguiente flujo: primero inicia sesión con un usuario de prueba y obtiene su refresh token. Después envía ese token al endpoint `POST /api/auth/logout/`, donde se espera una respuesta HTTP 204. Finalmente, intenta utilizar el mismo token en `POST /api/auth/refresh/` y comprueba que el servidor lo rechace con una respuesta HTTP 401.
+
+``` sql
+Login
+  │
+  ▼
+Recibo el refresh token R
+  │
+  ▼
+POST /api/auth/logout/
+{ "refresh": "R" }
+  │
+  ▼
+HTTP 204 — Sesión cerrada y token invalidado
+  │
+  ▼
+POST /api/auth/refresh/
+{ "refresh": "R" }
+  │
+  ▼
+HTTP 401 — El servidor rechaza el token
+```
+
+El resultado esperado de las pruebas es `OK`, lo que indica que los casos evaluados finalizaron correctamente. Para verificar el comportamiento manualmente, también se puede iniciar el servidor con `python manage.py runserver`, realizar un login desde una segunda terminal utilizando el endpoint `/api/auth/login/`, copiar el refresh token recibido y enviarlo primero al endpoint `/api/auth/logout/` y después al endpoint `/api/auth/refresh/`. La primera solicitud debe devolver HTTP 204 y la segunda HTTP 401.
+
+Con estas verificaciones se comprueba que el sistema invalida correctamente el refresh token al cerrar sesión, impide su reutilización y conserva la independencia entre las sesiones de diferentes dispositivos.
+
+### 1. Iniciar sesión — Login
+
+``` sql
+curl -X POST http://127.0.0.1:8000/api/auth/login/ \   -H "Content-Type: application/json" \   -d '{"username":"TU_USUARIO","password":"TU_CLAVE"}'
+```
+
+La respuesta debe incluir `access` y `refresh`, además del tipo de token y su duración. Copia el valor de `refresh` para los siguientes pasos.
+
+![](images/clipboard-1345909105.png)
+
+### 2. Cerrar sesión — Logout
+
+Reemplaza `PEGA_AQUI_R` por el refresh que recibiste en el login.
+
+``` sql
+curl -i -X POST http://127.0.0.1:8000/api/auth/logout/ \   -H "Content-Type: application/json" \   -d '{"refresh":"PEGA_AQUI_R"}'
+```
+
+curl -i -X POST <http://127.0.0.1:8000/api/auth/logout/> \\ -H "Content-Type: application/json" \\ -d '{"refresh":"PEGA_AQUI_R"}'
+
+Resultado esperado:
+
+![](images/clipboard-1345909105.png)
+
+### 3. Intentar renovar la sesión — Refresh
+
+Utiliza el mismo refresh que acabas de invalidar.
+
+``` sql
+
+curl -i -X POST http://127.0.0.1:8000/api/auth/refresh/ \   -H "Content-Type: application/json" \   -d '{"refresh":"PEGA_AQUI_R"}'
+```
+
+![](images/clipboard-24552941.png)
+
+#### **Criterios de aceptación**
+
+- **AC-19-01:** el logout responde 204.
+
+- **AC-19-02:** ese refresh ya no puede renovar: el refresh siguiente responde 401.
+
+- **AC-19-03:** un segundo logout del mismo token, si no fue rotado, también responde 204.
+
+- **AC-19-04:** un token desconocido o ya rotado responde 401, y el rotado apaga la familia.
+
+#### **Verificación**
+
+`test_logout_invalidates_refresh` y `test_logout_unknown_or_rotated_token_is_401`, con el comando del Paso 4.
+
+#### **GATE**
+
+- **AC-19-01:** HTTP 204. **PASS**.
+
+- **AC-19-02:** el refresh posterior responde 401. **PASS**.
+
+- **AC-19-03:** el segundo logout responde 204. **PASS**.
+
+- **AC-19-04:** desconocido o rotado responde 401, y la familia queda revocada. **PASS**.

@@ -16,6 +16,7 @@ from apps.common.status import RecordStatus
 from apps.security.models import RefreshToken
 from apps.security.serializers import LoginSerializer, TokenPairSerializer
 from apps.security.tokens import generate_refresh_value, hash_token
+from apps.security.serializers import LogoutSerializer
 
 User = get_user_model()
 
@@ -178,3 +179,58 @@ class RefreshAPIView(APIView):
             )
 
         return Response(payload, status=status.HTTP_200_OK)
+
+class LogoutAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=LogoutSerializer,
+        responses={204: None, 401: None},
+        description=(
+            "Cierra la sesión invalidando el refresh token presentado. "
+            "Si detecta un token reemplazado, revoca su familia."
+        ),
+        tags=["Autenticación"],
+    )
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        raw_refresh = serializer.validated_data["refresh"]
+
+        invalid = Response(
+            {"detail": "Refresh token inválido."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+        with transaction.atomic():
+            stored = (
+                RefreshToken.objects
+                .select_for_update()
+                .filter(token_hash=hash_token(raw_refresh))
+                .first()
+            )
+
+            if stored is None:
+                return invalid
+
+            now = timezone.now()
+
+            # Un token ya reemplazado indica posible reutilización.
+            if stored.replaced_by_id is not None:
+                RefreshToken.objects.filter(
+                    family_id=stored.family_id
+                ).update(
+                    status=RecordStatus.INACTIVE,
+                    revoked_at=now,
+                )
+                return invalid
+
+            # Invalidar el refresh presentado.
+            stored.status = RecordStatus.INACTIVE
+            stored.revoked_at = now
+            stored.save(
+                update_fields=["status", "revoked_at"]
+            )
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
