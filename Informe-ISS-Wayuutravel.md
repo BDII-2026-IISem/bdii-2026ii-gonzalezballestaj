@@ -5332,7 +5332,7 @@ Esta verificación confirma el funcionamiento básico del modelo y del hash. No 
 
 **Estado del GATE:** parcialmente verificado. El modelo `RefreshToken`, la persistencia manual del hash y las condiciones básicas de uso están comprobados. La integración con el inicio de sesión y la validación completa de los criterios de aceptación quedan pendientes del ISS-17.
 
-### ISS-16 — Role, RoleUser, Resource y ResourceRole
+## ISS-16 — Role, RoleUser, Resource y ResourceRole
 
 #### Paso 1. Agregar los modelos de autorización
 
@@ -5578,3 +5578,365 @@ Prueba del duplicado
 - **AC-16-02:** restricciones únicas verificadas mediante intentos de inserción duplicada. **PASS** cuando las tres pruebas sean rechazadas.
 
 - **AC-16-03:** patrones de ruta verificados. **PASS parcial** hasta comprobar los patrones reales de Wayuu Travel y su carga automatizada, prevista para el ISS-24.
+
+## ISS-17 — Login OPEN
+
+Vamos a implementar esta unidad en Wayuu Travel, paso a paso y respetando la estructura que ya tienes en Django.
+
+El objetivo es crear el endpoint `POST /api/auth/login/`, que permita iniciar sesión mediante username o email y contraseña, y devuelva un token de acceso (`access`) y un token de renovación (`refresh`).
+
+Antes de empezar, hay tres adaptaciones importantes de tu guía:
+
+- Usaremos los nombres y correos de prueba de Wayuu Travel, no los de StoreLab.
+
+- Conservaremos los modelos `User` y `RefreshToken` que ya tienes en `apps/security/models.py`.
+
+- No sobrescribiremos archivos completos que puedan contener código de unidades anteriores. Crearemos los archivos nuevos y añadiremos los cambios necesarios.
+
+El login será OPEN: no requiere un token previo para entrar. Eso no significa que permita acceder a recursos privados sin autenticación.
+
+### **Construcción**
+
+#### Paso 1. Comprobar los requisitos
+
+En la terminal de VS Code, desde la carpeta `Backend` y con `.venv` activo, ejecuta:
+
+``` sql
+python manage.py check
+```
+
+Después:
+
+``` sql
+python -m pip show djangorestframework-simplejwt
+```
+
+El primer comando debe indicar que no hay problemas en el proyecto. El segundo debe mostrar información del paquete `djangorestframework-simplejwt`.
+
+![](images/clipboard-1967026973.png)
+
+**Paso 2. Crear los serializers de autenticación**
+
+El archivo `apps/security/serializers.py` no existe todavía. Lo creé ahora, con el serializer del login y los que van a usar el refresh y el logout en los ISS siguientes:
+
+``` sql
+
+from rest_framework import serializers
+
+
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField(required=False, allow_blank=False)
+    email = serializers.EmailField(required=False)
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        if not attrs.get("username") and not attrs.get("email"):
+            raise serializers.ValidationError(
+                "Informe username o email junto con password."
+            )
+        return attrs
+
+
+class RefreshSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+
+class TokenPairSerializer(serializers.Serializer):
+    access = serializers.CharField()
+    refresh = serializers.CharField()
+    token_type = serializers.CharField()
+    access_expires_in = serializers.IntegerField()
+```
+
+![](images/clipboard-717038138.png)
+
+**Paso 2. Crear la vista del login**
+
+El archivo `apps/security/auth_views.py` tampoco existe. En este ISS solo tiene el login y dos funciones auxiliares (`token_payload` e `issue_refresh`) que el refresh y el logout van a reutilizar; esas dos vistas se agregan al final en los ISS-18 y ISS-19. Agregué además el decorador `extend_schema` de spectacular, para que `--validate` del ISS-14 siga pasando.
+
+``` sql
+
+import uuid
+
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import AccessToken
+from drf_spectacular.utils import extend_schema
+
+from apps.common.status import RecordStatus
+from apps.security.models import RefreshToken
+from apps.security.serializers import LoginSerializer, TokenPairSerializer
+from apps.security.tokens import generate_refresh_value, hash_token
+
+User = get_user_model()
+
+
+def token_payload(user, raw_refresh):
+    access = AccessToken.for_user(user)
+    lifetime = int(
+        settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()
+    )
+
+    return {
+        "access": str(access),
+        "refresh": raw_refresh,
+        "token_type": "Bearer",
+        "access_expires_in": lifetime,
+    }
+
+
+def issue_refresh(user, family_id=None):
+    raw_refresh = generate_refresh_value()
+
+    stored = RefreshToken.objects.create(
+        user=user,
+        token_hash=hash_token(raw_refresh),
+        family_id=family_id or uuid.uuid4(),
+        expires_at=RefreshToken.default_expiry(),
+        status=RecordStatus.ACTIVE,
+    )
+
+    return stored, raw_refresh
+
+
+class LoginAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=LoginSerializer,
+        responses={200: TokenPairSerializer},
+        description=(
+            "Inicia sesión mediante username o email y devuelve "
+            "un access token y un refresh token."
+        ),
+        tags=["Autenticación"],
+    )
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        user = _find_user(data.get("username"), data.get("email"))
+
+        invalid = Response(
+            {"detail": "Credenciales inválidas."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+        if user is None or user.status != RecordStatus.ACTIVE:
+            return invalid
+
+        if not user.check_password(data["password"]):
+            return invalid
+
+        _stored, raw_refresh = issue_refresh(user)
+
+        return Response(
+            token_payload(user, raw_refresh),
+            status=status.HTTP_200_OK,
+        )
+
+
+def _find_user(username, email):
+    if username and email:
+        return User.objects.filter(
+            username=username,
+            email__iexact=email,
+        ).first()
+
+    if username:
+        return User.objects.filter(username=username).first()
+
+    if email:
+        return User.objects.filter(email__iexact=email).first()
+
+    return None
+```
+
+![](images/clipboard-2468431393.png)
+
+**Paso 3. Crear las rutas de `security`**
+
+Creo el archivo `urls.py` porque todavía no existe. y agrego el siguiente contenido.
+
+Archivo `apps/security/urls.py`:
+
+``` sql
+
+from django.urls import path
+
+from apps.security.auth_views import LoginAPIView
+
+urlpatterns = [
+    path("auth/login/", LoginAPIView.as_view(), name="auth-login"),
+]
+```
+
+![](images/clipboard-2959578880.png)
+
+Y en `config/urls.py`, debajo de los demás `path("api/", include("apps...."))`, agregué:
+
+``` sql
+path("api/", include("apps.security.urls")), 
+```
+
+La ruta `auth/login/` vive en la app `security`, y el proyecto solo agrega otro `include` bajo `api/`. El refresh, el logout, el perfil y el CRUD de la matriz se agregan a este mismo `urlpatterns` en los ISS siguientes; no se abre un segundo archivo de rutas.
+
+![](images/clipboard-3448537695.png)
+
+**Paso 4. Crear los datos de apoyo para las pruebas**
+
+El test necesita un usuario activo. Todavía no existe el archivo de ayudas de pruebas, así que lo creé ahora con solo lo necesario. El ISS-22 lo completará con más ayudas, sin borrar esto. Archivo `apps/common/testing.py`:
+
+``` sql
+
+from apps.common.status import RecordStatus
+from apps.security.models import User
+
+PASSWORD = "WayuuTravel-Test-1"
+
+
+def create_active_user(
+    username="ana",
+    email="ana@wayuutravel.test",
+    password=PASSWORD,
+):
+    return User.objects.create_user(
+        username=username,
+        email=email,
+        password=password,
+        status=RecordStatus.ACTIVE,
+    )
+```
+
+![](images/clipboard-673845688.png)
+
+Realizamos la prueba
+
+``` sql
+python manage.py test apps.security.tests.AuthFlowTests
+```
+
+![](images/clipboard-13464357.png)
+
+#### Explicación
+
+Usé una `APIView` porque el flujo de login no crea usuarios. Su función es verificar las credenciales de un usuario existente y permitirle acceder al sistema. El registro de usuarios será otro endpoint y tendrá sus propios permisos.
+
+El endpoint `/api/auth/login/` es público, por lo que no necesita un token previo. Para conseguirlo, configuré `authentication_classes = []` y `permission_classes = [AllowAny]`. Esto evita que un token vencido enviado por costumbre interfiera con el inicio de sesión.
+
+El usuario puede iniciar sesión con su `username` o su `email`, junto con su contraseña. El sistema consulta la tabla `users`, verifica que el usuario esté activo y comprueba la contraseña mediante `check_password()`, que permite validar la contraseña almacenada de forma segura.
+
+Si el usuario no existe, está inactivo o la contraseña es incorrecta, el endpoint devuelve el mismo error `401 Unauthorized` con el mensaje `"Credenciales inválidas."`. De esta manera, no revela si una cuenta existe o si está desactivada.
+
+Si las credenciales son correctas, se generan dos tokens:
+
+- Access token: se genera con `AccessToken.for_user(user)` mediante SimpleJWT. Se utiliza para acceder a los endpoints protegidos y tiene una duración configurada de 60 minutos. No se almacena en la base de datos.
+
+- Refresh token: se genera para permitir la renovación de la sesión. Se devuelve al cliente en texto claro, pero en la tabla `refresh_tokens` solo se almacena su hash, junto con el usuario, la familia del token, la fecha de expiración y el estado.
+
+#### Flujo del login
+
+``` sql
+POST /api/auth/login/
+        │
+        ▼
+Recibe username o email + password
+        │
+        ▼
+Busca el usuario en la base de datos
+        │
+        ▼
+¿El usuario existe y está activo?
+        │
+        ├── No → 401 Credenciales inválidas
+        │
+        ▼
+Verifica la contraseña con check_password()
+        │
+        ├── Incorrecta → 401 Credenciales inválidas
+        │
+        ▼
+Genera access token y refresh token
+        │
+        ▼
+Guarda el hash del refresh token
+        │
+        ▼
+Devuelve los tokens al cliente
+```
+
+#### Cómo probarlo
+
+Para comprobar que el login funciona, utilicé pruebas automatizadas con `APITestCase` de Django REST Framework. Estas pruebas realizan peticiones HTTP reales dentro del entorno de pruebas, sin utilizar `force_authenticate`, para verificar que el endpoint funciona sin autenticación previa.
+
+El usuario de prueba se crea mediante `create_active_user`, y las pruebas utilizan una base de datos aislada para evitar afectar los datos reales.
+
+``` sql
+python manage.py test apps.security.tests.AuthFlowTests
+        │
+        ▼
+POST /api/auth/login/ sin token
+        │
+        ├── username + password correctos → 200 OK
+        │      Devuelve access y refresh
+        │      Guarda el hash del refresh
+        │
+        ├── email + password correctos → 200 OK
+        │
+        ├── Usuario inactivo → 401 Unauthorized
+        │
+        └── Contraseña incorrecta → 401 Unauthorized
+               Mismo mensaje de error
+```
+
+Para verlo a mano, con el servidor corriendo (`python manage.py runserver`) y un usuario activo (por ejemplo tu superusuario), en otra terminal:
+
+``` sql
+curl -i -X POST http://127.0.0.1:8000/api/auth/login/ \
+  -H "Content-Type: application/json" \
+  -d '{"username":"Rafael","password":"TU_CLAVE"}'
+```
+
+![](images/clipboard-1171353877.png)
+
+![](images/clipboard-1092852909.png)
+
+![](images/clipboard-1208928080.png)
+
+#### **Criterios de aceptación**
+
+- **AC-17-01:** `username` y `password` correctos responden 200 con `access` y `refresh`.
+
+- **AC-17-02:** el correo, aunque venga en otras mayúsculas, también entra.
+
+- **AC-17-03:** un usuario `inactive` responde 401.
+
+- **AC-17-04:** una clave incorrecta responde 401.
+
+- **AC-17-05:** el JSON no trae `password`.
+
+#### **Verificación**
+
+`AuthFlowTests.test_login_with_username_and_email` y `test_inactive_user_and_bad_password_are_401`, con el comando del Paso 6.
+
+#### **GATE**
+
+- **AC-17-01:** login con `username`. **PASS**.
+
+- **AC-17-02:** login con correo. **PASS**.
+
+- **AC-17-03:** usuario inactivo. **PASS**.
+
+- **AC-17-04:** clave incorrecta. **PASS**.
+
+- **AC-17-05:** sin `password` en la respuesta. **PASS**.
