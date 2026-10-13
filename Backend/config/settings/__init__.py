@@ -116,6 +116,13 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": None,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+
+     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "apps.security.authentication.StoreLabJWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+
+    ],
 }
 
 SPECTACULAR_SETTINGS = {

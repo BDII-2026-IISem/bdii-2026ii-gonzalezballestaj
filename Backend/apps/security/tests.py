@@ -1,6 +1,5 @@
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
-
 from rest_framework import status
 from rest_framework.test import APITestCase
 from apps.common.status import RecordStatus
@@ -76,7 +75,7 @@ class AuthFlowTests(APITestCase):
             {"username": "ana", "password": PASSWORD},
             format="json",
         )
-
+ 
         self.assertEqual(
             by_username.status_code,
             status.HTTP_200_OK,
@@ -211,5 +210,50 @@ class AuthFlowTests(APITestCase):
         )
         self.assertEqual(
             again.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+ 
+    def test_profile_requires_token_and_rejects_inactive_user(self):
+        # 1. Sin token, el endpoint debe rechazar la solicitud.
+        anonymous = self.client.get("/api/auth/profile/")
+        self.assertEqual(
+            anonymous.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+        # 2. Iniciar sesión para obtener un token.
+        login = self.client.post(
+            "/api/auth/login/",
+            {"username": "ana", "password": PASSWORD},
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+
+        # 3. Consultar el perfil usando el token.
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {login.data['access']}"
+        )
+        profile = self.client.get("/api/auth/profile/")
+
+        self.assertEqual(profile.status_code, status.HTTP_200_OK)
+        self.assertEqual(profile.data["username"], "ana")
+        self.assertNotIn("password", profile.data)
+
+        # 4. Actualizar el nombre del usuario.
+        patched = self.client.patch(
+            "/api/auth/profile/",
+            {"firstName": "Ana"},
+            format="json",
+        )
+        self.assertEqual(patched.status_code, status.HTTP_200_OK)
+
+        # 5. Desactivar el usuario y verificar que pierda el acceso.
+        self.user.status = RecordStatus.INACTIVE
+        self.user.save()
+
+        denied = self.client.get("/api/auth/profile/")
+        self.assertEqual(
+            denied.status_code,
             status.HTTP_401_UNAUTHORIZED,
         )

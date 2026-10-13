@@ -6465,3 +6465,262 @@ curl -i -X POST http://127.0.0.1:8000/api/auth/refresh/ \   -H "Content-Type: ap
 - **AC-19-03:** el segundo logout responde 204. **PASS**.
 
 - **AC-19-04:** desconocido o rotado responde 401, y la familia queda revocada. **PASS**.
+
+## ISS-20 — Perfil JWT con token
+
+#### Narrativa
+
+En esta unidad implementé el perfil de usuario autenticado de Wayuu Travel mediante JWT. Configuré una clase de autenticación personalizada para validar la firma y vigencia del access token, y comprobar que el usuario continúe activo. Creé `ProfileSerializer` para consultar y actualizar los datos permitidos del usuario, excluyendo la contraseña y protegiendo los campos `username` y `status`. Implementé `ProfileAPIView`, que utiliza `request.user` para que cada persona acceda únicamente a su propio perfil. Registré el endpoint `/api/auth/profile/` y preparé pruebas para verificar el acceso sin token, la consulta del perfil, la actualización del nombre y el rechazo de usuarios inactivos. Esta unidad todavía no consulta la matriz RBAC.
+
+#### Objetivo
+
+Permitir que un usuario autenticado consulte y actualice su propio perfil mediante JWT, rechazando solicitudes anónimas y usuarios inactivos.
+
+#### Requisitos
+
+- ISS-19 superado.
+
+- Entorno virtual `.venv` activo.
+
+- Configuración de Django REST Framework y SimpleJWT.
+
+- Usuario de prueba activo y autenticación JWT funcional.
+
+#### Construcción
+
+## 1. Crearmos el archivo
+
+En Visual Studio Code, dentro de tu proyecto, ve a:
+
+`Backend/apps/security/`
+
+Crea un archivo nuevo llamado:
+
+`authentication.py`
+
+``` sql
+
+
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import AuthenticationFailed
+
+from apps.common.status import RecordStatus
+
+
+class StoreLabJWTAuthentication(JWTAuthentication):
+    def get_user(self, validated_token):
+        user = super().get_user(validated_token)
+
+        if user.status != RecordStatus.ACTIVE or not user.is_active:
+            raise AuthenticationFailed(
+                "El usuario no está active.",
+                code="user_inactive",
+            )
+
+        return user
+```
+
+## 2. Verificamos antes de continuar
+
+``` sql
+ls apps/security/authentication.py
+```
+
+## 3. Abrimos el archivo de configuración
+
+En Visual Studio Code, abre:
+
+`Backend/config/settings/__init__.py`
+
+``` sql
+ "DEFAULT_AUTHENTICATION_CLASSES": [
+        "apps.security.authentication.StoreLabJWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        # Conserva aquí los permisos que ya tienes configurados.
+    ],
+```
+
+## 3. Abrimos el archivo
+
+En Visual Studio Code, abre:
+
+`Backend/apps/security/serializers.py`
+
+Busca esta clase:
+
+``` sql
+class LoginSerializer(serializers.Serializer):
+```
+
+Vamos a agregar `ProfileSerializer` justo encima, sin borrar las clases que ya tienes para login, refresh y logout.
+
+## 4. Agregamos el serializador
+
+Primero, compruebamos que al inicio del archivo ya tengas estos imports:
+
+``` sql
+from rest_framework import serializersfrom apps.security.models import User
+```
+
+Después, encima de `LoginSerializer`, agregamos:
+
+``` sql
+
+class ProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "status",
+        )
+        read_only_fields = ("id", "username", "status")
+```
+
+![](images/clipboard-548537796.png)
+
+## 4. Crea el archivo
+
+`Backend/apps/security/`
+
+Creamos un archivo nuevo llamado `rbac_views.py`.
+
+``` sql
+
+from rest_framework.generics import RetrieveUpdateAPIView
+from rest_framework.permissions import IsAuthenticated
+
+from apps.security.serializers import ProfileSerializer
+
+
+class ProfileAPIView(RetrieveUpdateAPIView):
+    serializer_class = ProfileSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_object(self):
+        return self.request.user
+```
+
+![](images/clipboard-3807523752.png)
+
+## 5. Agrega el import
+
+En la parte superior del archivo, junto a los demás imports, agrega:
+
+``` sql
+
+from apps.security.rbac_views import ProfileAPIView
+```
+
+Conserva los imports de `LoginAPIView`, `LogoutAPIView` y `RefreshAPIView`.
+
+## 6. Agrega la ruta
+
+Dentro de `urlpatterns`, justo debajo de la ruta de logout, agrega:
+
+``` sql
+path("auth/profile/", ProfileAPIView.as_view(), name="auth-profile"),
+```
+
+## 7. Agregamos el nuevo codigo
+
+Pegamos este método dentro de `AuthFlowTests`, conservando los cuatro espacios de indentación iniciales:
+
+```         
+
+    def test_profile_requires_token_and_rejects_inactive_user(self):
+        # 1. Sin token, el endpoint debe rechazar la solicitud.
+        anonymous = self.client.get("/api/auth/profile/")
+        self.assertEqual(
+            anonymous.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+        # 2. Iniciar sesión para obtener un token.
+        login = self.client.post(
+            "/api/auth/login/",
+            {"username": "ana", "password": PASSWORD},
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+
+        # 3. Consultar el perfil usando el token.
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {login.data['access']}"
+        )
+        profile = self.client.get("/api/auth/profile/")
+
+        self.assertEqual(profile.status_code, status.HTTP_200_OK)
+        self.assertEqual(profile.data["username"], "ana")
+        self.assertNotIn("password", profile.data)
+
+        # 4. Actualizar el nombre del usuario.
+        patched = self.client.patch(
+            "/api/auth/profile/",
+            {"firstName": "Ana"},
+            format="json",
+        )
+        self.assertEqual(patched.status_code, status.HTTP_200_OK)
+
+        # 5. Desactivar el usuario y verificar que pierda el acceso.
+        self.user.status = RecordStatus.INACTIVE
+        self.user.save()
+
+        denied = self.client.get("/api/auth/profile/")
+        self.assertEqual(
+            denied.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+```
+
+**Ejecutamos la prueba**
+
+``` sql
+python manage.py test apps.security.tests.AuthFlowTests.test_profile_requires_token_and_rejects_inactive_user
+```
+
+``` sql
+
+python manage.py test apps.security.tests
+```
+
+![](images/clipboard-1216221076.png)
+
+![](images/clipboard-3498290676.png)
+
+![](images/clipboard-1180248886.png)
+
+![](images/clipboard-1028598809.png)
+
+#### Evidencia
+
+- **EVI-20-01:** Código de `StoreLabJWTAuthentication` y configuración de autenticación JWT.
+
+- **EVI-20-02:** Implementación de `ProfileSerializer` y `ProfileAPIView`.
+
+- **EVI-20-03:** Registro de la ruta `/api/auth/profile/`.
+
+- **EVI-20-04:** Resultado de la prueba individual del endpoint de perfil.
+
+- **EVI-20-05:** Resultado de la ejecución de `python manage.py test apps.security.tests`, con las 11 pruebas aprobadas.
+
+- **EVI-20-06:** Resultado pendiente de la prueba específica de protección de los campos `username` y `status`.
+
+#### GATE
+
+- **AC-20-01:** Acceso anónimo rechazado con HTTP `401`. **PASS**, según la prueba ejecutada.
+
+- **AC-20-02:** Perfil consultado con token válido y sin exponer `password`. **PASS**, según la prueba ejecutada.
+
+- **AC-20-03:** Actualización del nombre mediante `PATCH`. **PASS**, según la prueba ejecutada.
+
+- **AC-20-04:** Acceso rechazado después de desactivar al usuario. **PASS**, según la prueba ejecutada.
+
+- **AC-20-05:** Protección de los campos `username` y `status`. **PENDIENTE DE VERIFICACIÓN EXPLÍCITA**.
+
+**Estado de la unidad:** implementación realizada y pruebas existentes aprobadas. El cierre definitivo del GATE queda condicionado a verificar AC-20-05 y comprobar la configuración final de permisos de `REST_FRAMEWORK`.
