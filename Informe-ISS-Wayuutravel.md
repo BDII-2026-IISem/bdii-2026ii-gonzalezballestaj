@@ -5940,3 +5940,234 @@ curl -i -X POST http://127.0.0.1:8000/api/auth/login/ \
 - **AC-17-04:** clave incorrecta. **PASS**.
 
 - **AC-17-05:** sin `password` en la respuesta. **PASS**.
+
+# ISS-18 — Refresh con rotación
+
+Vamos a implementar esta unidad en tu proyecto Wayuu Travel, paso a paso, conservando lo que ya funciona en ISS-17: el login, los serializadores, los modelos de seguridad y las pruebas existentes.
+
+El objetivo es que cada vez que se utilice un `refresh token`, se genere uno nuevo y el anterior quede marcado como reemplazado. Si alguien intenta reutilizar el token anterior, el sistema revocará toda la familia de tokens.
+
+## 1. Cómo funcionará
+
+``` sql
+Login
+  │
+  ▼
+Refresh A
+  │
+  ├── Primer uso → 200 OK
+  │                Emite Refresh B
+  │                A queda reemplazado
+  │
+  ├── Reutilizar A → 401 Unauthorized
+  │                  Revoca toda la familia
+  │
+  └── Usar B → 401 Unauthorized
+               La familia fue revocada
+```
+
+La implementación utilizará tu tabla `refresh_tokens`; no necesitamos sustituirla por la blacklist de SimpleJWT.
+
+## 2. Actualizamos las rutas
+
+Abrimos `apps/security/urls.py`. Cambia el import de `LoginAPIView` para que también incluya `RefreshAPIView` y agrega la nueva ruta.
+
+``` sql
+
+
+from django.urls import path
+
+from apps.security.auth_views import LoginAPIView, RefreshAPIView
+
+urlpatterns = [
+    path("auth/login/", LoginAPIView.as_view(), name="auth-login"),
+    path("auth/refresh/", RefreshAPIView.as_view(), name="auth-refresh"),
+]
+```
+
+### 3. Actualizamos `apps/security/auth_views.py`
+
+Primero, agrega estos imports junto a los demás imports del archivo. No elimines los que ya existen:
+
+``` sql
+from django.db import transaction
+from django.utils import timezone
+from apps.security.serializers import RefreshSerializer
+```
+
+Ahora, debajo de `LoginAPIView` y encima de `_find_user`, agrega la siguiente clase:
+
+``` sql
+
+class RefreshAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=RefreshSerializer,
+        responses={200: TokenPairSerializer},
+        description=(
+            "Renueva los tokens mediante un refresh token, "
+            "aplica rotación y revoca la familia si detecta reutilización."
+        ),
+        tags=["Autenticación"],
+    )
+    def post(self, request):
+        serializer = RefreshSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        raw_refresh = serializer.validated_data["refresh"]
+
+        invalid = Response(
+            {"detail": "Refresh token inválido o no vigente."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+        with transaction.atomic():
+            stored = (
+                RefreshToken.objects
+                .select_for_update()
+                .filter(token_hash=hash_token(raw_refresh))
+                .first()
+            )
+
+            if stored is None:
+                return invalid
+
+            # Un token reemplazado indica posible reutilización.
+            if (
+                stored.replaced_by_id is not None
+                or stored.status != RecordStatus.ACTIVE
+            ):
+                RefreshToken.objects.filter(
+                    family_id=stored.family_id
+                ).update(status=RecordStatus.INACTIVE)
+
+                return invalid
+
+            # Un token vencido no provoca la revocación de la familia.
+            if stored.expires_at <= timezone.now():
+                stored.status = RecordStatus.INACTIVE
+                stored.save(update_fields=["status"])
+                return invalid
+
+            # No se permite renovar la sesión de un usuario inactivo.
+            if stored.user.status != RecordStatus.ACTIVE:
+                stored.status = RecordStatus.INACTIVE
+                stored.save(update_fields=["status"])
+                return invalid
+
+            # Emite el nuevo refresh dentro de la misma familia.
+            new_stored, new_raw_refresh = issue_refresh(
+                stored.user,
+                family_id=stored.family_id,
+            )
+
+            # Marca el token anterior como reemplazado.
+            stored.replaced_by = new_stored
+            stored.status = RecordStatus.INACTIVE
+            stored.save(
+                update_fields=["replaced_by", "status"]
+            )
+
+            payload = token_payload(
+                stored.user,
+                new_raw_refresh,
+            )
+
+        return Response(payload, status=status.HTTP_200_OK)
+```
+
+![](images/clipboard-50508277.png)
+
+#### Abrimos el archivo
+
+```         
+code apps/security/tests.py
+```
+
+Busca la clase `AuthFlowTests`. Al final de esa clase, después de los métodos existentes, agregamos esta prueba :
+
+``` sql
+
+    def test_refresh_rotates_and_reuse_revokes_family(self):
+        login = self.client.post(
+            "/api/auth/login/",
+            {"username": "ana", "password": PASSWORD},
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+
+        first = login.data["refresh"]
+
+        rotated = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": first},
+            format="json",
+        )
+        self.assertEqual(rotated.status_code, status.HTTP_200_OK)
+
+        second = rotated.data["refresh"]
+        self.assertNotEqual(first, second)
+
+        reused = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": first},
+            format="json",
+        )
+        self.assertEqual(
+            reused.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+        after_reuse = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": second},
+            format="json",
+        )
+        self.assertEqual(
+            after_reuse.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+```
+
+##### . Ejecutamos la prueba 
+
+Guardamos los archivos y ejecuta este comando desde la carpeta `Backend`, con `.venv` activado:
+
+``` sql
+python manage.py test apps.security.tests.AuthFlowTests.test_refresh_rotates_and_reuse_revokes_family
+```
+
+El resultado esperado es que la prueba pase:
+
+- Primer uso de A: `200 OK`, se emite B.
+
+- Reutilización de A: `401 Unauthorized`, se revoca la familia.
+
+- Uso posterior de B: `401 Unauthorized`.
+
+![](images/clipboard-2137249186.png)
+
+**Resultado:** PASS en la prueba `test_refresh_rotates_and_reuse_revokes_family`.
+
+**Evidencia:** `EVI-18-01`.
+
+**Verificaciones realizadas:**
+
+- El primer uso del refresh token devuelve `200 OK` y genera un token nuevo.
+
+- La reutilización del token anterior devuelve `401 Unauthorized`.
+
+- Después de detectar la reutilización, el nuevo token de la misma familia también devuelve `401 Unauthorized`.
+
+- ::: {}
+  ## GATE
+  :::
+
+  | **AC**   | **Verificación** | **Evidencia** | **Resultado** |
+  |:---------|:-----------------|:--------------|:--------------|
+  | AC-18-01 | rotación         | EVI-18-01     | PASS          |
+  | AC-18-02 | reuso            | EVI-18-01     | PASS          |
+  | AC-18-03 | familia revocada | EVI-18-01     | PASS          |
+
+**Pendiente:** ejecutar el conjunto completo de pruebas de autenticación y corregir la advertencia sobre la longitud de la clave de firma JWT.

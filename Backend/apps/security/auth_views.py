@@ -9,7 +9,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import AccessToken
 from drf_spectacular.utils import extend_schema
-
+from django.db import transaction
+from django.utils import timezone
+from apps.security.serializers import RefreshSerializer
 from apps.common.status import RecordStatus
 from apps.security.models import RefreshToken
 from apps.security.serializers import LoginSerializer, TokenPairSerializer
@@ -99,3 +101,80 @@ def _find_user(username, email):
         return User.objects.filter(email__iexact=email).first()
 
     return None
+
+class RefreshAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=RefreshSerializer,
+        responses={200: TokenPairSerializer},
+        description=(
+            "Renueva los tokens mediante un refresh token, "
+            "aplica rotación y revoca la familia si detecta reutilización."
+        ),
+        tags=["Autenticación"],
+    )
+    def post(self, request):
+        serializer = RefreshSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        raw_refresh = serializer.validated_data["refresh"]
+
+        invalid = Response(
+            {"detail": "Refresh token inválido o no vigente."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+        with transaction.atomic():
+            stored = (
+                RefreshToken.objects
+                .select_for_update()
+                .filter(token_hash=hash_token(raw_refresh))
+                .first()
+            )
+
+            if stored is None:
+                return invalid
+
+            # Un token reemplazado indica posible reutilización.
+            if (
+                stored.replaced_by_id is not None
+                or stored.status != RecordStatus.ACTIVE
+            ):
+                RefreshToken.objects.filter(
+                    family_id=stored.family_id
+                ).update(status=RecordStatus.INACTIVE)
+
+                return invalid
+
+            # Un token vencido no provoca la revocación de la familia.
+            if stored.expires_at <= timezone.now():
+                stored.status = RecordStatus.INACTIVE
+                stored.save(update_fields=["status"])
+                return invalid
+
+            # No se permite renovar la sesión de un usuario inactiv o.
+            if stored.user.status != RecordStatus.ACTIVE:
+                stored.status = RecordStatus.INACTIVE
+                stored.save(update_fields=["status"])
+                return invalid
+
+            # Emite el nuevo refresh dentro de la misma familia.
+            new_stored, new_raw_refresh = issue_refresh(
+                stored.user,
+                family_id=stored.family_id,
+            )
+
+            # Marca el token anterior como reemplazado.
+            stored.replaced_by = new_stored
+            stored.status = RecordStatus.INACTIVE
+            stored.save(
+                update_fields=["replaced_by", "status"]
+            )
+
+            payload = token_payload(
+                stored.user,
+                new_raw_refresh,
+            )
+
+        return Response(payload, status=status.HTTP_200_OK)

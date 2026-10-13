@@ -138,3 +138,47 @@ class AuthFlowTests(APITestCase):
             inactive.data["detail"],
             wrong_password.data["detail"],
         )
+
+
+
+
+
+    def test_refresh_rotates_and_reuse_revokes_family(self):
+        login = self.client.post(
+            "/api/auth/login/",
+            {"username": "ana", "password": PASSWORD},
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+
+        first = login.data["refresh"]
+
+        rotated = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": first},
+            format="json",
+        )
+        self.assertEqual(rotated.status_code, status.HTTP_200_OK)
+
+        second = rotated.data["refresh"]
+        self.assertNotEqual(first, second)
+
+        reused = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": first},
+            format="json",
+        )
+        self.assertEqual(
+            reused.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+        after_reuse = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": second},
+            format="json",
+        )
+        self.assertEqual(
+            after_reuse.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
