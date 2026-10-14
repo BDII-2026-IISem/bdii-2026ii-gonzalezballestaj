@@ -6631,7 +6631,7 @@ path("auth/profile/", ProfileAPIView.as_view(), name="auth-profile"),
 
 Pegamos este método dentro de `AuthFlowTests`, conservando los cuatro espacios de indentación iniciales:
 
-```         
+``` sql
 
     def test_profile_requires_token_and_rejects_inactive_user(self):
         # 1. Sin token, el endpoint debe rechazar la solicitud.
@@ -6724,3 +6724,250 @@ python manage.py test apps.security.tests
 - **AC-20-05:** Protección de los campos `username` y `status`. **PENDIENTE DE VERIFICACIÓN EXPLÍCITA**.
 
 **Estado de la unidad:** implementación realizada y pruebas existentes aprobadas. El cierre definitivo del GATE queda condicionado a verificar AC-20-05 y comprobar la configuración final de permisos de `REST_FRAMEWORK`.
+
+# ISS-21 — HasResourceAccess
+
+**Objetivo**
+
+crear en `apps/security/permissions.py` para que tener un JWT válido no sea suficiente para acceder a cualquier recurso: el usuario también deberá contar con una concesión RBAC activa para el método HTTP y la ruta solicitados.
+
+Antes de conectar el permiso a los endpoints, conviene verificar que los modelos de ISS-16 tengan las relaciones que utiliza la clase y preparar pruebas para los cuatro criterios de aceptación.
+
+## 1. Crea `permissions.py`
+
+``` sql
+ from rest_framework.permissions import BasePermission
+
+from apps.common.status import RecordStatus
+from apps.security.models import ResourceRole
+
+
+class HasResourceAccess(BasePermission):
+    message = "No tiene autorización para ejecutar esta operación."
+
+    def has_permission(self, request, view):
+        user = request.user
+
+        if not user or not user.is_authenticated:
+            return False
+
+        if getattr(user, "status", None) != RecordStatus.ACTIVE:
+            return False
+
+        if request.method.upper() == "OPTIONS":
+            return True
+
+        match = request.resolver_match
+        if match is None:
+            return False
+
+        method = request.method.upper()
+        if method == "HEAD":
+            method = "GET"
+
+        return ResourceRole.objects.filter(
+            status=RecordStatus.ACTIVE,
+            resource__status=RecordStatus.ACTIVE,
+            resource__method=method,
+            resource__route=match.route,
+            role__status=RecordStatus.ACTIVE,
+            role__assignments__user=user,
+            role__assignments__status=RecordStatus.ACTIVE,
+        ).exists()
+
+```
+
+![](images/clipboard-3249538033.png)
+
+## 2. Compruebamos los modelos de ISS-16
+
+Antes de ejecutar las pruebas, confirma que los modelos tienen las relaciones esperadas por el permiso:
+
+- `ResourceRole` tiene las relaciones `resource` y `role`.
+
+- `Resource` tiene `method`, `route` y `status`.
+
+- La asignación entre `Role` y `User` usa el nombre inverso `assignments`.
+
+- El usuario, el rol, la asignación, el recurso y la concesión tienen los estados previstos.
+
+Comprueba primero los modelos y sus relaciones:
+
+``` sql
+grep -nE 'class (Resource|ResourceRole|Role|RoleUser)|related_name|method|route|status' apps/security/models.py
+```
+
+![](images/clipboard-2683712627.png)
+
+## 3. Ejecutamos las verificaciones
+
+Primero comprueba que Django carga correctamente la clase:
+
+``` sql
+python manage.py check
+```
+
+``` sql
+python manage.py test apps.security.tests
+```
+
+![](images/clipboard-316788568.png)
+
+## 4. comprobar los modelos y las pruebas RBAC
+
+Ejecutamos este comando en la misma terminal:
+
+``` sql
+grep -nE 'class (Resource|ResourceRole|Role|RoleUser)|related_name|method|route|status' apps/security/models.py
+```
+
+![](images/clipboard-867766899.png)
+
+Ahora confirmamos que los modelos necesarios para el control de acceso existen en `apps/security/models.py` y que `RoleUser` utiliza `related_name="assignments"` para consultar las asignaciones de roles de cada usuario.
+
+`ResourceRole` muestra `related_name="grants"`, pero todavía debemos comprobar cómo se llaman las relaciones entre `ResourceRole`, `Resource` y `Role`. Así evitamos implementar un permiso que falle por usar una relación incorrecta.
+
+## 5. Revisemos las relaciones exactas
+
+Ejecutamos este comando en la misma terminal, desde la carpeta `Backend`:
+
+``` sql
+sed -n '120,245p' apps/security/models.py
+```
+
+![](images/clipboard-1118493905.png)
+
+Ya verificamos las relaciones de los modelos de seguridad . La consulta del permiso sí puede utilizar `role__assignments` y `resource__...` como estaba previsto.
+
+## 6. Ejecuta las pruebas existentes
+
+En la terminal:
+
+``` sql
+python manage.py test apps.security.tests
+```
+
+![](images/clipboard-3555390546.png)
+
+## 7. Comprueba la configuración de permisos
+
+Antes de cambiar la configuración global, revisemos cómo están definidos actualmente los permisos y las vistas. Ejecuta:
+
+``` sql
+
+grep -R -nE 'DEFAULT_PERMISSION_CLASSES|permission_classes|HasResourceAccess' config apps
+```
+
+![](images/clipboard-4147554768.png)
+
+![](images/clipboard-1622301137.png)
+
+## 8. Agregamos la clase `RbacTests`
+
+Vamos al final de `apps/security/tests.py` y pegamos esta clase completa. No reemplacemos las clases `DatabaseSelectionTests` ni `AuthFlowTests`.
+
+``` sql
+
+class RbacTests(APITestCase):
+    def setUp(self):
+        self.user = create_active_user(
+            username="rbac_user",
+            email="rbac@wayuutravel.test",
+        )
+
+        self.role = Role.objects.create(
+            name="Operador RBAC",
+            status=RecordStatus.ACTIVE,
+        )
+
+        self.assignment = RoleUser.objects.create(
+            role=self.role,
+            user=self.user,
+            status=RecordStatus.ACTIVE,
+        )
+
+        self.resource = Resource.objects.create(
+            name="Listar clientes",
+            method="GET",
+            route="api/clients/",
+            status=RecordStatus.ACTIVE,
+        )
+
+        self.grant = ResourceRole.objects.create(
+            resource=self.resource,
+            role=self.role,
+            status=RecordStatus.ACTIVE,
+        )
+
+        self.client.force_authenticate(user=self.user)
+
+    def test_authenticated_user_without_grant_gets_403(self):
+        self.grant.status = RecordStatus.INACTIVE
+        self.grant.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_anonymous_user_gets_401(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_active_grant_allows_client_list(self):
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_inactive_role_denies_access(self):
+        self.role.status = RecordStatus.INACTIVE
+        self.role.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_inactive_role_assignment_denies_access(self):
+        self.assignment.status = RecordStatus.INACTIVE
+        self.assignment.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_inactive_grant_denies_access(self):
+        self.grant.status = RecordStatus.INACTIVE
+        self.grant.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_inactive_resource_denies_access(self):
+        self.resource.status = RecordStatus.INACTIVE
+        self.resource.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 403)
+```
+
+![](images/clipboard-2258910371.png)
+
+``` sql
+python manage.py test apps.security.tests.RbacTests
+python manage.py test apps.security.tests
+```
+
+![](images/clipboard-2352258524.png)
+
+## GATE
+
+| **AC**   | **Verificación**      | **Evidencia** | **Resultado** |
+|:---------|:----------------------|:--------------|:--------------|
+| AC-21-01 | 403                   | EVI-21-01     | PASS          |
+| AC-21-02 | 401                   | EVI-21-01     | PASS          |
+| AC-21-03 | concesión activa      | EVI-21-01     | PASS          |
+| AC-21-04 | cada eslabón inactivo | EVI-21-01     | PASS          |

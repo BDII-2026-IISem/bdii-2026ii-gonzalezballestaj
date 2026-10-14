@@ -4,10 +4,10 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from apps.common.status import RecordStatus
 from apps.common.testing import PASSWORD, create_active_user
-from apps.security.models import RefreshToken
 from apps.security.tokens import hash_token
 from config.database import database_from_environ
-
+from apps.security.models import ( RefreshToken,Resource,ResourceRole,Role,RoleUser,
+)
 
 class DatabaseSelectionTests(SimpleTestCase):
     def _env(self, engine):
@@ -257,3 +257,89 @@ class AuthFlowTests(APITestCase):
             denied.status_code,
             status.HTTP_401_UNAUTHORIZED,
         )
+
+
+class RbacTests(APITestCase):
+    def setUp(self):
+        self.user = create_active_user(
+            username="rbac_user",
+            email="rbac@wayuutravel.test",
+        )
+
+        self.role = Role.objects.create(
+            name="Operador RBAC",
+            status=RecordStatus.ACTIVE,
+        )
+
+        self.assignment = RoleUser.objects.create(
+            role=self.role,
+            user=self.user,
+            status=RecordStatus.ACTIVE,
+        )
+
+        self.resource = Resource.objects.create(
+            name="Listar clientes",
+            method="GET",
+            route="api/clients/",
+            status=RecordStatus.ACTIVE,
+        )
+
+        self.grant = ResourceRole.objects.create(
+            resource=self.resource,
+            role=self.role,
+            status=RecordStatus.ACTIVE,
+        )
+
+        self.client.force_authenticate(user=self.user)
+
+    def test_authenticated_user_without_grant_gets_403(self):
+        self.grant.status = RecordStatus.INACTIVE
+        self.grant.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_anonymous_user_gets_401(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_active_grant_allows_client_list(self):
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_inactive_role_denies_access(self):
+        self.role.status = RecordStatus.INACTIVE
+        self.role.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_inactive_role_assignment_denies_access(self):
+        self.assignment.status = RecordStatus.INACTIVE
+        self.assignment.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_inactive_grant_denies_access(self):
+        self.grant.status = RecordStatus.INACTIVE
+        self.grant.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_inactive_resource_denies_access(self):
+        self.resource.status = RecordStatus.INACTIVE
+        self.resource.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(response.status_code, 403)
