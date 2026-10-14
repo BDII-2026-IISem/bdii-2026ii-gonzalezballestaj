@@ -2,12 +2,28 @@ import json
 
 from rest_framework import status
 from rest_framework.test import APITestCase
-
+from apps.common.testing import create_active_user, grant_crud
 from apps.client.models import Client
 from apps.common.status import RecordStatus
 
 
 class ClientApiTests(APITestCase):
+
+
+ def setUp(self):
+    self.user = create_active_user(
+        username="client_test_user",
+        email="client-test@wayuutravel.test",
+    )
+
+    grant_crud(
+        self.user,
+        "/api/clients/",
+        "/api/clients/1/",
+    )
+
+    self.client.force_authenticate(user=self.user)
+
     def test_create_defaults_and_persists(self):
         response = self.client.post(
             "/api/clients/",

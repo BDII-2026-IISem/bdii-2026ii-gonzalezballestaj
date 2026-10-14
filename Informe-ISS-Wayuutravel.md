@@ -581,7 +581,7 @@ El proceso de configuración sigue esta secuencia:
 #### GATE
 
 | **Criterio** | **Método de comprobación** | **Evidencia** | **Resultado** |
-|----|----|----|----|
+|------------------|------------------|------------------|------------------|
 | AC-01-01 | Pruebas de configuración para cada motor | EVI-01-06 | PASS |
 | AC-01-02 | Prueba con un motor no admitido | EVI-01-06 | PASS |
 | AC-01-03 | Prueba con una variable obligatoria vacía | EVI-01-06 | PASS |
@@ -748,7 +748,7 @@ tree apps -I "__pycache__"
 ### **GATE**
 
 | **AC** | **Verificación** | **Evidencia** | **Resultado** |
-|----|----|----|----|
+|------------------|------------------|------------------|------------------|
 | AC-02-01 | directorios de las apps | árbol de `apps/` (EVI-02-01) | PASS |
 | AC-02-02 | `manage.py check` | EVI-02-04 | PASS |
 | AC-02-03 | este ISS no escribe modelos | revisión de los `models.py` vacíos | PASS |
@@ -1031,7 +1031,7 @@ Se utiliza la suite de pruebas `AuthFlowTests` para verificar el flujo de autent
 ## GATE
 
 | **AC** | **Verificación** | **Evidencia** | **Resultado** |
-|----|----|----|----|
+|------------------|------------------|------------------|------------------|
 | AC-03-01 | Configuración de `AUTH_USER_MODEL` | `config/settings.py` o módulo de configuración correspondiente | PASS |
 | AC-03-02 | Revisión del modelo `Client` | Ausencia de campo para contraseñas | PASS |
 | AC-03-03 | Autenticación con usuario inactivo | Prueba que comprueba la respuesta `401` | PASS |
@@ -1903,7 +1903,6 @@ can = Cancellation.objects.create(booking=b, name="Cancelación de prueba", desc
 v = Voucher.objects.create(booking=b, name="Comprobante de prueba", descriptions="Comprobante de prueba")
 
 b.status
-
 ```
 
 ![](images/clipboard-2082449459.png)
@@ -3455,7 +3454,7 @@ GET /api/product/packages/available/
 
 Si quieres comprobarlo manualmente, arranca el servidor y abre [`http://127.0.0.1:8000/api/product/packages/available/`](http://127.0.0.1:8000/api/product/packages/available/) en el navegador. Mostrará `[]` hasta que existan paquetes activos con salidas futuras y cupos disponibles. Swagger se incorporará más adelante, con la unidad de OpenAPI.
 
-####  Criterios de aceptación 
+#### Criterios de aceptación
 
 - AC-10-01: un paquete activo con una salida futura y cupos disponibles aparece en la lista.
 
@@ -3816,7 +3815,6 @@ class VoucherSerializer(serializers.ModelSerializer):
         if attrs.get("descriptions") == "":
             attrs["descriptions"] = None
         return attrs
-
 ```
 
 ![](images/clipboard-1496059461.png)
@@ -4172,7 +4170,7 @@ urlpatterns += router.urls
 
 **Realizamos las pruebas**
 
-#### 2. Consultar las reservas 
+#### 2. Consultar las reservas
 
 ``` sql
 python manage.py shell
@@ -4193,7 +4191,7 @@ for reserva in Booking.objects.all():
     )
 ```
 
-#### 3. Probar la API 
+#### 3. Probar la API
 
 ``` sql
 python manage.py runserver
@@ -4425,7 +4423,6 @@ class IncludedServiceAdmin(admin.ModelAdmin):
     search_fields = ("package__name", "supplier__razon_social")
     ordering = ("package", "supplier")
     readonly_fields = ("created_at", "updated_at")
-
 
 ```
 
@@ -4977,7 +4974,7 @@ http://127.0.0.1:8000/api/schema/swagger-ui/
 ### GATE BUSINESS
 
 | **AC** | **Verificación** | **Evidencia** | **Resultado** |
-|:---|:---|:---|:---|
+|:-----------------|:-----------------|:-----------------|:-----------------|
 | Modelos y relaciones | migraciones y tests | suite | PASS |
 | Transacción y stock | `SaleTransactionTests` | suite | PASS |
 | Serializers y camelCase | test de `response.content` | suite | PASS |
@@ -5185,7 +5182,6 @@ class RefreshToken(models.Model):
     @classmethod
     def default_expiry(cls):
         return timezone.now() + cls.lifetime()
-
 ```
 
 #### 6. Generar y aplicar las migraciones
@@ -5303,7 +5299,7 @@ rt.is_usable
 Los resultados esperados son los siguientes:
 
 | Expresión | Resultado esperado | Significado |
-|----|----|----|
+|------------------------|------------------------|------------------------|
 | `rt.token_hash != raw` | `True` | El valor almacenado no es el token original. |
 | `len(rt.token_hash)` | `64` | El hash SHA-256 se representa con 64 caracteres hexadecimales. |
 | Comparación con `hashlib` | `True` | El hash coincide con el calculado a partir del token original. |
@@ -5476,7 +5472,6 @@ class ResourceRole(models.Model):
                 name="resource_roles_status_valid",
             ),
         ]
-
 ```
 
 #### Paso 2. Generar las migraciones y aplicarlas
@@ -5555,7 +5550,7 @@ Debes encontrar estas restricciones:
 
 ![](images/clipboard-1271087391.png)
 
-####  paso 6: probar las restricciones
+#### paso 6: probar las restricciones
 
 En la terminal de VS Code, asegúrate de estar en la carpeta `Backend` y de tener activo el entorno virtual `.venv`.
 
@@ -6130,7 +6125,7 @@ Busca la clase `AuthFlowTests`. Al final de esa clase, después de los métodos 
         )
 ```
 
-##### . Ejecutamos la prueba 
+##### . Ejecutamos la prueba
 
 Guardamos los archivos y ejecuta este comando desde la carpeta `Backend`, con `.venv` activado:
 
@@ -6356,7 +6351,7 @@ Abre `apps/security/tests.py` y, al final de la clase `AuthFlowTests`, agrega es
 
 ![](images/clipboard-3254503474.png)
 
-#### 5. Ejecuta la prueba 
+#### 5. Ejecuta la prueba
 
 ``` sql
 python manage.py test apps.security.tests.AuthFlowTests.test_logout_invalidates_refresh
@@ -6774,7 +6769,6 @@ class HasResourceAccess(BasePermission):
             role__assignments__user=user,
             role__assignments__status=RecordStatus.ACTIVE,
         ).exists()
-
 ```
 
 ![](images/clipboard-3249538033.png)
@@ -6971,3 +6965,159 @@ python manage.py test apps.security.tests
 | AC-21-02 | 401                   | EVI-21-01     | PASS          |
 | AC-21-03 | concesión activa      | EVI-21-01     | PASS          |
 | AC-21-04 | cada eslabón inactivo | EVI-21-01     | PASS          |
+
+### ISS-22 — RBAC sobre el negocio
+
+### Narrativa
+
+En esta unidad se integró la autenticación mediante JWT y la autorización RBAC en las aplicaciones `client`, `product` y `sale` de Wayuu Travel. Se utilizó `HasResourceAccess` junto con `IsAuthenticated` para garantizar que únicamente los usuarios autenticados y autorizados puedan ejecutar las operaciones del negocio. Además, se incorporaron las funciones `grant()` y `grant_crud()` para facilitar la configuración de permisos en las pruebas automatizadas, manteniendo el acceso al perfil independiente de la matriz RBAC.
+
+### Objetivo
+
+Proteger las operaciones del negocio mediante JWT y RBAC, verificando los permisos asignados a cada usuario.
+
+### Requisitos
+
+- ISS-21 superado.
+
+- Entorno virtual `.venv` activado.
+
+- Modelos de seguridad y utilidades de prueba implementados.
+
+### Construcción
+
+Se configuraron las vistas del negocio con `IsAuthenticated` y `HasResourceAccess`, y se estableció `IsAuthenticated` como permiso global predeterminado. También se agregaron `grant()` y `grant_crud()` en `apps/common/testing.py` y se adaptaron las pruebas para autenticar usuarios y conceder los permisos necesarios. Finalmente, se verificó que el acceso autorizado funcione y que las solicitudes sin autorización sean rechazadas.
+
+Reemplazamos el contenido de `apps/common/testing.py` por este código:
+
+``` sql
+
+from django.urls import resolve
+
+from apps.common.status import RecordStatus
+from apps.security.models import (
+    Resource,
+    ResourceRole,
+    Role,
+    RoleUser,
+    User,
+)
+
+PASSWORD = "WayuuTravel-Test-1"
+
+
+def create_active_user(
+    username="ana",
+    email="ana@wayuutravel.test",
+    password=PASSWORD,
+):
+    return User.objects.create_user(
+        username=username,
+        email=email,
+        password=password,
+        status=RecordStatus.ACTIVE,
+    )
+
+
+def grant(user, method, path, role_name=None):
+    role, _ = Role.objects.get_or_create(
+        name=role_name or f"test-role-{user.pk}",
+        defaults={
+            "description": "Rol de prueba",
+            "status": RecordStatus.ACTIVE,
+        },
+    )
+
+    if role.status != RecordStatus.ACTIVE:
+        role.status = RecordStatus.ACTIVE
+        role.save()
+
+    assignment, _ = RoleUser.objects.get_or_create(
+        role=role,
+        user=user,
+        defaults={"status": RecordStatus.ACTIVE},
+    )
+
+    if assignment.status != RecordStatus.ACTIVE:
+        assignment.status = RecordStatus.ACTIVE
+        assignment.save()
+
+    match = resolve(path)
+
+    resource, _ = Resource.objects.get_or_create(
+        method=method.upper(),
+        route=match.route,
+        defaults={
+            "name": f"{method.upper()} {match.route}",
+            "status": RecordStatus.ACTIVE,
+        },
+    )
+
+    if resource.status != RecordStatus.ACTIVE:
+        resource.status = RecordStatus.ACTIVE
+        resource.save()
+
+    resource_role, _ = ResourceRole.objects.get_or_create(
+        resource=resource,
+        role=role,
+        defaults={"status": RecordStatus.ACTIVE},
+    )
+
+    if resource_role.status != RecordStatus.ACTIVE:
+        resource_role.status = RecordStatus.ACTIVE
+        resource_role.save()
+
+    return role
+
+
+def grant_crud(user, collection, detail):
+    grant(user, "GET", collection)
+    grant(user, "POST", collection)
+
+    for method in ("GET", "PUT", "PATCH", "DELETE"):
+        grant(user, method, detail)
+```
+
+### Siguiente paso
+
+Abrimos `apps/client/tests.py` y agrega este import debajo de los imports existentes:
+
+``` {.sql .sq}
+from apps.common.testing import create_active_user, grant_crud
+```
+
+Dentro de `ClientApiTests`, antes del primer método de prueba, agrega:
+
+``` sql
+def setUp(self):
+    self.user = create_active_user(
+        username="client_test_user",
+        email="client-test@wayuutravel.test",
+    )
+
+    grant_crud(
+        self.user,
+        "/api/clients/",
+        "/api/clients/1/",
+    )
+
+    self.client.force_authenticate(user=self.user)
+```
+
+No modifiques todavía los métodos de prueba existentes.
+
+Después ejecuta en la terminal de WSL, desde la carpeta `Backend`:
+
+```         
+python manage.py test apps.client.tests
+```
+
+![![](images/clipboard-2769138363.png)](images/clipboard-1624313700.png)
+
+## GATE
+
+| **AC** | **Verificación** | **Evidencia** | **Resultado** |
+|:---|:---|:---|:---|
+| AC-22-01 | negocio con RBAC | EVI-22-01 | PASS |
+| AC-22-02 | deny by default | EVI-22-02 | PASS |
+| AC-22-03 | perfil sigue en JWT con token | `ProfileAPIView.permission_classes` | PASS |
