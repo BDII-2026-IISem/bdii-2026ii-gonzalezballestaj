@@ -42,7 +42,7 @@ class Migration(migrations.Migration):
                 'constraints': [models.CheckConstraint(condition=models.Q(('status__in', ['active', 'inactive'])), name='users_status_valid')],
             },
             managers=[
-                ('objects', apps.security.models.ActivaFitUserManager()),
+                ('objects', apps.security.models.WayuutravelUserManager()),
             ],
         ),
     ]

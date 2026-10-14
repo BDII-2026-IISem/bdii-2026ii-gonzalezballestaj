@@ -1,28 +1,43 @@
-# Create your models here.
-from django.db import models
+
 import uuid
+
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.db import models
 from django.utils import timezone
-import uuid
+
 from apps.common.status import RecordStatus
 
 
-class ActivaFitUserManager(UserManager):
+class WayuutravelUserManager(UserManager):
     def create_user(self, username, email=None, password=None, **extra_fields):
         extra_fields.setdefault("status", RecordStatus.INACTIVE)
-        return super().create_user(username, email, password, **extra_fields)
+        return super().create_user(
+            username,
+            email=email,
+            password=password,
+            **extra_fields,
+        )
 
     def create_superuser(self, username, email=None, password=None, **extra_fields):
         extra_fields.setdefault("status", RecordStatus.ACTIVE)
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
-        return super().create_superuser(username, email, password, **extra_fields)
+
+        return super().create_superuser(
+            username,
+            email=email,
+            password=password,
+            **extra_fields,
+        )
 
 
 class User(AbstractUser):
-    email = models.EmailField("correo electrónico", max_length=150, unique=True)
+    email = models.EmailField(
+        "correo electrónico",
+        max_length=150,
+        unique=True,
+    )
     status = models.CharField(
         max_length=8,
         choices=RecordStatus.choices,
@@ -31,7 +46,7 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    objects = ActivaFitUserManager()
+    objects = WayuutravelUserManager()
 
     class Meta:
         db_table = "users"
@@ -41,12 +56,13 @@ class User(AbstractUser):
             models.CheckConstraint(
                 condition=models.Q(status__in=RecordStatus.values),
                 name="users_status_valid",
-            )
+            ),
         ]
 
     def save(self, *args, **kwargs):
         if self.email:
             self.email = self.email.strip().lower()
+
         self.is_active = self.status == RecordStatus.ACTIVE
         super().save(*args, **kwargs)
 
@@ -88,7 +104,7 @@ class RefreshToken(models.Model):
             models.CheckConstraint(
                 condition=models.Q(status__in=RecordStatus.values),
                 name="refresh_tokens_status_valid",
-            )
+            ),
         ]
 
     def __str__(self):
@@ -137,7 +153,7 @@ class Role(models.Model):
             models.CheckConstraint(
                 condition=models.Q(status__in=RecordStatus.values),
                 name="roles_status_valid",
-            )
+            ),
         ]
 
     def __str__(self):

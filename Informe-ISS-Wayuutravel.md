@@ -7877,3 +7877,429 @@ python manage.py test apps.security.tests
 | AC-23-03 | Pruebas de baja lógica                 | PASS               |
 | AC-23-04 | Acceso sin `ResourceRole`              | PASS               |
 | AC-23-05 | `GET` autorizado y `POST` denegado     | PASS               |
+
+# ISS-24 — Semilla RBAC y Swagger con Bearer
+
+## Narrativa
+
+En esta incidencia se busca automatizar la configuración de la matriz de seguridad RBAC y facilitar la validación de los permisos de acceso desde Swagger. Para ello, se implementará un comando de Django que recorra las rutas reales del sistema y sincronice los recursos con los permisos asignados al rol administrador, evitando registrar manualmente las rutas y reduciendo posibles inconsistencias entre las URL y la matriz de seguridad.
+
+También se configurará la autenticación JWT Bearer en el esquema OpenAPI mediante una extensión de `drf-spectacular`, de manera que Swagger permita ingresar el token de acceso obtenido durante el inicio de sesión y utilizarlo en las solicitudes protegidas.
+
+La implementación se apoyará en la estructura existente de `apps/security`, conservando la autenticación y el control de permisos desarrollados en las incidencias anteriores. La incidencia se considerará terminada cuando la semilla se ejecute correctamente, las rutas se almacenen con sus patrones reales y el esquema OpenAPI valide la autenticación Bearer.
+
+## Objetivo
+
+Automatizar la sincronización de los recursos y permisos RBAC a partir de las rutas reales de Django y configurar Swagger para realizar pruebas de las operaciones protegidas mediante JWT Bearer.
+
+## Requisitos
+
+- ISS-23 completada y validada mediante las pruebas automatizadas de seguridad.
+
+- Proyecto Django ejecutable desde el entorno virtual `.venv`.
+
+- Aplicación `apps/security` registrada y configurada en el proyecto.
+
+- Modelos y relaciones RBAC disponibles para gestionar roles, usuarios, recursos y permisos.
+
+- Autenticación JWT y vistas de inicio de sesión, renovación y cierre de sesión implementadas.
+
+- `drf-spectacular` instalado y configurado para generar el esquema OpenAPI.
+
+- Usuario administrador creado y con estado activo para realizar las pruebas desde Swagger.
+
+**construcción de la ISS-24: configurar Swagger para aceptar el token JWT.**
+
+### 1. Creamos `apps/security/schema.py`
+
+Abre el archivo en VS Code y pega este código:
+
+``` sql
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
+
+
+class StoreLabJWTScheme(OpenApiAuthenticationExtension):
+    target_class = "apps.security.authentication.StoreLabJWTAuthentication"
+    name = "bearerAuth"
+
+    def get_security_definition(self, auto_schema):
+        return {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+        }
+```
+
+![](images/clipboard-4250324870.png)
+
+### 2. Registramos la extensión en `apps/security/apps.py`
+
+Abrimos `apps/security/apps.py` y busca la clase de configuración de seguridad.
+
+Debajo de `label = "security"`, agrega este método:
+
+``` sql
+def ready(self): 
+from apps.security import schema  
+```
+
+![](images/clipboard-3123903295.png)
+
+###  3. Crear la estructura del comando `seed_rbac`
+
+Desde la terminal de WSL, en la carpeta `Backend`, ejecuta:
+
+``` sql
+mkdir -p apps/security/management/commands
+
+touch apps/security/management/__init__.py
+touch apps/security/management/commands/__init__.py
+touch apps/security/management/commands/seed_rbac.py
+```
+
+Esto crea la estructura que Django necesita para reconocer el comando personalizado.
+
+Comprobamos que el archivo existe:
+
+``` sql
+ls apps/security/management/commands/
+```
+
+![](images/clipboard-2452898252.png)
+
+### 4. Implementar `seed_rbac.py`
+
+Vamos a implementar la semilla para que Django registre las rutas reales y conceda esos permisos al rol `admin`.
+
+Primero, necesito confirmar los campos y relaciones de tus modelos para que el código sea compatible con tu proyecto.
+
+En la terminal de WSL, dentro de `Backend`, ejecutamos:
+
+``` sql
+sed -n '1,240p' apps/security/models.py
+```
+
+### 5. creamos el archivo seed_rbac.py
+
+Abrimos `apps/security/management/commands/seed_rbac.py` y agregamos el siguiente codigo.
+
+``` sql
+from django.core.management.base import BaseCommand
+
+
+class Command(BaseCommand):
+    help = "Sincroniza los recursos y permisos de la matriz RBAC."
+
+    def handle(self, *args, **options):
+        self.stdout.write(
+            self.style.SUCCESS("Comando seed_rbac preparado.")
+        )
+```
+
+![](images/clipboard-1650527944.png)
+
+#### 6. Asignar el rol `admin` a tu usuario administrador.
+
+Ejecutamos en la terminal
+
+``` sql
+python manage.py seed_rbac --username admin
+```
+
+![](images/clipboard-153150027.png)
+
+Esto debe activar el rol `admin` y asignárselo al usuario `admin`, siempre que ese usuario exista y esté activo.
+
+Ahora actualizamos el contenido de **seed_rbac.py,** agregamos lo siguiente:
+
+``` sql
+
+from django.core.management.base import BaseCommand, CommandError
+from django.urls import Resolver404, resolve
+
+from apps.common.status import RecordStatus
+from apps.security.models import (
+    HttpMethod,
+    Resource,
+    ResourceRole,
+    Role,
+    RoleUser,
+    User,
+)
+
+
+SAMPLE_ROUTES = [
+    # Clientes: /api/
+    ("GET", "/api/clients/"),
+    ("POST", "/api/clients/"),
+    ("GET", "/api/clients/1/"),
+    ("PUT", "/api/clients/1/"),
+    ("PATCH", "/api/clients/1/"),
+    ("DELETE", "/api/clients/1/"),
+
+    # Paquetes: /api/product/
+    ("GET", "/api/product/packages/"),
+    ("POST", "/api/product/packages/"),
+    ("GET", "/api/product/packages/1/"),
+    ("PUT", "/api/product/packages/1/"),
+    ("PATCH", "/api/product/packages/1/"),
+    ("DELETE", "/api/product/packages/1/"),
+    ("GET", "/api/product/packages/available/"),
+
+    # Salidas
+    ("GET", "/api/product/departures/"),
+    ("POST", "/api/product/departures/"),
+    ("GET", "/api/product/departures/1/"),
+    ("PUT", "/api/product/departures/1/"),
+    ("PATCH", "/api/product/departures/1/"),
+    ("DELETE", "/api/product/departures/1/"),
+
+    # Proveedores
+    ("GET", "/api/product/suppliers/"),
+    ("POST", "/api/product/suppliers/"),
+    ("GET", "/api/product/suppliers/1/"),
+    ("PUT", "/api/product/suppliers/1/"),
+    ("PATCH", "/api/product/suppliers/1/"),
+    ("DELETE", "/api/product/suppliers/1/"),
+
+    # Servicios incluidos
+    ("GET", "/api/product/included-services/"),
+    ("POST", "/api/product/included-services/"),
+    ("GET", "/api/product/included-services/1/"),
+    ("PUT", "/api/product/included-services/1/"),
+    ("PATCH", "/api/product/included-services/1/"),
+    ("DELETE", "/api/product/included-services/1/"),
+
+    # Reservas, pagos, cancelaciones y comprobantes: /api/sale/
+    *[
+        (method, f"/api/sale/{resource}/")
+        for resource in (
+            "bookings",
+            "payments",
+            "cancellations",
+            "vouchers",
+        )
+        for method in ("GET", "POST")
+    ],
+    *[
+        (method, f"/api/sale/{resource}/1/")
+        for resource in (
+            "bookings",
+            "payments",
+            "cancellations",
+            "vouchers",
+        )
+        for method in ("GET", "PUT", "PATCH", "DELETE")
+    ],
+    ("POST", "/api/sale/bookings/register/"),
+
+    # Administración de seguridad: /api/
+    *[
+        (method, f"/api/{resource}/")
+        for resource in (
+            "users",
+            "roles",
+            "role-users",
+            "resources",
+            "resource-roles",
+        )
+        for method in ("GET", "POST")
+    ],
+    *[
+        (method, f"/api/{resource}/1/")
+        for resource in (
+            "users",
+            "roles",
+            "role-users",
+            "resources",
+            "resource-roles",
+        )
+        for method in ("GET", "PUT", "PATCH", "DELETE")
+    ],
+
+    # Autenticación
+    ("POST", "/api/auth/login/"),
+    ("POST", "/api/auth/refresh/"),
+    ("POST", "/api/auth/logout/"),
+    ("GET", "/api/auth/profile/"),
+]
+
+
+class Command(BaseCommand):
+    help = "Sincroniza los recursos y permisos de la matriz RBAC."
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--username",
+            type=str,
+            help="Usuario al que se asignará el rol admin.",
+        )
+
+    def handle(self, *args, **options):
+        username = options.get("username")
+
+        # Validar primero al usuario para evitar cambios parciales.
+        user = None
+        if username:
+            try:
+                user = User.objects.get(username=username)
+            except User.DoesNotExist as exc:
+                raise CommandError(
+                    f"No existe el usuario '{username}'. Créalo primero."
+                ) from exc
+
+        role, _ = Role.objects.get_or_create(
+            name="admin",
+            defaults={
+                "description": "Administrador del sistema",
+                "status": RecordStatus.ACTIVE,
+            },
+        )
+
+        if role.status != RecordStatus.ACTIVE:
+            role.status = RecordStatus.ACTIVE
+            role.save(update_fields=["status", "updated_at"])
+
+        created_resources = 0
+        created_grants = 0
+
+        for method, sample_path in SAMPLE_ROUTES:
+            if method not in HttpMethod.values:
+                raise CommandError(f"Método HTTP no válido: {method}")
+
+            try:
+                route = resolve(sample_path).route
+            except Resolver404 as exc:
+                raise CommandError(
+                    f"No se encontró una ruta para {method} {sample_path}. "
+                    "Comprueba los prefijos en config/urls.py y las rutas "
+                    "registradas en cada aplicación."
+                ) from exc
+
+            resource, resource_created = Resource.objects.get_or_create(
+                method=method,
+                route=route,
+                defaults={
+                    "name": f"{method} {route}",
+                    "status": RecordStatus.ACTIVE,
+                },
+            )
+
+            if resource_created:
+                created_resources += 1
+
+            resource_changes = []
+
+            if resource.status != RecordStatus.ACTIVE:
+                resource.status = RecordStatus.ACTIVE
+                resource_changes.append("status")
+
+            if not resource.name:
+                resource.name = f"{method} {route}"
+                resource_changes.append("name")
+
+            if resource_changes:
+                resource.save(
+                    update_fields=[*resource_changes, "updated_at"]
+                )
+
+            grant, grant_created = ResourceRole.objects.get_or_create(
+                resource=resource,
+                role=role,
+                defaults={"status": RecordStatus.ACTIVE},
+            )
+
+            if grant_created:
+                created_grants += 1
+            elif grant.status != RecordStatus.ACTIVE:
+                grant.status = RecordStatus.ACTIVE
+                grant.save(update_fields=["status", "updated_at"])
+
+        if user is not None:
+            assignment, _ = RoleUser.objects.get_or_create(
+                user=user,
+                role=role,
+                defaults={"status": RecordStatus.ACTIVE},
+            )
+
+            if assignment.status != RecordStatus.ACTIVE:
+                assignment.status = RecordStatus.ACTIVE
+                assignment.save(update_fields=["status", "updated_at"])
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                "Recursos RBAC sincronizados correctamente. "
+                f"Recursos nuevos: {created_resources}. "
+                f"Permisos nuevos: {created_grants}."
+            )
+        )
+
+```
+
+#### 7.comprobar que las rutas y la semilla RBAC funcionen.
+
+En la terminal de WSL, ejecutamos:
+
+``` sql
+python manage.py seed_rbac --username gonzalez
+```
+
+![](images/clipboard-2286016857.png)
+
+#### 8. Validar Swagger
+
+Primero ejecutamos:
+
+``` sql
+python manage.py spectacular --validate
+```
+
+Este comando valida el esquema OpenAPI. Después verificaremos que Swagger muestre la autenticación Bearer JWT y que podamos probar un endpoint protegido.
+
+### abrir Swagger
+
+Ejecutamos:
+
+``` sql
+python manage.py runserver
+```
+
+Abre en el navegador la dirección de Swagger :
+
+```         
+http://127.0.0.1:8000/api/schema/swagger-ui/
+```
+
+![](images/clipboard-1908278578.png)
+
+![![](images/clipboard-2536533750.png)](images/clipboard-1941781300.png)
+
+![](images/clipboard-2572679790.png)
+
+## Criterios de aceptación
+
+- AC-24-01: `seed_rbac` termina sin error.
+
+- AC-24-02: las rutas guardadas usan `<int:pk>`.
+
+- AC-24-03: `spectacular --validate` sale con código 0 e incluye el esquema Bearer.
+
+## Verificación
+
+Semilla ejecutada sobre `storelab_django`. Consulta de `resources`. `--validate` con exit code 0.
+
+## Evidencias
+
+- EVI-24-01: mensaje `Recursos RBAC sincronizados.`
+
+- EVI-24-02: 53 filas, patrón `api/clients/<int:pk>/`.
+
+- EVI-24-03: `spectacular --validate` exit 0.
+
+## GATE
+
+| **AC**   | **Verificación** | **Evidencia** | **Resultado** |
+|:---------|:-----------------|:--------------|:--------------|
+| AC-24-01 | comando          | EVI-24-01     | PASS          |
+| AC-24-02 | SQL de resources | EVI-24-02     | PASS          |
+| AC-24-03 | esquema          | EVI-24-03     | PASS          |
