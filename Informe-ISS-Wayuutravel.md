@@ -7114,10 +7114,766 @@ python manage.py test apps.client.tests
 
 ![![](images/clipboard-2769138363.png)](images/clipboard-1624313700.png)
 
-## GATE
+#### GATE
 
 | **AC** | **Verificación** | **Evidencia** | **Resultado** |
 |:---|:---|:---|:---|
 | AC-22-01 | negocio con RBAC | EVI-22-01 | PASS |
 | AC-22-02 | deny by default | EVI-22-02 | PASS |
 | AC-22-03 | perfil sigue en JWT con token | `ProfileAPIView.permission_classes` | PASS |
+
+### ISS-23 — CRUD de la matriz RBAC
+
+### Narrativa
+
+En esta unidad voy a implementar el CRUD de la matriz de seguridad de Wayuu Travel para administrar usuarios, roles, asignaciones de roles y recursos. Crearé los `ViewSet` y serializers necesarios, integraré sus rutas en `apps/security/urls.py` y mantendré la protección mediante JWT y RBAC. También verificaré que las bajas sean lógicas y que las contraseñas se almacenen de forma segura mediante `set_password()`. Finalmente, realizaré pruebas automatizadas para comprobar que un usuario solo pueda acceder a las rutas y métodos HTTP que tenga autorizados.
+
+### Objetivo
+
+Implementar el CRUD de usuarios, roles, asignaciones y recursos para administrar la matriz RBAC y verificar la cadena de autorización mediante pruebas automatizadas.
+
+### Requisitos
+
+- Tener el ISS-22 superado.
+
+- Tener activo el entorno virtual `.venv`.
+
+- Tener configurada la conexión a la base de datos de WayuuTravel.
+
+- Contar con los modelos `User`, `Role`, `RoleUser`, `Resource` y `ResourceRole`.
+
+- Tener implementado `HasResourceAccess` y la autenticación JWT.
+
+- Verificar la estructura actual de `apps/security` antes de modificar los archivos.
+
+### Construcción
+
+#### Paso 1. Crear los serializers de la matriz
+
+Abrimos `apps/security/serializers.py` .
+
+No borramos los serializers que ya tienemos. Y al final del archivo, después de `TokenPairSerializer`, agregamos este código:
+
+``` sql
+
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+
+from apps.security.models import (
+    Resource,
+    ResourceRole,
+    Role,
+    RoleUser,
+)
+
+
+class UserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(
+        write_only=True,
+        required=False,
+        validators=[validate_password],
+    )
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "password",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+    def validate_password(self, value):
+        try:
+            validate_password(value, self.instance)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages)
+        return value
+
+    def create(self, validated_data):
+        password = validated_data.pop("password", None)
+        user = User(**validated_data)
+
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
+
+        user.save()
+        return user
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop("password", None)
+
+        for attribute, value in validated_data.items():
+            setattr(instance, attribute, value)
+
+        if password:
+            instance.set_password(password)
+
+        instance.save()
+        return instance
+
+
+class RoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = (
+            "id",
+            "name",
+            "description",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+
+class RoleUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RoleUser
+        fields = (
+            "id",
+            "role",
+            "user",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+
+class ResourceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Resource
+        fields = (
+            "id",
+            "name",
+            "method",
+            "route",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+
+
+class ResourceRoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResourceRole
+        fields = (
+            "id",
+            "resource",
+            "role",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")
+```
+
+![](images/clipboard-2782482947.png)
+
+#### 2. Implementar `rbac_views.py`
+
+Abrimos el archivo:
+
+``` sql
+apps/security/rbac_views.py
+```
+
+Actualmente contiene `ProfileAPIView`. Conservamos esa clase sin cambios y agregamos el siguiente código debajo de ella.
+
+``` sql
+
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+
+from apps.common.status import RecordStatus
+from apps.security.models import (
+    Resource,
+    ResourceRole,
+    Role,
+    RoleUser,
+    User,
+)
+from apps.security.permissions import HasResourceAccess
+from apps.security.serializers import (
+    ResourceRoleSerializer,
+    ResourceSerializer,
+    RoleSerializer,
+    RoleUserSerializer,
+    UserSerializer,
+)
+
+
+class SoftDeleteModelViewSet(viewsets.ModelViewSet):
+    http_method_names = [
+        "get",
+        "post",
+        "put",
+        "patch",
+        "delete",
+        "head",
+        "options",
+    ]
+    permission_classes = [IsAuthenticated, HasResourceAccess]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        status_value = self.request.query_params.get("status")
+
+        if status_value:
+            return queryset.filter(status=status_value)
+
+        return queryset.filter(status=RecordStatus.ACTIVE)
+
+    def perform_destroy(self, instance):
+        instance.status = RecordStatus.INACTIVE
+        instance.save()
+
+
+class UserViewSet(SoftDeleteModelViewSet):
+    queryset = User.objects.all().order_by("id")
+    serializer_class = UserSerializer
+
+
+class RoleViewSet(SoftDeleteModelViewSet):
+    queryset = Role.objects.all().order_by("id")
+    serializer_class = RoleSerializer
+
+
+class RoleUserViewSet(SoftDeleteModelViewSet):
+    queryset = RoleUser.objects.all().order_by("id")
+    serializer_class = RoleUserSerializer
+
+
+class ResourceViewSet(SoftDeleteModelViewSet):
+    queryset = Resource.objects.all().order_by("id")
+    serializer_class = ResourceSerializer
+
+
+class ResourceRoleViewSet(SoftDeleteModelViewSet):
+    queryset = ResourceRole.objects.all().order_by("id")
+    serializer_class = ResourceRoleSerializer
+```
+
+![](images/clipboard-1655634854.png)
+
+**Realizamos la prueba de seguridad**
+
+![](images/clipboard-2427907698.png)
+
+#### 3. Configurar `apps/security/urls.py`
+
+Abrimos el archivo:
+
+``` sql
+apps/security/urls.py
+```
+
+Reemplazamos su contenido por el siguiente código. Conservando las cuatro rutas de autenticación y perfil, e incorporamos las diez rutas CRUD.
+
+``` sql
+
+from django.urls import path
+from rest_framework.routers import SimpleRouter
+
+from apps.security.auth_views import (
+    LoginAPIView,
+    LogoutAPIView,
+    RefreshAPIView,
+)
+from apps.security.rbac_views import (
+    ProfileAPIView,
+    ResourceRoleViewSet,
+    ResourceViewSet,
+    RoleUserViewSet,
+    RoleViewSet,
+    UserViewSet,
+)
+
+
+router = SimpleRouter(use_regex_path=False)
+
+router.register("users", UserViewSet, basename="user")
+router.register("roles", RoleViewSet, basename="role")
+router.register("role-users", RoleUserViewSet, basename="role-user")
+router.register("resources", ResourceViewSet, basename="resource")
+router.register(
+    "resource-roles",
+    ResourceRoleViewSet,
+    basename="resource-role",
+)
+
+
+urlpatterns = [
+    path("auth/login/", LoginAPIView.as_view(), name="auth-login"),
+    path("auth/refresh/", RefreshAPIView.as_view(), name="auth-refresh"),
+    path("auth/logout/", LogoutAPIView.as_view(), name="auth-logout"),
+    path("auth/profile/", ProfileAPIView.as_view(), name="auth-profile"),
+]
+
+urlpatterns += router.urls
+```
+
+![](images/clipboard-2173986244.png)
+
+**Realizamos la prueba**
+
+``` sql
+python manage.py test apps.security.tests
+```
+
+![](images/clipboard-1201944438.png)
+
+### 4. Añadir la prueba inicial
+
+Abrimos `apps/security/tests.py`. Y agregamos esto al final
+
+``` sql
+
+class SecurityMatrixApiTests(APITestCase):
+    def setUp(self):
+        self.user = create_active_user(
+            username="matrix-user",
+            email="matrix-user@wayuutravel.test",
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_user_without_role_cannot_list_clients(self):
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+```
+
+![](images/clipboard-3204153924.png)
+
+``` sql
+python manage.py test apps.security.tests.SecurityMatrixApiTests
+```
+
+![](images/clipboard-1106848294.png)
+
+### 5. Agregarmos la segunda prueba
+
+En `apps/security/tests.py`, dentro de la clase `SecurityMatrixApiTests`, agregamos este método debajo del primero:
+
+``` sql
+
+    def test_user_with_role_but_without_resource_role_cannot_list_clients(self):
+        role = Role.objects.create(
+            name="matrix-role-without-permissions",
+            description="Rol sin permisos",
+            status=RecordStatus.ACTIVE,
+        )
+
+        RoleUser.objects.create(
+            user=self.user,
+            role=role,
+            status=RecordStatus.ACTIVE,
+        )
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+```
+
+![](images/clipboard-2725249666.png)
+
+Este método utiliza los modelos `Role` y `RoleUser`, que ya están importados en tu archivo.
+
+### 6. Ejecutamos las pruebas
+
+``` sql
+python manage.py test apps.security.tests.SecurityMatrixApiTests
+```
+
+![](images/clipboard-2125896557.png)
+
+### 7. Agregamos la tercera prueba
+
+En `apps/security/tests.py`, dentro de `SecurityMatrixApiTests`, agrega este método debajo de los otros dos:
+
+``` sql
+
+    def test_active_resource_without_resource_role_cannot_list_clients(self):
+        Resource.objects.create(
+            name="Consultar clientes",
+            method="GET",
+            route="api/clients/",
+            status=RecordStatus.ACTIVE,
+        )
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+```
+
+![](images/clipboard-1809892837.png)
+
+Esta prueba verifica que crear un recurso activo por sí solo no concede acceso: también debe existir la relación activa entre el recurso y un rol asignado al usuario.
+
+### 8. Ejecutamos las pruebas
+
+``` sql
+python manage.py test apps.security.tests.SecurityMatrixApiTests
+```
+
+![](images/clipboard-2080439427.png)
+
+### 9. Agregamos la prueba
+
+Abrimos `apps/security/tests.py` y busca la clase `SecurityMatrixApiTests`.
+
+Debajo de las dos pruebas anteriores, agregamos este método:
+
+``` sql
+
+    def test_active_resource_without_resource_role_cannot_list_clients(self):
+        Resource.objects.create(
+            name="Consultar clientes",
+            method="GET",
+            route="api/clients/",
+            status=RecordStatus.ACTIVE,
+        )
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+```
+
+![](images/clipboard-1522977322.png)
+
+### 10. Ejecutamos las tres pruebas
+
+En la terminal, desde la carpeta `Backend`, ejecuta:
+
+``` sql
+
+python manage.py test apps.security.tests.SecurityMatrixApiTests
+```
+
+![](images/clipboard-2661719801.png)
+
+### 11. Agregar la prueba 4
+
+Abre `apps/security/tests.py` y, dentro de `SecurityMatrixApiTests`, agrega este método debajo de la tercera prueba:
+
+``` sql
+
+    def test_active_resource_role_allows_get_clients(self):
+        role = Role.objects.create(
+            name="matrix-role-get-clients",
+            description="Rol con permiso de consulta",
+            status=RecordStatus.ACTIVE,
+        )
+
+        RoleUser.objects.create(
+            user=self.user,
+            role=role,
+            status=RecordStatus.ACTIVE,
+        )
+
+        resource = Resource.objects.create(
+            name="Consultar clientes",
+            method="GET",
+            route="api/clients/",
+            status=RecordStatus.ACTIVE,
+        )
+
+        ResourceRole.objects.create(
+            resource=resource,
+            role=role,
+            status=RecordStatus.ACTIVE,
+        )
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+```
+
+### 12. Agregar la prueba 5
+
+En `apps/security/tests.py`, dentro de `SecurityMatrixApiTests`, agregamos este método debajo de la prueba 4:
+
+``` sql
+
+    def test_get_permission_does_not_allow_post_clients(self):
+        role = Role.objects.create(
+            name="matrix-role-get-only",
+            description="Rol de solo consulta",
+            status=RecordStatus.ACTIVE,
+        )
+
+        RoleUser.objects.create(
+            user=self.user,
+            role=role,
+            status=RecordStatus.ACTIVE,
+        )
+
+        resource = Resource.objects.create(
+            name="Consultar clientes",
+            method="GET",
+            route="api/clients/",
+            status=RecordStatus.ACTIVE,
+        )
+
+        ResourceRole.objects.create(
+            resource=resource,
+            role=role,
+            status=RecordStatus.ACTIVE,
+        )
+
+        response = self.client.post(
+            "/api/clients/",
+            {
+                "document_type": "CC",
+                "document_number": "1000000001",
+                "name": "Cliente de prueba",
+                "phone": "3001234567",
+                "email": "cliente.prueba@wayuutravel.test",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+```
+
+Esta prueba crea un usuario con permiso únicamente para consultar clientes y verifica que no pueda registrarlos.
+
+###  13. Agregamos la prueba 6
+
+En `apps/security/tests.py`, dentro de `SecurityMatrixApiTests`, agrega este método debajo de la prueba 5:
+
+``` sql
+    
+    def test_can_create_role(self):
+        grant(self.user, "POST", "/api/roles/")
+
+        response = self.client.post(
+            "/api/roles/",
+            {
+                "name": "guia-turistico",
+                "description": "Rol para guías turísticos",
+                "status": RecordStatus.ACTIVE,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        self.assertTrue(
+            Role.objects.filter(name="guia-turistico").exists()
+        )
+```
+
+Esta prueba verifica que el usuario tenga autorización para crear roles y que el nuevo rol quede guardado en la base de datos.
+
+### 14. Agregar la prueba 7
+
+En `apps/security/tests.py`, dentro de la clase `SecurityMatrixApiTests`, agrega este método debajo de la prueba 6:
+
+``` sql
+
+    def test_can_list_roles(self):
+        grant(self.user, "GET", "/api/roles/")
+
+        Role.objects.create(
+            name="coordinador-turistico",
+            description="Coordinación de experiencias",
+            status=RecordStatus.ACTIVE,
+        )
+
+        response = self.client.get("/api/roles/")
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertTrue(
+            any(
+                item["name"] == "coordinador-turistico"
+                for item in response.data
+            )
+        )
+```
+
+### 15. Agregar la prueba 8
+
+En `apps/security/tests.py`, dentro de `SecurityMatrixApiTests`, agrega este método debajo de la prueba 7:
+
+``` sql
+   
+    def test_can_retrieve_role_detail(self):
+        role = Role.objects.create(
+            name="asesor-turistico",
+            description="Asesoría a clientes",
+            status=RecordStatus.ACTIVE,
+        )
+
+        grant(self.user, "GET", "/api/roles/")
+        grant(self.user, "GET", f"/api/roles/{role.pk}/")
+
+        response = self.client.get(
+            f"/api/roles/{role.pk}/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["name"],
+            "asesor-turistico",
+        )
+```
+
+### 16. Agregar la prueba 9
+
+La prueba crea un rol, concede los permisos necesarios para consultar la colección y el detalle, y verifica que la API devuelva el rol correcto.
+
+Agrega este método dentro de la clase `SecurityMatrixApiTests` en `apps/security/tests.py`, al mismo nivel de indentación que las pruebas anteriores.
+
+``` sql
+    def test_can_patch_role(self):
+        role = Role.objects.create(
+            name="guia-local",
+            description="Descripción inicial",
+            status=RecordStatus.ACTIVE,
+        )
+
+        grant(
+            self.user,
+            "PATCH",
+            f"/api/roles/{role.pk}/",
+        )
+
+        response = self.client.patch(
+            f"/api/roles/{role.pk}/",
+            {
+                "description": "Guía de experiencias Wayuu",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        role.refresh_from_db()
+
+        self.assertEqual(
+            role.description,
+            "Guía de experiencias Wayuu",
+        )
+```
+
+### 17. Agregar la prueba 10
+
+Agregamos este método dentro de `SecurityMatrixApiTests` en `apps/security/tests.py`, al mismo nivel que las demás pruebas.
+
+``` sql
+    def test_delete_role_is_soft_delete(self):
+        role = Role.objects.create(
+            name="rol-para-desactivar",
+            description="Rol de prueba",
+            status=RecordStatus.ACTIVE,
+        )
+
+        grant(
+            self.user,
+            "DELETE",
+            f"/api/roles/{role.pk}/",
+        )
+
+        response = self.client.delete(
+            f"/api/roles/{role.pk}/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+        role.refresh_from_db()
+
+        self.assertEqual(
+            role.status,
+            RecordStatus.INACTIVE,
+        )
+
+        self.assertTrue(
+            Role.objects.filter(pk=role.pk).exists()
+        )
+```
+
+### Ejecuta las pruebas
+
+``` sql
+python manage.py test apps.security.tests
+```
+
+![](images/clipboard-3771574251.png)
+
+### Criterios de aceptación
+
+- AC-23-01: el serializer de usuarios no devuelve el campo `password`.
+
+- AC-23-02: la contraseña se procesa mediante `set_password()` al crear y actualizar usuarios.
+
+- AC-23-03: las operaciones `DELETE` realizan bajas lógicas sin eliminar físicamente los registros.
+
+- AC-23-04: asignar un rol mediante `RoleUser`, sin una concesión `ResourceRole`, mantiene el acceso a `GET /api/clients/` en HTTP 403.
+
+- AC-23-05: conceder el recurso activo para `GET api/clients/` permite responder HTTP 200 a ese método, mientras que `POST /api/clients/` continúa respondiendo HTTP 403.
+
+### Evidencias
+
+- EVI-23-01: declaración `password = serializers.CharField(write_only=True)` en el serializer de usuarios.
+
+- EVI-23-02: uso de `set_password()` en los métodos `create()` y `update()`.
+
+- EVI-23-03: pruebas que demuestran las bajas lógicas.
+
+- EVI-23-04: pruebas de la cadena `User → RoleUser → Role → ResourceRole → Resource`.
+
+### GATE
+
+| Criterio | Evidencia requerida                    | Resultado esperado |
+|----------|----------------------------------------|--------------------|
+| AC-23-01 | Serializer de usuarios                 | PASS               |
+| AC-23-02 | Creación y actualización de contraseña | PASS               |
+| AC-23-03 | Pruebas de baja lógica                 | PASS               |
+| AC-23-04 | Acceso sin `ResourceRole`              | PASS               |
+| AC-23-05 | `GET` autorizado y `POST` denegado     | PASS               |

@@ -6,8 +6,8 @@ from apps.common.status import RecordStatus
 from apps.common.testing import PASSWORD, create_active_user
 from apps.security.tokens import hash_token
 from config.database import database_from_environ
-from apps.security.models import ( RefreshToken,Resource,ResourceRole,Role,RoleUser,
-)
+from apps.security.models import ( RefreshToken,Resource,ResourceRole,Role,RoleUser,)
+from apps.common.testing import (grant,)
 
 class DatabaseSelectionTests(SimpleTestCase):
     def _env(self, engine):
@@ -343,3 +343,220 @@ class RbacTests(APITestCase):
         response = self.client.get("/api/clients/")
 
         self.assertEqual(response.status_code, 403)
+
+
+class SecurityMatrixApiTests(APITestCase):
+
+
+
+
+    def test_active_resource_without_resource_role_cannot_list_clients(self):
+        Resource.objects.create(
+            name="Consultar clientes",
+            method="GET",
+            route="api/clients/",
+            status=RecordStatus.ACTIVE,
+        )
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    
+    def test_user_with_role_but_without_resource_role_cannot_list_clients(self):
+        role = Role.objects.create(
+            name="matrix-role-without-permissions",
+            description="Rol sin permisos",
+            status=RecordStatus.ACTIVE,
+        )
+
+        RoleUser.objects.create(
+            user=self.user,
+            role=role,
+            status=RecordStatus.ACTIVE,
+        )
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+    def test_active_resource_without_resource_role_cannot_list_clients(self):
+        Resource.objects.create(
+            name="Consultar clientes",
+            method="GET",
+            route="api/clients/",
+            status=RecordStatus.ACTIVE,
+        )
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+
+    def setUp(self):
+        self.user = create_active_user(
+            username="matrix-user",
+            email="matrix-user@wayuutravel.test",
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_user_without_role_cannot_list_clients(self):
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        
+    def test_active_resource_role_allows_get_clients(self):
+        role = Role.objects.create(
+            name="matrix-role-get-clients",
+            description="Rol con permiso de consulta",
+            status=RecordStatus.ACTIVE,
+        )
+
+        RoleUser.objects.create(
+            user=self.user,
+            role=role,
+            status=RecordStatus.ACTIVE,
+        )
+
+        resource = Resource.objects.create(
+            name="Consultar clientes",
+            method="GET",
+            route="api/clients/",
+            status=RecordStatus.ACTIVE,
+        )
+
+        ResourceRole.objects.create(
+            resource=resource,
+            role=role,
+            status=RecordStatus.ACTIVE,
+        )
+
+        response = self.client.get("/api/clients/")
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+
+    def test_can_list_roles(self):
+        grant(self.user, "GET", "/api/roles/")
+
+        Role.objects.create(
+            name="coordinador-turistico",
+            description="Coordinación de experiencias",
+            status=RecordStatus.ACTIVE,
+        )
+
+        response = self.client.get("/api/roles/")
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertTrue(
+            any(
+                item["name"] == "coordinador-turistico"
+                for item in response.data
+            )
+        )
+ 
+    def test_can_retrieve_role_detail(self):
+        role = Role.objects.create(
+            name="asesor-turistico",
+            description="Asesoría a clientes",
+            status=RecordStatus.ACTIVE,
+        )
+
+        grant(self.user, "GET", "/api/roles/")
+        grant(self.user, "GET", f"/api/roles/{role.pk}/")
+
+        response = self.client.get(
+            f"/api/roles/{role.pk}/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["name"],
+            "asesor-turistico",
+        )
+    def test_can_patch_role(self):
+        role = Role.objects.create(
+            name="guia-local",
+            description="Descripción inicial",
+            status=RecordStatus.ACTIVE,
+        )
+
+        grant(
+            self.user,
+            "PATCH",
+            f"/api/roles/{role.pk}/",
+        )
+
+        response = self.client.patch(
+            f"/api/roles/{role.pk}/",
+            {
+                "description": "Guía de experiencias Wayuu",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        role.refresh_from_db()
+
+        self.assertEqual(
+            role.description,
+            "Guía de experiencias Wayuu",
+        )
+    def test_delete_role_is_soft_delete(self):
+        role = Role.objects.create(
+            name="rol-para-desactivar",
+            description="Rol de prueba",
+            status=RecordStatus.ACTIVE,
+        )
+
+        grant(
+            self.user,
+            "DELETE",
+            f"/api/roles/{role.pk}/",
+        )
+
+        response = self.client.delete(
+            f"/api/roles/{role.pk}/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+        role.refresh_from_db()
+
+        self.assertEqual(
+            role.status,
+            RecordStatus.INACTIVE,
+        )
+
+        self.assertTrue(
+            Role.objects.filter(pk=role.pk).exists()
+        )
