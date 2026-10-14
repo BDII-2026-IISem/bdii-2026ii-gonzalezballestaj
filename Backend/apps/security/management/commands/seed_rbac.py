@@ -206,6 +206,7 @@ class Command(BaseCommand):
                 role=role,
                 defaults={"status": RecordStatus.ACTIVE},
             )
+            
 
             if assignment.status != RecordStatus.ACTIVE:
                 assignment.status = RecordStatus.ACTIVE
@@ -218,3 +219,5 @@ class Command(BaseCommand):
                 f"Permisos nuevos: {created_grants}."
             )
         )
+
+

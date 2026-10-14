@@ -8303,3 +8303,165 @@ Semilla ejecutada sobre `storelab_django`. Consulta de `resources`. `--validate`
 | AC-24-01 | comando          | EVI-24-01     | PASS          |
 | AC-24-02 | SQL de resources | EVI-24-02     | PASS          |
 | AC-24-03 | esquema          | EVI-24-03     | PASS          |
+
+## ISS-25 — Pruebas 401 y 403
+
+#### Narrativa
+
+En esta unidad voy a implementar pruebas automatizadas para verificar el comportamiento de la autenticación y autorización de la API de Wayuu Travel. Me enfocaré en comprobar la diferencia entre los códigos HTTP 401 (Unauthorized) y 403 (Forbidden), garantizando que las solicitudes sin una identidad autenticada sean rechazadas con 401 y que los usuarios autenticados sin los permisos correspondientes reciban 403.
+
+También verificaré que el sistema deniegue el acceso cuando alguno de los elementos de la matriz RBAC se encuentre inactivo: el rol, la asignación del usuario al rol (`RoleUser`), la asignación del recurso al rol (`ResourceRole`) o el recurso solicitado (`Resource`). Para ello, ampliaré las pruebas del archivo `apps/security/tests.py` y ejecutaré la suite de pruebas del proyecto, con el propósito de comprobar que las reglas de seguridad funcionen correctamente y que los cambios no afecten las funcionalidades desarrolladas anteriormente.
+
+#### Objetivo
+
+Implementar y ejecutar pruebas automatizadas que validen la diferencia entre los errores HTTP 401 y 403, comprobando el rechazo de solicitudes sin autenticación, la denegación de acceso por falta de permisos y la desactivación de cualquier elemento de la cadena de autorización RBAC.
+
+#### Requerimientos
+
+- Tener completado y verificado el ISS-24 — Semilla RBAC y autenticación JWT con Swagger Bearer.
+
+- Contar con el entorno virtual `.venv` configurado y activado.
+
+- Tener instalado y configurado Django, Django REST Framework y las dependencias del proyecto.
+
+- Disponer de la configuración de base de datos correspondiente al entorno de pruebas.
+
+- Contar con los modelos de seguridad implementados: `User`, `Role`, `RoleUser`, `Resource` y `ResourceRole`.
+
+- Tener disponibles las funciones auxiliares `create_active_user()` y `grant()` para preparar los escenarios de prueba.
+
+- Ampliar el archivo `apps/security/tests.py` con la clase `RbacTests`.
+
+- Ejecutar las pruebas específicas de seguridad y la suite completa mediante `python manage.py test apps`.
+
+- Verificar los criterios de aceptación y conservar la evidencia de los resultados obtenidos.
+
+#### 1. Pruebas específicas de RBAC
+
+Comando ejecutado:
+
+``` sql
+python manage.py test apps.security.tests.RbacTests
+```
+
+Resultado obtenido:
+
+``` sql
+Found 7 test(s). Creating test database for alias 'default'... System check identified no issues (0 silenced). ....... ---------------------------------------------------------------------- Ran 7 tests in 2.173s  OK Destroying test database for alias 'default'...
+```
+
+![](images/clipboard-3230222500.png)
+
+Resultado: PASS — 7 pruebas aprobadas.
+
+Estas pruebas verifican:
+
+- Usuario autenticado sin concesión: `403 Forbidden`.
+
+- Usuario sin autenticación: `401 Unauthorized`.
+
+- Concesión activa: `200 OK`.
+
+- Rol inactivo: `403 Forbidden`.
+
+- Asignación del usuario al rol (`RoleUser`) inactiva: `403 Forbidden`.
+
+- Concesión del recurso al rol (`ResourceRole`) inactiva: `403 Forbidden`.
+
+- Recurso inactivo: `403 Forbidden`.
+
+#### 2. Suite completa de pruebas
+
+Comando ejecutado:
+
+``` sql
+python manage.py test apps
+```
+
+Resultado obtenido:
+
+``` sql
+Found 35 test(s). Creating test database for alias 'default'... System check identified no issues (0 silenced). ................................... ---------------------------------------------------------------------- Ran 35 tests in 9.638s  OK Destroying test database for alias 'default'...
+```
+
+![](images/clipboard-4247196821.png)
+
+Resultado: PASS — 35 pruebas aprobadas.
+
+Esta ejecución comprueba también las pruebas de las unidades anteriores del proyecto.
+
+#### 3. Sincronización de la semilla RBAC
+
+Comando ejecutado:
+
+``` sql
+python manage.py seed_rbac
+```
+
+Resultado obtenido:
+
+``` sql
+Recursos RBAC sincronizados correctamente. Recursos nuevos: 0. Permisos nuevos: 0.
+```
+
+![](images/clipboard-4259425810.png)
+
+Resultado: PASS — la sincronización se completó sin errores. No se necesitaron recursos ni permisos nuevos.
+
+#### 4. Validación del esquema OpenAPI y Swagger
+
+Comando ejecutado:
+
+``` sql
+python manage.py spectacular --validate
+```
+
+![](images/clipboard-1012681390.png)
+
+El resultado que compartiste incluye:
+
+``` sql
+securitySchemes:  
+bearerAuth:    
+type: http    
+scheme: bearer    
+bearerFormat: JWT
+```
+
+Resultado: se confirma que el esquema contiene la definición de autenticación Bearer JWT. Para registrar el comando como validación completa, debe finalizar sin errores de validación.
+
+#### 5. Verificación de configuración Django
+
+Comando pendiente de confirmar en la conversación:
+
+``` sql
+python manage.py check
+```
+
+Resultado esperado:
+
+``` sql
+System check identified no issues (0 silenced).
+```
+
+![](images/clipboard-2954207052.png)
+
+### GATE AUTH/RBAC
+
+| **AC** | **Verificación** | **Evidencia** | **Resultado** |
+|:---|:---|:---|:---|
+| Hash de contraseña y de refresh | tests de login | suite | PASS |
+| OPEN, JWT con token, JWT con token + RBAC | contrato y tests | suite | PASS |
+| Deny by default | `RbacTests` | suite | PASS |
+| 401 distinto de 403 | tests explícitos | suite | PASS |
+| Swagger Bearer | extensión OpenAPI | `--validate` | PASS |
+
+### 
+
+### Conclusión 
+
+Durante el desarrollo de la Fase II de Wayuu Travel, fortalecí mis conocimientos sobre autenticación y autorización utilizando Django y Django REST Framework. Aprendí a implementar JWT para gestionar el inicio de sesión, la renovación de tokens, el cierre de sesión y el acceso al perfil del usuario. También comprendí cómo funciona RBAC para controlar los permisos mediante usuarios, roles y recursos.\
+Además, aprendí a diferenciar los errores HTTP 401 y 403 y a comprobarlos mediante pruebas automatizadas.Ejecuté las pruebas de seguridad y la suite completa del proyecto, obteniendo resultados satisfactorios en 35 pruebas. Asimismo, utilicé Swagger para documentar y probar los endpoints protegidos mediante autenticación Bearer JWT.
+
+\
+Durante este proceso comprendí la importancia de verificar tanto los accesos permitidos como los que deben ser rechazados. **El uso de la página académica del profesor Jaider Quintero** me permitió seguir una guía organizada y comprender mejor cada etapa del desarrollo. **De igual manera,** **la inteligencia artificial fue un apoyo importante para resolver dudas**, analizar errores y avanzar paso a paso en la implementación. La combinación de estos recursos me permitió explorar herramientas y conceptos que inicialmente consideraba difíciles de alcanzar. Gracias a esta experiencia, logré ir más allá de lo que pensaba que podía desarrollar, fortaleciendo mi autonomía y confianza como estudiante de Ingeniería de Sistemas. Finalmente, comprendí que aprender a desarrollar software implica investigar, practicar, equivocarse y mejorar continuamente para construir aplicaciones más seguras y confiables.
