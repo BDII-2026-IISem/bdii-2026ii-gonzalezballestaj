@@ -123,7 +123,7 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Wayuu Travel API",
+    "TITLE": "WayuuTravel API",
     "DESCRIPTION": (
         "API REST para la gestión de clientes, paquetes turísticos, "
         "salidas programadas, proveedores, servicios incluidos, "

@@ -581,7 +581,7 @@ El proceso de configuración sigue esta secuencia:
 #### GATE
 
 | **Criterio** | **Método de comprobación** | **Evidencia** | **Resultado** |
-|------------------|------------------|------------------|------------------|
+|----|----|----|----|
 | AC-01-01 | Pruebas de configuración para cada motor | EVI-01-06 | PASS |
 | AC-01-02 | Prueba con un motor no admitido | EVI-01-06 | PASS |
 | AC-01-03 | Prueba con una variable obligatoria vacía | EVI-01-06 | PASS |
@@ -748,7 +748,7 @@ tree apps -I "__pycache__"
 ### **GATE**
 
 | **AC** | **Verificación** | **Evidencia** | **Resultado** |
-|------------------|------------------|------------------|------------------|
+|----|----|----|----|
 | AC-02-01 | directorios de las apps | árbol de `apps/` (EVI-02-01) | PASS |
 | AC-02-02 | `manage.py check` | EVI-02-04 | PASS |
 | AC-02-03 | este ISS no escribe modelos | revisión de los `models.py` vacíos | PASS |
@@ -1031,7 +1031,7 @@ Se utiliza la suite de pruebas `AuthFlowTests` para verificar el flujo de autent
 ## GATE
 
 | **AC** | **Verificación** | **Evidencia** | **Resultado** |
-|------------------|------------------|------------------|------------------|
+|----|----|----|----|
 | AC-03-01 | Configuración de `AUTH_USER_MODEL` | `config/settings.py` o módulo de configuración correspondiente | PASS |
 | AC-03-02 | Revisión del modelo `Client` | Ausencia de campo para contraseñas | PASS |
 | AC-03-03 | Autenticación con usuario inactivo | Prueba que comprueba la respuesta `401` | PASS |
@@ -4423,7 +4423,6 @@ class IncludedServiceAdmin(admin.ModelAdmin):
     search_fields = ("package__name", "supplier__razon_social")
     ordering = ("package", "supplier")
     readonly_fields = ("created_at", "updated_at")
-
 ```
 
 ![](images/clipboard-3569406505.png)
@@ -4974,7 +4973,7 @@ http://127.0.0.1:8000/api/schema/swagger-ui/
 ### GATE BUSINESS
 
 | **AC** | **Verificación** | **Evidencia** | **Resultado** |
-|:-----------------|:-----------------|:-----------------|:-----------------|
+|:---|:---|:---|:---|
 | Modelos y relaciones | migraciones y tests | suite | PASS |
 | Transacción y stock | `SaleTransactionTests` | suite | PASS |
 | Serializers y camelCase | test de `response.content` | suite | PASS |
@@ -5299,7 +5298,7 @@ rt.is_usable
 Los resultados esperados son los siguientes:
 
 | Expresión | Resultado esperado | Significado |
-|------------------------|------------------------|------------------------|
+|----|----|----|
 | `rt.token_hash != raw` | `True` | El valor almacenado no es el token original. |
 | `len(rt.token_hash)` | `64` | El hash SHA-256 se representa con 64 caracteres hexadecimales. |
 | Comparación con `hashlib` | `True` | El hash coincide con el calculado a partir del token original. |
@@ -7666,7 +7665,7 @@ En `apps/security/tests.py`, dentro de `SecurityMatrixApiTests`, agregamos este 
 
 Esta prueba crea un usuario con permiso únicamente para consultar clientes y verifica que no pueda registrarlos.
 
-###  13. Agregamos la prueba 6
+### 13. Agregamos la prueba 6
 
 En `apps/security/tests.py`, dentro de `SecurityMatrixApiTests`, agrega este método debajo de la prueba 5:
 
@@ -7945,7 +7944,7 @@ from apps.security import schema
 
 ![](images/clipboard-3123903295.png)
 
-###  3. Crear la estructura del comando `seed_rbac`
+### 3. Crear la estructura del comando `seed_rbac`
 
 Desde la terminal de WSL, en la carpeta `Backend`, ejecuta:
 
@@ -8233,7 +8232,6 @@ class Command(BaseCommand):
                 f"Permisos nuevos: {created_grants}."
             )
         )
-
 ```
 
 #### 7.comprobar que las rutas y la semilla RBAC funcionen.
@@ -8458,7 +8456,7 @@ System check identified no issues (0 silenced).
 
 ### 
 
-### Conclusión 
+### Conclusión
 
 Durante el desarrollo de la Fase II de Wayuu Travel, fortalecí mis conocimientos sobre autenticación y autorización utilizando Django y Django REST Framework. Aprendí a implementar JWT para gestionar el inicio de sesión, la renovación de tokens, el cierre de sesión y el acceso al perfil del usuario. También comprendí cómo funciona RBAC para controlar los permisos mediante usuarios, roles y recursos.\
 Además, aprendí a diferenciar los errores HTTP 401 y 403 y a comprobarlos mediante pruebas automatizadas.Ejecuté las pruebas de seguridad y la suite completa del proyecto, obteniendo resultados satisfactorios en 35 pruebas. Asimismo, utilicé Swagger para documentar y probar los endpoints protegidos mediante autenticación Bearer JWT.

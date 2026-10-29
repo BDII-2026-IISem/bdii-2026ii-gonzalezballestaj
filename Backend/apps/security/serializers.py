@@ -13,6 +13,8 @@ class ProfileSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "status",
+            "is_superuser",
+            "is_staff",
         )
         read_only_fields = ("id", "username", "status")
 

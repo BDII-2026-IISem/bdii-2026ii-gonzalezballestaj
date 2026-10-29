@@ -1,0 +1,78 @@
+
+<div class="card p-6 w-full max-w-2xl self-start mt-6 text-slate-800">
+  <div class="mb-6">
+    <h2 class="text-2xl font-bold">Registrar cliente</h2>
+    <p class="text-gray-500 font-normal">
+      Introduce los datos del nuevo cliente.
+    </p>
+  </div>
+
+  <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex flex-col gap-4 font-normal text-slate-800">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="flex flex-col">
+        <label for="documentType" class="field-label">Tipo de documento *</label>
+        <p-select
+          inputId="documentType"
+          formControlName="documentType"
+          [options]="documentTypes"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="Seleccionar tipo">
+        </p-select>
+      </div>
+
+      <div class="flex flex-col">
+        <label for="documentNumber" class="field-label">Número de documento *</label>
+        <input pInputText id="documentNumber" formControlName="documentNumber"
+          placeholder="Número de documento" [class.ng-dirty]="isInvalid('documentNumber')" />
+        @if (isInvalid('documentNumber')) {
+          <small class="field-error">Mínimo 3 y máximo 30 caracteres.</small>
+        }
+      </div>
+    </div>
+
+    <div class="flex flex-col">
+      <label for="name" class="field-label">Nombre completo *</label>
+      <input pInputText id="name" formControlName="name" placeholder="Nombre del cliente" />
+      @if (isInvalid('name')) {
+        <small class="field-error">El nombre debe tener al menos 2 caracteres.</small>
+      }
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="flex flex-col">
+        <label for="phone" class="field-label">Teléfono</label>
+        <input pInputText id="phone" formControlName="phone" placeholder="3001234567" />
+        @if (isInvalid('phone')) {
+          <small class="field-error">Entre 10 y 15 dígitos.</small>
+        }
+      </div>
+
+      <div class="flex flex-col">
+        <label for="email" class="field-label">Correo electrónico</label>
+        <input pInputText id="email" formControlName="email" placeholder="correo@ejemplo.com" />
+        @if (isInvalid('email')) {
+          <small class="field-error">Correo no válido.</small>
+        }
+      </div>
+    </div>
+
+    <div class="flex flex-col">
+      <label for="status" class="field-label">Estado *</label>
+      <p-select
+        inputId="status"
+        formControlName="status"
+        [options]="statuses"
+        optionLabel="label"
+        optionValue="value">
+      </p-select>
+    </div>
+
+    <div class="flex justify-end gap-3 mt-4">
+      <p-button label="Cancelar" icon="pi pi-times" severity="secondary" [outlined]="true" (onClick)="cancel()" />
+      <p-button type="submit" label="Guardar cliente" icon="pi pi-check" [loading]="loading" />
+    </div>
+  </form>
+</div>
+
+<p-toast></p-toast>
