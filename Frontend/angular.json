@@ -3,11 +3,11 @@
   "version": 1,
   "cli": {
     "packageManager": "npm",
-    "analytics": "dab9356b-b839-48b8-96be-135d4ce5ea45"
+    "analytics": "c12479c6-28f3-434a-95bf-5d42a493818e"
   },
   "newProjectRoot": "projects",
   "projects": {
-    "frontend": {
+    "wayuu-travel-frontend": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -55,10 +55,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "frontend:build:production"
+              "buildTarget": "wayuu-travel-frontend:build:production"
             },
             "development": {
-              "buildTarget": "frontend:build:development"
+              "buildTarget": "wayuu-travel-frontend:build:development"
             }
           },
           "defaultConfiguration": "development"
