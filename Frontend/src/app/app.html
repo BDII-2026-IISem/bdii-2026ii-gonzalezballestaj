@@ -1,4 +1,20 @@
-<main class="min-h-screen bg-slate-100 font-sans text-slate-900">
-  <h1 class="text-2xl font-bold">{{ title() }}</h1>
-  <router-outlet />
-</main>
+
+<div class="flex min-h-screen flex-col bg-slate-100 font-sans text-slate-900">
+  <app-header />
+
+  <div class="flex flex-1">
+    <aside class="w-64 shrink-0">
+      <app-aside />
+    </aside>
+
+    <main id="contenido" class="min-w-0 flex-1 p-6">
+      <h1 class="text-2xl font-bold">{{ title }}</h1>
+
+      <p class="mt-2 text-slate-600">
+        Bienvenido a WayuuTravel.
+      </p>
+    </main>
+  </div>
+
+  <app-footer />
+</div>

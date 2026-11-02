@@ -432,3 +432,305 @@ Keep-Alive: timeout=5
 ```
 
 Respuesta HTTP 200 OK. El servidor de WayuuTravel está respondiendo correctamente.
+
+### ISS-01A — Esqueleto Header / Aside / contenido / Footer
+
+En esta actividad preparé la estructura visual inicial de la aplicación utilizando Angular 22 y su arquitectura basada en componentes standalone. Organicé la interfaz en cuatro regiones principales: Header, Aside, contenido y Footer.
+
+Para ello, creé tres componentes de presentación dentro de la carpeta `layout/` y posteriormente los integré en el componente principal `App`. Configuré sus respectivas plantillas para mostrar la marca Wayuutravel, el menú de navegación, el área principal de contenido y el pie de página.
+
+Durante esta implementación trabajé con componentes independientes, selectores e imports, comprendiendo cómo se relacionan los componentes hijos con el componente padre. Mantuve los estilos de los componentes vacíos y utilicé las clases de Tailwind CSS para organizar la distribución visual.
+
+Finalmente, verifiqué la composición de las cuatro regiones, la adaptación de la interfaz a diferentes tamaños de pantalla, la ausencia de llamadas a la API y el correcto funcionamiento de la compilación y las pruebas unitarias.
+
+**Paso 1.2 — Generar Header**
+
+Desde la carpeta `Frontend`, ejecuta:
+
+```         
+ng generate component layout/header --skip-tests --defaults
+```
+
+**Ahora genera el componente `Aside`:**
+
+```         
+ng generate component layout/aside --skip-tests --defaults
+```
+
+**Ahora genera el último componente, `Footer`:**
+
+```         
+ng generate component layout/footer --skip-tests --defaults
+```
+
+![](images/clipboard-3968472944.png)
+
+### Paso 1.3 — Configurar Header
+
+Primero revisemos el archivo TypeScript generado:
+
+```         
+cat src/app/layout/header/header.ts
+```
+
+remplazamos por:
+
+``` typescript
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-header',
+  standalone: true,
+  imports: [],
+  templateUrl: './header.html',
+  styleUrl: './header.css',
+  host: {
+    class: 'block',
+  },
+})
+export class Header {
+  protected readonly title = 'WayuuTravel';
+}
+```
+
+![](images/clipboard-102246711.png)
+
+Ahora revisemos la plantilla:
+
+```         
+cat src/app/layout/header/header.html
+```
+
+remplazamos por:
+
+``` html
+cat > src/app/layout/header/header.html <<'EOF'
+<header class="flex h-16 items-center border-b border-slate-200 bg-white px-6">
+  <span class="truncate text-xl font-bold text-slate-900">
+    {{ title }}
+  </span>
+</header>
+EOF
+```
+
+![](images/clipboard-613996156.png)
+
+Ahora revisemos el componente Aside.
+
+```         
+cat src/app/layout/aside/aside.ts
+```
+
+remplazamos por:
+
+``` typescript
+cat > src/app/layout/aside/aside.ts <<'EOF'
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-aside',
+  standalone: true,
+  imports: [],
+  templateUrl: './aside.html',
+  styleUrl: './aside.css',
+  host: {
+    class: 'block h-full',
+  },
+})
+export class Aside {}
+EOF
+```
+
+![](images/clipboard-3712676837.png)
+
+Ahora ejecutamos:
+
+```         
+cat src/app/layout/aside/aside.html
+```
+
+y remplazamos por:
+
+``` html
+cat > src/app/layout/aside/aside.html <<'EOF'
+<nav
+  aria-label="Navegación principal"
+  class="h-full bg-slate-900 px-5 py-6 text-white"
+>
+  <h2 class="mb-4 text-lg font-semibold">Menú de WayuuTravel</h2>
+
+  <p class="text-sm text-slate-300">
+    En la siguiente etapa se incorporará el menú interactivo.
+  </p>
+</nav>
+EOF
+```
+
+![](images/clipboard-642493695.png)
+
+Ahora vamos con el componente Footer.
+
+```         
+cat src/app/layout/footer/footer.ts
+```
+
+remplazamos por:
+
+``` typescript
+cat > src/app/layout/footer/footer.ts <<'EOF'
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-footer',
+  standalone: true,
+  imports: [],
+  templateUrl: './footer.html',
+  styleUrl: './footer.css',
+  host: {
+    class: 'block',
+  },
+})
+export class Footer {}
+EOF
+```
+
+![](images/clipboard-608874119.png)
+
+![](images/clipboard-996532996.png)
+
+![](images/clipboard-536005204.png)
+
+![](images/clipboard-930391308.png)
+
+![](images/clipboard-992182846.png)
+
+Reemplaza todo el contenido de `src/app/app.spec.ts` con:
+
+```         
+cat > src/app/app.spec.ts <<'EOF'
+import { TestBed } from '@angular/core/testing';
+import { App } from './app';
+
+describe('App - WayuuTravel', () => {
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [App],
+    }).compileComponents();
+  });
+
+  it('should create the app', () => {
+    const fixture = TestBed.createComponent(App);
+    expect(fixture.componentInstance).toBeTruthy();
+  });
+
+  it('should display the header component', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('app-header')).toBeTruthy();
+  });
+
+  it('should display the WayuuTravel title in the header', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('WayuuTravel');
+  });
+
+  it('should display the aside component', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('app-aside')).toBeTruthy();
+  });
+
+  it('should display the main content', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    const main = fixture.nativeElement.querySelector('main');
+
+    expect(main).toBeTruthy();
+    expect(main.textContent).toContain('Inicio');
+    expect(main.textContent).toContain('Bienvenido a WayuuTravel.');
+  });
+
+  it('should display the footer component', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    const footer = fixture.nativeElement.querySelector('app-footer');
+
+    expect(footer).toBeTruthy();
+    expect(footer.textContent).toContain(
+      'Experiencias Turísticas Responsables',
+    );
+  });
+});
+EOF
+```
+
+### Ejecuta las pruebas
+
+```         
+ng test --watch=false
+```
+
+![](images/clipboard-4032596888.png)
+
++-----------------------------------+----------------------------------+
+| Verificación                      | Resultado                        |
++===================================+==================================+
+| Creación de App                   | PASS                             |
++-----------------------------------+----------------------------------+
+| Header                            | PASS                             |
++-----------------------------------+----------------------------------+
+| Título WayuuTravel                | PASS                             |
++-----------------------------------+----------------------------------+
+| Aside                             | PASS                             |
++-----------------------------------+----------------------------------+
+| Contenido principal               | PASS                             |
++-----------------------------------+----------------------------------+
+| Footer                            | PASS                             |
++-----------------------------------+----------------------------------+
+
+### Siguiente paso: revisar los estilos
+
+La ISS-01A establece que los archivos CSS de los componentes deben permanecer vacíos, porque estamos utilizando Tailwind CSS.
+
+Ejecuta:
+
+``` css
+wc -c src/app/app.css \
+src/app/layout/header/header.css \
+src/app/layout/aside/aside.css \
+src/app/layout/footer/footer.css
+```
+
+![](images/clipboard-2885022466.png)
+
+### Verificación visual
+
+Inicia el servidor:
+
+```         
+ng serve
+```
+
+Abre en tu navegador la dirección que aparezca en la terminal, normalmente:
+
+[`http://localhost:4200`](http://localhost:4200)
+
+Comprueba lo siguiente:
+
+1.  Header blanco con el título WayuuTravel.
+
+2.  Aside oscuro a la izquierda.
+
+3.  Contenido principal con «Inicio» y «Bienvenido a WayuuTravel».
+
+4.  Footer en la parte inferior.
+
+5.  Que no exista desplazamiento horizontal al reducir la ventana a 390 px.
+
+![](images/clipboard-3274169640.png)
