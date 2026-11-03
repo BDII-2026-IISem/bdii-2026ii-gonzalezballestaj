@@ -1,20 +1,23 @@
-export type RecordStatus = 'active' | 'inactive';
+import type { Status, Timestamps } from './api.model';
 
-export interface Client {
+export type RecordStatus = Status;
+
+export interface Client extends Timestamps {
   id: number;
-  documentType: string;
-  documentNumber: string;
   name: string;
+  address: string | null;
   phone: string | null;
   email: string | null;
-  status: RecordStatus;
-  createdAt: string;
-  updatedAt: string;
+  status: Status;
 }
 
-export type CreateClient = Omit<
-  Client,
-  'id' | 'status' | 'createdAt' | 'updatedAt'
->;
+export interface ClientPayload {
+  name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+}
 
-export type UpdateClient = Partial<CreateClient>;
+// Compatibilidad con los nombres anteriores.
+export type CreateClient = ClientPayload;
+export type UpdateClient = Partial<ClientPayload>;  

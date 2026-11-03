@@ -1,0 +1,103 @@
+<form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5">
+
+  <div class="space-y-2">
+    <label for="name" class="block text-sm font-medium text-slate-700">
+      Nombre completo *
+    </label>
+
+    <input
+      pInputText
+      id="name"
+      formControlName="name"
+      class="w-full"
+      placeholder="Nombre del cliente"
+    />
+
+    @if (form.controls.name.touched && form.controls.name.invalid) {
+      <small class="text-red-600">
+        @if (form.controls.name.hasError('required')) {
+          El nombre es obligatorio.
+        } @else if (form.controls.name.hasError('minlength')) {
+          El nombre debe tener al menos 3 caracteres.
+        } @else {
+          El nombre no puede superar los 150 caracteres.
+        }
+      </small>
+    }
+  </div>
+
+  <div class="space-y-2">
+    <label for="address" class="block text-sm font-medium text-slate-700">
+      Dirección
+    </label>
+
+    <textarea
+      pTextarea
+      id="address"
+      formControlName="address"
+      rows="2"
+      class="w-full"
+      placeholder="Dirección del cliente"
+    ></textarea>
+  </div>
+
+  <div class="space-y-2">
+    <label for="phone" class="block text-sm font-medium text-slate-700">
+      Teléfono
+    </label>
+
+    <input
+      pInputText
+      id="phone"
+      formControlName="phone"
+      class="w-full"
+      placeholder="Número de contacto"
+    />
+
+    @if (form.controls.phone.touched && form.controls.phone.invalid) {
+      <small class="text-red-600">
+        El teléfono no puede superar los 30 caracteres.
+      </small>
+    }
+  </div>
+
+  <div class="space-y-2">
+    <label for="email" class="block text-sm font-medium text-slate-700">
+      Correo electrónico
+    </label>
+
+    <input
+      pInputText
+      id="email"
+      type="email"
+      formControlName="email"
+      class="w-full"
+      placeholder="correo@ejemplo.com"
+    />
+
+    @if (form.controls.email.touched && form.controls.email.invalid) {
+      <small class="text-red-600">
+        Ingresa un correo electrónico válido.
+      </small>
+    }
+  </div>
+
+  <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [outlined]="true"
+      type="button"
+      (onClick)="cancel()"
+    />
+
+    <p-button
+      [label]="client() ? 'Guardar cambios' : 'Registrar cliente'"
+      icon="pi pi-check"
+      type="submit"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+  </div>
+
+</form>

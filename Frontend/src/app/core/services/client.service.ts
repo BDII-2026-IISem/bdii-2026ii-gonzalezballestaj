@@ -3,10 +3,10 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
+import { Status } from '../models/api.model';
 import {
   Client,
-  CreateClient,
-  UpdateClient
+  ClientPayload
 } from '../models/client.model';
 
 @Injectable({
@@ -14,25 +14,25 @@ import {
 })
 export class ClientService {
   private readonly http = inject(HttpClient);
-  private readonly apiUrl = `${environment.apiUrl}/clients/`;
+  private readonly base = `${environment.apiUrl}/clients`;
 
-  getAll(): Observable<Client[]> {
-    return this.http.get<Client[]>(this.apiUrl);
+  list(): Observable<Client[]> {
+    return this.http.get<Client[]>(`${this.base}/`);
   }
 
   getById(id: number): Observable<Client> {
-    return this.http.get<Client>(`${this.apiUrl}${id}/`);
+    return this.http.get<Client>(`${this.base}/${id}/`);
   }
 
-  create(data: CreateClient): Observable<Client> {
-    return this.http.post<Client>(this.apiUrl, data);
+  create(payload: ClientPayload & { status: Status }): Observable<Client> {
+    return this.http.post<Client>(`${this.base}/`, payload);
   }
 
-  update(id: number, data: UpdateClient): Observable<Client> {
-    return this.http.patch<Client>(`${this.apiUrl}${id}/`, data);
+  update(id: number, payload: ClientPayload): Observable<Client> {
+    return this.http.patch<Client>(`${this.base}/${id}/`, payload);
   }
 
-  delete(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}${id}/`);
+  remove(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/${id}/`);
   }
 }

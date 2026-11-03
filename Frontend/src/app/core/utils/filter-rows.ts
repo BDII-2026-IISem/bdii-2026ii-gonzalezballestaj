@@ -1,21 +1,17 @@
 export function filterRows<T>(
-  rows: T[],
-  searchTerm: string,
-  fields?: (keyof T)[]
+  rows: readonly T[],
+  query: string,
+  pick: (row: T) => Array<string | number | null | undefined>
 ): T[] {
-  const term = searchTerm.trim().toLowerCase();
+  const term = query.trim().toLowerCase();
 
   if (!term) {
-    return rows;
+    return [...rows];
   }
 
-  return rows.filter((row) => {
-    const values = fields
-      ? fields.map((field) => row[field])
-      : Object.values(row as Record<string, unknown>);
-
-    return values.some((value) =>
-      String(value ?? '').toLowerCase().includes(term)
-    );
-  });
+  return rows.filter((row) =>
+    pick(row).some((value) =>
+      (value ?? '').toString().toLowerCase().includes(term)
+    )
+  );
 }

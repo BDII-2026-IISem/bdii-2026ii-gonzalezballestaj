@@ -3486,3 +3486,985 @@ export class Shell {
 ![](images/clipboard-262390861.png)
 
 ![](images/clipboard-1830903407.png)
+
+#  **ISS-03 · CRUD de clientes con signals**
+
+### **Narrativa**
+
+### 
+
+En esta unidad desarrollé el CRUD de clientes para el proyecto front-storelab-django, integrando el frontend Angular 22 con la API REST construida en Django. Implementé la consulta, creación, edición y baja lógica de clientes mediante los métodos HTTP GET, POST, PATCH y DELETE, respectivamente.
+
+Organicé la funcionalidad utilizando componentes standalone y una arquitectura basada en features, separando la lógica de presentación, el formulario y el acceso a la API. Implementé Signals para administrar el estado de la lista, los indicadores de carga, los errores y la visibilidad del diálogo. También incorporé propiedades reactivas mediante `input()` y `output()` para comunicar el formulario con el componente principal.
+
+Además, desarrollé un buscador local utilizando `computed` y la función reutilizable `filterRows`, evitando solicitudes innecesarias al backend durante la búsqueda. Finalmente, incorporé validaciones reactivas, notificaciones, confirmación de bajas, pruebas unitarias y verificación de compilación para comprobar el correcto funcionamiento de la funcionalidad.
+
+### Generar los componentes
+
+Primero verificaremos la estructura actual y después generaremos `client-list` y `client-form` sin sobrescribir archivos existentes.
+
+Verificamos si ya existe la carpeta:
+
+``` sql
+ls src/app/features/clients
+```
+
+Si todavía no existen los componentes, ejecutamos:
+
+``` sql
+ng generate component features/clients/client-list --skip-tests --defaults ng generate component features/clients/client-form --skip-tests --defaults
+```
+
+Verificamos los archivos generados:
+
+``` sql
+tree src/app/features/clients -L 3
+```
+
+salida:
+
+``` sql
+src/app/features/clients
+├── client-form
+│   ├── client-form.css
+│   ├── client-form.html
+│   └── client-form.ts
+└── client-list
+    ├── client-list.css
+    ├── client-list.html
+    └── client-list.ts
+```
+
+###  Preparar el modelo de clientes
+
+Primero verificaremos si el modelo `Client` y el servicio `ClientApi` de ISS-02 ya existen, para reutilizarlos y evitar duplicaciones.
+
+Ejecutamos:
+
+``` sql
+tree src/app/core -L 4
+```
+
+###  Revisar modelo y servicio existentes
+
+Ejecutamos estos comandos:
+
+``` typescript
+cat src/app/core/models/client.model.ts
+```
+
+``` typescript
+cat src/app/core/services/client.service.ts
+```
+
+``` typescript
+cat src/app/core/models/api.model.ts
+```
+
+``` typescript
+cat src/app/core/utils/filter-rows.ts
+```
+
+Y verificamos la configuración de la API:
+
+``` typescript
+cat src/environments/environment.ts
+```
+
+![](images/clipboard-2053764791.png)
+
+###  Revisar los modelos compartidos y el filtro
+
+Ejecutamos:
+
+``` typescript
+cat src/app/core/models/api.model.ts
+```
+
+``` typescript
+cat src/app/core/utils/filter-rows.ts
+```
+
+![](images/clipboard-2944335611.png)
+
+### Comprobar dependencias y contrato del backend
+
+Ejecutamos:
+
+``` sql
+grep -R "ClientService\|filterRows" -n src/app
+```
+
+``` typescript
+cat src/environments/environment.development.ts
+```
+
+Comprobamos la respuesta real de Django:
+
+```         
+curl -s http://localhost:8000/api/clients/ | head -c 1500
+```
+
+![](images/clipboard-3136223011.png)
+
+### Adaptar el modelo de clientes
+
+Vamos a conservar el nombre `ClientService` que ya utiliza tu proyecto y adaptar el modelo al contrato.
+
+Primero, ejecutamos:
+
+``` typescript
+cat src/app/core/models/package.model.ts
+```
+
+``` typescript
+cat src/app/core/models/booking.model.ts
+```
+
+### Crear el modelo compartido de API
+
+Primero crearemos `api.model.ts`, que contendrá los tipos compartidos.
+
+Abrimos:
+
+``` typescript
+nano src/app/core/models/api.model.ts
+```
+
+Pegamos este código:
+
+``` typescript
+export type Status = 'active' | 'inactive';
+
+export interface Timestamps {
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+![](images/clipboard-4048537766.png)
+
+### Actualizar el modelo de clientes
+
+Abrimos:
+
+```         
+nano src/app/core/models/client.model.ts
+```
+
+Reemplazamos todo el contenido por:
+
+``` typescript
+import type { Status, Timestamps } from './api.model';
+
+export type RecordStatus = Status;
+
+export interface Client extends Timestamps {
+  id: number;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  status: Status;
+}
+
+export interface ClientPayload {
+  name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
+// Compatibilidad con los nombres anteriores.
+export type CreateClient = ClientPayload;
+export type UpdateClient = Partial<ClientPayload>;
+```
+
+![](images/clipboard-4041011558.png)
+
+### Adaptar el servicio de clientes
+
+Actualizaremos `ClientService` para que cumpla el contrato:
+
+- `GET /clients/`: listar clientes.
+
+- `POST /clients/`: crear con `status: 'active'`.
+
+- `PATCH /clients/{id}/`: editar sin modificar el estado.
+
+- `DELETE /clients/{id}/`: dar de baja y recibir `204`.
+
+Abrimos:
+
+``` typescript
+nano src/app/core/services/client.service.ts
+```
+
+Reemplazamos todo el contenido por:
+
+``` typescript
+import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+import { environment } from '../../../environments/environment';
+import { Status } from '../models/api.model';
+import {
+  Client,
+  ClientPayload
+} from '../models/client.model';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class ClientService {
+  private readonly http = inject(HttpClient);
+  private readonly base = `${environment.apiUrl}/clients`;
+
+  list(): Observable<Client[]> {
+    return this.http.get<Client[]>(`${this.base}/`);
+  }
+
+  getById(id: number): Observable<Client> {
+    return this.http.get<Client>(`${this.base}/${id}/`);
+  }
+
+  create(payload: ClientPayload & { status: Status }): Observable<Client> {
+    return this.http.post<Client>(`${this.base}/`, payload);
+  }
+
+  update(id: number, payload: ClientPayload): Observable<Client> {
+    return this.http.patch<Client>(`${this.base}/${id}/`, payload);
+  }
+
+  remove(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/${id}/`);
+  }
+}
+```
+
+![](images/clipboard-3456798907.png)
+
+### Actualizar el filtro reutilizable
+
+La función actual de `filterRows` tiene una firma diferente a la que necesitamos. Como todavía no tiene otros consumidores, podemos adaptarla directamente.
+
+Abrimos:
+
+``` typescript
+nano src/app/core/utils/filter-rows.ts
+```
+
+Reemplazamos todo el contenido por:
+
+``` typescript
+export function filterRows<T>(
+  rows: readonly T[],
+  query: string,
+  pick: (row: T) => Array<string | number | null | undefined>
+): T[] {
+  const term = query.trim().toLowerCase();
+
+  if (!term) {
+    return [...rows];
+  }
+
+  return rows.filter((row) =>
+    pick(row).some((value) =>
+      (value ?? '').toString().toLowerCase().includes(term)
+    )
+  );
+}
+```
+
+![](images/clipboard-229189238.png)
+
+###  Revisar servicios y componentes compartidos
+
+Antes de construir `client-list.ts`, vamos a revisar cómo están implementadas las notificaciones y los componentes compartidos para reutilizarlos correctamente.
+
+Ejecutamos:
+
+``` sql
+cat src/app/core/services/notification.service.ts 
+cat src/app/core/utils/to-api-message.ts 
+tree src/app/shared -L 3
+```
+
+![](images/clipboard-2114940301.png)
+
+### Revisar componentes compartidos
+
+Ahora necesitamos conocer las propiedades y eventos de los tres componentes compartidos.
+
+Ejecutamos:
+
+``` sql
+cat src/app/shared/ui/empty-state/empty-state.ts
+cat src/app/shared/ui/empty-state/empty-state.html
+
+cat src/app/shared/ui/page-header/page-header.ts
+cat src/app/shared/ui/page-header/page-header.html
+
+cat src/app/shared/ui/status-tag/status-tag.ts
+cat src/app/shared/ui/status-tag/status-tag.html
+```
+
+###  Revisar configuración e integración
+
+Antes de implementar el listado, revisaremos las rutas, el menú y la configuración de PrimeNG.
+
+Ejecutamos:
+
+``` sql
+cat src/app/app.routes.ts tree src/app/layout -L 3 
+cat src/app/app.config.ts
+cat src/app/core/services/client.service.ts
+```
+
+### Preparar el listado de clientes
+
+Vamos a conectar el componente con el menú y las rutas existentes antes de implementar su lógica.
+
+Ejecutamos:
+
+``` sql
+cat src/app/app.routes.ts
+```
+
+``` sql
+tree src/app/layout -L 3
+```
+
+``` sql
+cat src/app/core/models/client.model.ts
+```
+
+###  Conectar la ruta de clientes
+
+Abrimos:
+
+``` typescript
+nano src/app/app.routes.ts
+```
+
+remplasamos solo:
+
+``` sql
+loadComponent: () =>
+  import('./features/clients/client-list/client-list').then(
+    (m) => m.ClientList
+  ),
+```
+
+![](images/clipboard-697292978.png)
+
+### Implementar `client-list.ts`
+
+Vamos a incorporar Signals, carga de clientes, búsqueda, eliminación lógica, confirmaciones y notificaciones.
+
+Primero reemplazamos el archivo completo.
+
+Abrimos:
+
+``` typescript
+nano src/app/features/clients/client-list/client-list.ts
+```
+
+remplazamos por este codigo:
+
+``` typescript
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { finalize } from 'rxjs';
+
+import { ConfirmationService } from 'primeng/api';
+import { ButtonModule } from 'primeng/button';
+import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { TableModule } from 'primeng/table';
+import { TooltipModule } from 'primeng/tooltip';
+
+import { Client, ClientPayload } from '../../../core/models/client.model';
+import { ClientService } from '../../../core/services/client.service';
+import { NotificationService } from '../../../core/services/notification.service';
+import { filterRows } from '../../../core/utils/filter-rows';
+import { toApiMessage } from '../../../core/utils/to-api-message';
+
+import { EmptyState } from '../../../shared/ui/empty-state/empty-state';
+import { PageHeader } from '../../../shared/ui/page-header/page-header';
+import { StatusTag } from '../../../shared/ui/status-tag/status-tag';
+
+import { ClientForm } from '../client-form/client-form';
+
+@Component({
+  selector: 'app-client-list',
+  standalone: true,
+  imports: [
+    ButtonModule,
+    DialogModule,
+    InputTextModule,
+    TableModule,
+    TooltipModule,
+    PageHeader,
+    EmptyState,
+    StatusTag,
+    ClientForm
+  ],
+  templateUrl: './client-list.html',
+  styleUrl: './client-list.css'
+})
+export class ClientList implements OnInit {
+  private readonly clientService = inject(ClientService);
+  private readonly notification = inject(NotificationService);
+  private readonly confirmation = inject(ConfirmationService);
+
+  readonly rows = signal<Client[]>([]);
+  readonly loading = signal(false);
+  readonly saving = signal(false);
+  readonly error = signal<string | null>(null);
+
+  readonly filter = signal('');
+  readonly dialogVisible = signal(false);
+  readonly editing = signal<Client | null>(null);
+  readonly resetKey = signal(0);
+
+  readonly visibleRows = computed(() =>
+    filterRows(this.rows(), this.filter(), (client) => [
+      client.id,
+      client.name,
+      client.address,
+      client.phone,
+      client.email,
+      client.status
+    ])
+  );
+
+  ngOnInit(): void {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+    this.error.set(null);
+
+    this.clientService.list()
+      .pipe(finalize(() => this.loading.set(false)))
+      .subscribe({
+        next: (clients) => this.rows.set(clients),
+        error: (err) => {
+          const message = toApiMessage(err);
+          this.error.set(message);
+          this.notification.error(message);
+        }
+      });
+  }
+
+  openCreate(): void {
+    this.editing.set(null);
+    this.resetKey.update((value) => value + 1);
+    this.dialogVisible.set(true);
+  }
+
+  openEdit(client: Client): void {
+    this.editing.set(client);
+    this.dialogVisible.set(true);
+  }
+
+  closeDialog(): void {
+    this.dialogVisible.set(false);
+    this.editing.set(null);
+    this.resetKey.update((value) => value + 1);
+  }
+
+  save(payload: ClientPayload): void {
+    this.saving.set(true);
+
+    const client = this.editing();
+
+    const request = client
+      ? this.clientService.update(client.id, payload)
+      : this.clientService.create({
+          ...payload,
+          status: 'active'
+        });
+
+    request
+      .pipe(finalize(() => this.saving.set(false)))
+      .subscribe({
+        next: () => {
+          this.notification.success(
+            client
+              ? 'Cliente actualizado correctamente.'
+              : 'Cliente registrado correctamente.'
+          );
+
+          this.closeDialog();
+          this.load();
+        },
+        error: (err) => {
+          const message = toApiMessage(err);
+          this.error.set(message);
+          this.notification.error(message);
+        }
+      });
+  }
+
+  confirmDelete(client: Client): void {
+    this.confirmation.confirm({
+      header: 'Eliminar cliente',
+      message: `¿Estás seguro de eliminar a ${client.name}?`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Eliminar',
+      rejectLabel: 'Cancelar',
+      accept: () => this.remove(client)
+    });
+  }
+
+  private remove(client: Client): void {
+    this.clientService.remove(client.id).subscribe({
+      next: () => {
+        this.rows.update((rows) =>
+          rows.filter((row) => row.id !== client.id)
+        );
+
+        this.notification.success('Cliente eliminado correctamente.');
+      },
+      error: (err) => {
+        const message = toApiMessage(err);
+        this.notification.error(message);
+      }
+    });
+  }
+}
+```
+
+![](images/clipboard-256836280.png)
+
+### Implementar `client-list.html`
+
+Ahora construiremos la interfaz del listado: encabezado, búsqueda, tabla de clientes, estados y acciones.
+
+Abrimos:
+
+``` html
+nano src/app/features/clients/client-list/client-list.html
+```
+
+Pegamos este código:
+
+``` html
+<section class="space-y-6">
+  <app-page-header
+    title="Clientes"
+    description="Administra los clientes registrados en WayuuTravel."
+  />
+
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="relative w-full sm:max-w-md">
+      <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+
+      <input
+        pInputText
+        type="text"
+        class="w-full pl-10"
+        placeholder="Buscar clientes..."
+        [value]="filter()"
+        (input)="filter.set($any($event.target).value)"
+      />
+    </div>
+
+    <p-button
+      label="Nuevo cliente"
+      icon="pi pi-plus"
+      (onClick)="openCreate()"
+    />
+  </div>
+
+  @if (error()) {
+    <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      {{ error() }}
+      <p-button
+        label="Reintentar"
+        icon="pi pi-refresh"
+        severity="danger"
+        [text]="true"
+        (onClick)="load()"
+      />
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="flex justify-center py-12">
+      <i class="pi pi-spin pi-spinner text-3xl text-teal-700"></i>
+    </div>
+  } @else if (visibleRows().length === 0) {
+    <app-empty-state
+      [title]="filter() ? 'No se encontraron clientes' : 'No hay clientes registrados'"
+      [description]="filter() ? 'Intenta con otro término de búsqueda.' : 'Registra el primer cliente para comenzar.'"
+      icon="pi pi-users"
+    />
+  } @else {
+    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <p-table
+        [value]="visibleRows()"
+        [rowHover]="true"
+        responsiveLayout="scroll"
+      >
+        <ng-template #header>
+          <tr>
+            <th>ID</th>
+            <th>Nombre</th>
+            <th>Dirección</th>
+            <th>Teléfono</th>
+            <th>Correo electrónico</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-client>
+          <tr>
+            <td>{{ client.id }}</td>
+            <td class="font-medium">{{ client.name }}</td>
+            <td>{{ client.address || '—' }}</td>
+            <td>{{ client.phone || '—' }}</td>
+            <td>{{ client.email || '—' }}</td>
+            <td>
+              <app-status-tag [status]="client.status" />
+            </td>
+            <td>
+              <div class="flex justify-center gap-2">
+                <p-button
+                  icon="pi pi-pencil"
+                  severity="secondary"
+                  [text]="true"
+                  [rounded]="true"
+                  pTooltip="Editar cliente"
+                  (onClick)="openEdit(client)"
+                />
+
+                <p-button
+                  icon="pi pi-trash"
+                  severity="danger"
+                  [text]="true"
+                  [rounded]="true"
+                  pTooltip="Eliminar cliente"
+                  (onClick)="confirmDelete(client)"
+                />
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</section>
+
+<p-dialog
+  [header]="editing() ? 'Editar cliente' : 'Nuevo cliente'"
+  [visible]="dialogVisible()"
+  (visibleChange)="!$event && closeDialog()"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(95vw, 600px)' }"
+>
+  <app-client-form
+    [client]="editing()"
+    [saving]="saving()"
+    [resetKey]="resetKey()"
+    (saved)="save($event)"
+    (cancelled)="closeDialog()"
+  />
+</p-dialog>
+```
+
+![](images/clipboard-2560122057.png)
+
+### Implementar `client-form.ts`
+
+Ahora construiremos el formulario reactivo para registrar y editar clientes, con validaciones y Signals.
+
+Abrimos:
+
+``` typescript
+nano src/app/features/clients/client-form/client-form.ts
+```
+
+Pegamos este código:
+
+``` typescript
+import {
+  Component,
+  effect,
+  input,
+  output
+} from '@angular/core';
+
+import {
+  FormBuilder,
+  ReactiveFormsModule,
+  Validators
+} from '@angular/forms';
+
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { TextareaModule } from 'primeng/textarea';
+
+import { Client, ClientPayload } from '../../../core/models/client.model';
+
+@Component({
+  selector: 'app-client-form',
+  standalone: true,
+  imports: [
+    ReactiveFormsModule,
+    ButtonModule,
+    InputTextModule,
+    TextareaModule
+  ],
+  templateUrl: './client-form.html',
+  styleUrl: './client-form.css'
+})
+export class ClientForm {
+  readonly client = input<Client | null>(null);
+  readonly saving = input(false);
+  readonly resetKey = input(0);
+
+  readonly saved = output<ClientPayload>();
+  readonly cancelled = output<void>();
+
+  private readonly fb = new FormBuilder();
+
+  readonly form = this.fb.group({
+    name: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(150)]],
+    address: [''],
+    phone: ['', [Validators.maxLength(30)]],
+    email: ['', [Validators.email, Validators.maxLength(150)]]
+  });
+
+  constructor() {
+    effect(() => {
+      const client = this.client();
+      this.resetKey();
+
+      if (client) {
+        this.form.reset({
+          name: client.name,
+          address: client.address ?? '',
+          phone: client.phone ?? '',
+          email: client.email ?? ''
+        });
+      } else {
+        this.form.reset({
+          name: '',
+          address: '',
+          phone: '',
+          email: ''
+        });
+      }
+    });
+  }
+
+  submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const value = this.form.getRawValue();
+
+    const payload: ClientPayload = {
+      name: value.name!.trim(),
+      address: value.address?.trim() || null,
+      phone: value.phone?.trim() || null,
+      email: value.email?.trim() || null
+    };
+
+    this.saved.emit(payload);
+  }
+
+  cancel(): void {
+    this.cancelled.emit();
+  }
+}
+```
+
+![](images/clipboard-138298872.png)
+
+###  Implementar `client-form.html`
+
+Construiremos el formulario con campos, validaciones y botones para guardar o cancelar.
+
+Abrimos:
+
+``` html
+nano src/app/features/clients/client-form/client-form.html
+```
+
+Pegamos este código:
+
+``` html
+<form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5">
+
+  <div class="space-y-2">
+    <label for="name" class="block text-sm font-medium text-slate-700">
+      Nombre completo *
+    </label>
+
+    <input
+      pInputText
+      id="name"
+      formControlName="name"
+      class="w-full"
+      placeholder="Nombre del cliente"
+    />
+
+    @if (form.controls.name.touched && form.controls.name.invalid) {
+      <small class="text-red-600">
+        @if (form.controls.name.hasError('required')) {
+          El nombre es obligatorio.
+        } @else if (form.controls.name.hasError('minlength')) {
+          El nombre debe tener al menos 3 caracteres.
+        } @else {
+          El nombre no puede superar los 150 caracteres.
+        }
+      </small>
+    }
+  </div>
+
+  <div class="space-y-2">
+    <label for="address" class="block text-sm font-medium text-slate-700">
+      Dirección
+    </label>
+
+    <textarea
+      pTextarea
+      id="address"
+      formControlName="address"
+      rows="2"
+      class="w-full"
+      placeholder="Dirección del cliente"
+    ></textarea>
+  </div>
+
+  <div class="space-y-2">
+    <label for="phone" class="block text-sm font-medium text-slate-700">
+      Teléfono
+    </label>
+
+    <input
+      pInputText
+      id="phone"
+      formControlName="phone"
+      class="w-full"
+      placeholder="Número de contacto"
+    />
+
+    @if (form.controls.phone.touched && form.controls.phone.invalid) {
+      <small class="text-red-600">
+        El teléfono no puede superar los 30 caracteres.
+      </small>
+    }
+  </div>
+
+  <div class="space-y-2">
+    <label for="email" class="block text-sm font-medium text-slate-700">
+      Correo electrónico
+    </label>
+
+    <input
+      pInputText
+      id="email"
+      type="email"
+      formControlName="email"
+      class="w-full"
+      placeholder="correo@ejemplo.com"
+    />
+
+    @if (form.controls.email.touched && form.controls.email.invalid) {
+      <small class="text-red-600">
+        Ingresa un correo electrónico válido.
+      </small>
+    }
+  </div>
+
+  <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [outlined]="true"
+      type="button"
+      (onClick)="cancel()"
+    />
+
+    <p-button
+      [label]="client() ? 'Guardar cambios' : 'Registrar cliente'"
+      icon="pi pi-check"
+      type="submit"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+  </div>
+
+</form>
+```
+
+![](images/clipboard-3493461830.png)
+
+### Verificar archivos y rutas
+
+Ya tenemos implementados los dos componentes. Ahora vamos a comprobar que la ruta de clientes esté conectada y que los archivos CSS estén vacíos.
+
+Ejecutamos:
+
+``` typescript
+cat src/app/app.routes.ts
+```
+
+``` typescript
+wc -c src/app/features/clients/client-list/client-list.css
+wc -c src/app/features/clients/client-form/client-form.css
+```
+
+``` typescript
+cat src/app/core/models/client.model.ts
+cat src/app/core/services/client.service.ts
+```
+
+![](images/clipboard-1406579581.png)
+
+### Revisar las pruebas
+
+Primero verificaremos qué pruebas y scripts tiene configurados el proyecto.
+
+Ejecutamos:
+
+``` json
+cat package.json
+```
+
+``` typescript
+find src -name "*.spec.ts"
+```
+
+### Ejecutar pruebas
+
+Ejecutamos:
+
+```         
+ng test --watch=false
+```
+
+![](images/clipboard-925650600.png)
+
+### Probar la interfaz
+
+Ahora vamos a comprobar visualmente el módulo.
+
+Ejecutamos:
+
+```         
+ng serve
+```
+
+![](images/clipboard-1090359849.png)

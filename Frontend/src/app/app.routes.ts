@@ -18,9 +18,10 @@ export const routes: Routes = [
       {
         path: 'clientes',
         loadComponent: () =>
-          import('./features/placeholder/placeholder').then(
-            (m) => m.Placeholder
-          ),
+        import('./features/clients/client-list/client-list').then(
+         (m) => m.ClientList
+             ),
+             
         data: {
           title: 'Clientes',
           description: 'Gestión de los clientes de WayuuTravel.',
