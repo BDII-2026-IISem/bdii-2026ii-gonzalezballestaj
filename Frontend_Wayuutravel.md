@@ -5223,7 +5223,785 @@ npx ng build
 
 ![](images/clipboard-1004369684.png)
 
-realizamos las pruebas
+realizamos las pruebas:
 
 \
 ![](images/clipboard-3024088030.png)
+
+# ISS-05 — CRUD de productos turísticos
+
+**Narrativa**
+
+Como desarrollador frontend de WayuuTravel, necesito implementar el módulo de administración de productos turísticos para gestionar la información de los paquetes que ofrece la plataforma. La funcionalidad permitirá consultar, buscar, registrar, editar y dar de baja paquetes, integrando la interfaz Angular con los servicios del backend Django. Además, buscaré mantener la coherencia visual con la estructura existente de la aplicación, reutilizando los componentes compartidos y mostrando notificaciones para informar el resultado de las operaciones. De esta manera, facilitaré la administración del catálogo turístico y dejaré preparada su integración con los módulos de reservas y ventas.
+
+### Crear la estructura del módulo
+
+Vamos a crear dos componentes: listado y formulario.
+
+Desde la terminal de `Frontend`, ejecutamos:
+
+``` sql
+mkdir -p src/app/features/packages/pages/package-list
+mkdir -p src/app/features/packages/components/package-form
+```
+
+![](images/clipboard-2952038870.png)
+
+###  Crear el componente ProductList
+
+En nuestro proyecto lo llamaremos `PackageList`, porque administraremos paquetes turísticos.
+
+Primero generamos el componente standalone.
+
+Abrimos la terminal en `Frontend`:
+
+``` sql
+ng generate component features/packages/pages/package-list --standalone --skip-tests
+```
+
+Ahora verificamos que se haya creado correctamente:
+
+``` sql
+ls -la src/app/features/packages/pages/package-list
+```
+
+![](images/clipboard-4210904530.png)
+
+### Preparar el listado de paquetes
+
+Vamos a conectar `PackageList` con `PackageService` para mostrar los paquetes registrados en WayuuTravel.
+
+Primero, verificamos los archivos generados y los componentes compartidos que reutilizaremos:
+
+``` typescript
+cat src/app/features/packages/pages/package-list/package-list.ts
+cat src/app/features/packages/pages/package-list/package-list.html
+cat src/app/shared/ui/page-header/page-header.ts
+cat src/app/shared/ui/empty-state/empty-state.ts
+cat src/app/shared/ui/status-tag/status-tag.ts
+```
+
+### Implementamos `package-list.ts`
+
+Abrimos:
+
+```         
+code src/app/features/packages/pages/package-list/package-list.ts
+```
+
+Reemplazamos todo el contenido por:
+
+``` typescript
+import {
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+import { CurrencyPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { forkJoin } from 'rxjs';
+
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
+
+import { Package } from '../../../../core/models/package.model';
+import { PackageService } from '../../../../core/services/package.service';
+import { NotificationService } from '../../../../core/services/notification.service';
+
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
+import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
+
+@Component({
+  selector: 'app-package-list',
+  standalone: true,
+  imports: [
+    CurrencyPipe,
+    FormsModule,
+    ButtonModule,
+    InputTextModule,
+    TableModule,
+    TagModule,
+    PageHeader,
+    EmptyState,
+    StatusTag,
+  ],
+  templateUrl: './package-list.html',
+  styleUrl: './package-list.css',
+})
+export class PackageList {
+  private readonly packageService = inject(PackageService);
+  private readonly notification = inject(NotificationService);
+
+  readonly rows = signal<Package[]>([]);
+  readonly search = signal('');
+  readonly onlyAvailable = signal(false);
+  readonly loading = signal(false);
+
+  readonly filteredRows = computed(() => {
+    const term = this.search().trim().toLowerCase();
+
+    return this.rows().filter((item) =>
+      item.name.toLowerCase().includes(term)
+    );
+  });
+
+  constructor() {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+
+    const request = this.onlyAvailable()
+      ? this.packageService.getAvailable()
+      : this.packageService.getAll();
+
+    request.subscribe({
+      next: (data) => {
+        this.rows.set(data);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.notification.error(
+          'Error al cargar los paquetes turísticos.'
+        );
+      },
+    });
+  }
+
+  toggleAvailability(): void {
+    this.onlyAvailable.update((value) => !value);
+    this.load();
+  }
+
+  updateSearch(value: string): void {
+    this.search.set(value);
+  }
+}
+```
+
+![](images/clipboard-3525570397.png)
+
+###  Implementar `package-list.html`
+
+Abrimos:
+
+``` html
+code src/app/features/packages/pages/package-list/package-list.html
+```
+
+Pegamos:
+
+``` html
+<div class="space-y-6">
+  <app-page-header
+    title="Paquetes turísticos"
+    description="Administra los paquetes turísticos de WayuuTravel."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar paquetes..."
+      aria-label="Buscar paquetes"
+      [ngModel]="search()"
+      (ngModelChange)="updateSearch($event)"
+    />
+
+    <div class="flex gap-2">
+      <p-button
+        [label]="onlyAvailable() ? 'Ver todos' : 'Solo disponibles'"
+        [icon]="onlyAvailable() ? 'pi pi-list' : 'pi pi-check-circle'"
+        severity="secondary"
+        [outlined]="true"
+        (onClick)="toggleAvailability()"
+      />
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">
+      Cargando paquetes turísticos...
+    </div>
+  } @else if (filteredRows().length === 0) {
+    <app-empty-state
+      title="Sin paquetes turísticos"
+      description="No se encontraron paquetes para mostrar."
+    />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table
+        [value]="filteredRows()"
+        [tableStyle]="{ 'min-width': '40rem' }"
+      >
+        <ng-template #header>
+          <tr>
+            <th>Nombre</th>
+            <th>Descripción</th>
+            <th>Estado</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-package>
+          <tr>
+            <td class="font-medium">
+              {{ package.name }}
+            </td>
+
+            <td>
+              {{ package.description || 'Sin descripción' }}
+            </td>
+
+            <td>
+              <app-status-tag [status]="package.status" />
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+```
+
+![](images/clipboard-923310490.png)
+
+### Crear el formulario de paquetes
+
+Generamos el componente:
+
+``` sql
+ng generate component features/packages/components/package-form --standalone --skip-tests
+```
+
+Después verificamos los archivos:
+
+``` sql
+ls -la src/app/features/packages/components/package-form
+```
+
+![](images/clipboard-1810599672.png)
+
+### 
+
+### Implementar `package-form.ts`
+
+Abrimos:
+
+``` typescript
+code src/app/features/packages/components/package-form/package-form.ts
+```
+
+Reemplazamos todo el contenido por:
+
+``` typescript
+import { Component, input, output, effect } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { TextareaModule } from 'primeng/textarea';
+
+import {
+  Package,
+  CreatePackage,
+} from '../../../../core/models/package.model';
+
+@Component({
+  selector: 'app-package-form',
+  standalone: true,
+  imports: [
+    ReactiveFormsModule,
+    ButtonModule,
+    InputTextModule,
+    TextareaModule,
+  ],
+  templateUrl: './package-form.html',
+  styleUrl: './package-form.css',
+})
+export class PackageForm {
+  readonly package = input<Package | null>(null);
+  readonly saving = input(false);
+
+  readonly saved = output<CreatePackage>();
+  readonly cancelled = output<void>();
+
+  private readonly fb = new FormBuilder();
+
+  readonly form = this.fb.nonNullable.group({
+    name: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]],
+    description: [''],
+  });
+
+  constructor() {
+    effect(() => {
+      const current = this.package();
+
+      this.form.reset({
+        name: current?.name ?? '',
+        description: current?.description ?? '',
+      });
+    });
+  }
+
+  submit(): void {
+    if (this.form.invalid || this.saving()) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const value = this.form.getRawValue();
+
+    this.saved.emit({
+      name: value.name.trim(),
+      description: value.description.trim() || null,
+    });
+  }
+}
+```
+
+![](images/clipboard-3753109801.png)
+
+###  Implementar `package-form.html`
+
+Abrimos:
+
+``` html
+code src/app/features/packages/components/package-form/package-form.html
+```
+
+Pegamos:
+
+``` html
+<form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5">
+  <div class="flex flex-col gap-2">
+    <label for="name" class="font-medium">Nombre del paquete</label>
+
+    <input
+      id="name"
+      pInputText
+      formControlName="name"
+      placeholder="Ej. Experiencia Cabo de la Vela"
+      class="w-full"
+    />
+
+    @if (form.controls.name.touched && form.controls.name.invalid) {
+      <small class="text-red-600">
+        El nombre es obligatorio y debe tener entre 2 y 100 caracteres.
+      </small>
+    }
+  </div>
+
+  <div class="flex flex-col gap-2">
+    <label for="description" class="font-medium">Descripción</label>
+
+    <textarea
+      id="description"
+      pTextarea
+      formControlName="description"
+      rows="4"
+      maxlength="255"
+      placeholder="Describe la experiencia turística..."
+      class="w-full"
+    ></textarea>
+  </div>
+
+  <div class="flex justify-end gap-2">
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [outlined]="true"
+      type="button"
+      (onClick)="cancelled.emit()"
+    />
+
+    <p-button
+      [label]="package() ? 'Guardar cambios' : 'Registrar paquete'"
+      icon="pi pi-check"
+      type="submit"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+  </div>
+</form>
+```
+
+![](images/clipboard-1354302724.png)
+
+### Conectar formulario y listado
+
+Vamos a modificar `package-list.ts` para integrar el diálogo, registrar paquetes y editar los existentes.
+
+Abrimos:
+
+``` typescript
+code src/app/features/packages/pages/package-list/package-list.ts
+```
+
+Reemplazamos todo el contenido por:
+
+``` typescript
+import {
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+
+import { FormsModule } from '@angular/forms';
+import { forkJoin } from 'rxjs';
+
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { TableModule } from 'primeng/table';
+import { DialogModule } from 'primeng/dialog';
+
+import {
+  Package,
+  CreatePackage,
+} from '../../../../core/models/package.model';
+
+import { PackageService } from '../../../../core/services/package.service';
+import { NotificationService } from '../../../../core/services/notification.service';
+
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
+import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
+
+import { PackageForm } from '../../components/package-form/package-form';
+
+@Component({
+  selector: 'app-package-list',
+  standalone: true,
+  imports: [
+    FormsModule,
+    ButtonModule,
+    InputTextModule,
+    TableModule,
+    DialogModule,
+    PageHeader,
+    EmptyState,
+    StatusTag,
+    PackageForm,
+  ],
+  templateUrl: './package-list.html',
+  styleUrl: './package-list.css',
+})
+export class PackageList {
+  private readonly packageService = inject(PackageService);
+  private readonly notification = inject(NotificationService);
+
+  readonly rows = signal<Package[]>([]);
+  readonly search = signal('');
+  readonly onlyAvailable = signal(false);
+  readonly loading = signal(false);
+  readonly saving = signal(false);
+
+  readonly dialogVisible = signal(false);
+  readonly selectedPackage = signal<Package | null>(null);
+
+  readonly filteredRows = computed(() => {
+    const term = this.search().trim().toLowerCase();
+
+    return this.rows().filter((item) =>
+      item.name.toLowerCase().includes(term)
+    );
+  });
+
+  constructor() {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+
+    const request = this.onlyAvailable()
+      ? this.packageService.getAvailable()
+      : this.packageService.getAll();
+
+    request.subscribe({
+      next: (data) => {
+        this.rows.set(data);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.notification.error(
+          'Error al cargar los paquetes turísticos.'
+        );
+      },
+    });
+  }
+
+  toggleAvailability(): void {
+    this.onlyAvailable.update((value) => !value);
+    this.load();
+  }
+
+  updateSearch(value: string): void {
+    this.search.set(value);
+  }
+
+  openCreate(): void {
+    this.selectedPackage.set(null);
+    this.dialogVisible.set(true);
+  }
+
+  openEdit(item: Package): void {
+    this.selectedPackage.set(item);
+    this.dialogVisible.set(true);
+  }
+
+  closeDialog(): void {
+    this.dialogVisible.set(false);
+    this.selectedPackage.set(null);
+  }
+
+  save(data: CreatePackage): void {
+    this.saving.set(true);
+
+    const current = this.selectedPackage();
+
+    const request = current
+      ? this.packageService.update(current.id, data)
+      : this.packageService.create(data);
+
+    request.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.closeDialog();
+
+        this.notification.success(
+          current
+            ? 'Paquete actualizado correctamente.'
+            : 'Paquete registrado correctamente.'
+        );
+
+        this.load();
+      },
+      error: () => {
+        this.saving.set(false);
+        this.notification.error(
+          'No fue posible guardar el paquete turístico.'
+        );
+      },
+    });
+  }
+}
+```
+
+![](images/clipboard-1491119144.png)
+
+###  Actualizar `package-list.html`
+
+Abrimos:
+
+``` html
+code src/app/features/packages/pages/package-list/package-list.html
+```
+
+Reemplazamos el contenido por:
+
+``` html
+<div class="space-y-6">
+  <app-page-header
+    title="Paquetes turísticos"
+    description="Administra los paquetes turísticos de WayuuTravel."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar paquetes..."
+      aria-label="Buscar paquetes"
+      [ngModel]="search()"
+      (ngModelChange)="updateSearch($event)"
+    />
+
+    <div class="flex flex-wrap gap-2">
+      <p-button
+        [label]="onlyAvailable() ? 'Ver todos' : 'Solo disponibles'"
+        [icon]="onlyAvailable() ? 'pi pi-list' : 'pi pi-check-circle'"
+        severity="secondary"
+        [outlined]="true"
+        (onClick)="toggleAvailability()"
+      />
+
+      <p-button
+        label="Nuevo paquete"
+        icon="pi pi-plus"
+        (onClick)="openCreate()"
+      />
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">
+      Cargando paquetes turísticos...
+    </div>
+  } @else if (filteredRows().length === 0) {
+    <app-empty-state
+      title="Sin paquetes turísticos"
+      description="No se encontraron paquetes para mostrar."
+    />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table
+        [value]="filteredRows()"
+        [tableStyle]="{ 'min-width': '40rem' }"
+      >
+        <ng-template #header>
+          <tr>
+            <th>Nombre</th>
+            <th>Descripción</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-package>
+          <tr>
+            <td class="font-medium">
+              {{ package.name }}
+            </td>
+
+            <td>
+              {{ package.description || 'Sin descripción' }}
+            </td>
+
+            <td>
+              <app-status-tag [status]="package.status" />
+            </td>
+
+            <td>
+              <p-button
+                icon="pi pi-pencil"
+                severity="secondary"
+                [text]="true"
+                [rounded]="true"
+                aria-label="Editar paquete"
+                (onClick)="openEdit(package)"
+              />
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+
+<p-dialog
+  [header]="selectedPackage() ? 'Editar paquete' : 'Nuevo paquete'"
+  [visible]="dialogVisible()"
+  (visibleChange)="!$event && closeDialog()"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(95vw, 35rem)' }"
+>
+  <app-package-form
+    [package]="selectedPackage()"
+    [saving]="saving()"
+    (saved)="save($event)"
+    (cancelled)="closeDialog()"
+  />
+</p-dialog>
+```
+
+![](images/clipboard-4203660457.png)
+
+###  Implementar baja lógica de paquetes
+
+Primero, vamos a integrar el servicio de confirmación en `package-list.ts`.
+
+1\. Abrimos:
+
+``` typescript
+code src/app/features/packages/pages/package-list/package-list.ts
+```
+
+2\. Agregamos `ConfirmationService` a los imports:
+
+``` sql
+import { ConfirmationService } from 'primeng/api';
+```
+
+3\. Dentro de la clase `PackageList`, junto a las demás dependencias, agregamos:
+
+``` sql
+private readonly confirmationService = inject(ConfirmationService);
+```
+
+4\. Al final de la clase, agregamos estos métodos:
+
+``` typescript
+confirmDelete(item: Package): void {
+  this.confirmationService.confirm({
+    header: 'Confirmar desactivación',
+    message: `¿Deseas desactivar el paquete "${item.name}"?`,
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Desactivar',
+    rejectLabel: 'Cancelar',
+    acceptButtonStyleClass: 'p-button-danger',
+    accept: () => this.deletePackage(item),
+  });
+}
+
+private deletePackage(item: Package): void {
+  this.packageService.delete(item.id).subscribe({
+    next: () => {
+      this.notification.success('Paquete desactivado correctamente.');
+      this.load();
+    },
+    error: () => {
+      this.notification.error('No fue posible desactivar el paquete.');
+    },
+  });
+}
+```
+
+![](images/clipboard-1717774135.png)
+
+### Agregar botón de desactivación
+
+En `package-list.html`, busca el botón de editar:
+
+``` html
+<p-button
+  icon="pi pi-pencil"
+  severity="secondary"
+  [text]="true"
+  [rounded]="true"
+  aria-label="Editar paquete"
+  (onClick)="openEdit(package)"
+/>
+```
+
+Debajo agrega:
+
+``` html
+<p-button
+  icon="pi pi-trash"
+  severity="danger"
+  [text]="true"
+  [rounded]="true"
+  aria-label="Desactivar paquete"
+  (onClick)="confirmDelete(package)"
+/>
+```
+
+![](images/clipboard-3729855501.png)
+
+Realizamos las pruebas:
+
+![](images/clipboard-2910423266.png)
+
+![](images/clipboard-2090560892.png)
+
+![](images/clipboard-919336945.png)

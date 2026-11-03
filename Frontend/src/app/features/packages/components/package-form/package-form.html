@@ -1,0 +1,51 @@
+<form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5">
+  <div class="flex flex-col gap-2">
+    <label for="name" class="font-medium">Nombre del paquete</label>
+
+    <input
+      id="name"
+      pInputText
+      formControlName="name"
+      placeholder="Ej. Experiencia Cabo de la Vela"
+      class="w-full"
+    />
+
+    @if (form.controls.name.touched && form.controls.name.invalid) {
+      <small class="text-red-600">
+        El nombre es obligatorio y debe tener entre 2 y 100 caracteres.
+      </small>
+    }
+  </div>
+
+  <div class="flex flex-col gap-2">
+    <label for="description" class="font-medium">Descripción</label>
+
+    <textarea
+      id="description"
+      pTextarea
+      formControlName="description"
+      rows="4"
+      maxlength="255"
+      placeholder="Describe la experiencia turística..."
+      class="w-full"
+    ></textarea>
+  </div>
+
+  <div class="flex justify-end gap-2">
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [outlined]="true"
+      type="button"
+      (onClick)="cancelled.emit()"
+    />
+
+    <p-button
+      [label]="package() ? 'Guardar cambios' : 'Registrar paquete'"
+      icon="pi pi-check"
+      type="submit"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+  </div>
+</form>

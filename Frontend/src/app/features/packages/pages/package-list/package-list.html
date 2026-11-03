@@ -1,0 +1,112 @@
+<div class="space-y-6">
+  <app-page-header
+    title="Paquetes turísticos"
+    description="Administra los paquetes turísticos de WayuuTravel."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar paquetes..."
+      aria-label="Buscar paquetes"
+      [ngModel]="search()"
+      (ngModelChange)="updateSearch($event)"
+    />
+
+    <div class="flex flex-wrap gap-2">
+      <p-button
+        [label]="onlyAvailable() ? 'Ver todos' : 'Solo disponibles'"
+        [icon]="onlyAvailable() ? 'pi pi-list' : 'pi pi-check-circle'"
+        severity="secondary"
+        [outlined]="true"
+        (onClick)="toggleAvailability()"
+      />
+
+      <p-button
+        label="Nuevo paquete"
+        icon="pi pi-plus"
+        (onClick)="openCreate()"
+      />
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">
+      Cargando paquetes turísticos...
+    </div>
+  } @else if (filteredRows().length === 0) {
+    <app-empty-state
+      title="Sin paquetes turísticos"
+      description="No se encontraron paquetes para mostrar."
+    />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table
+        [value]="filteredRows()"
+        [tableStyle]="{ 'min-width': '40rem' }"
+      >
+        <ng-template #header>
+          <tr>
+            <th>Nombre</th>
+            <th>Descripción</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-package>
+          <tr>
+            <td class="font-medium">
+              {{ package.name }}
+            </td>
+
+            <td>
+              {{ package.description || 'Sin descripción' }}
+            </td>
+
+            <td>
+              <app-status-tag [status]="package.status" />
+            </td>
+
+            <td>
+              <p-button
+                icon="pi pi-pencil"
+                severity="secondary"
+                [text]="true"
+                [rounded]="true"
+                aria-label="Editar paquete"
+                (onClick)="openEdit(package)"
+              />
+                            <p-button
+                icon="pi pi-trash"
+                severity="danger"
+                [text]="true"
+                [rounded]="true"
+                aria-label="Desactivar paquete"
+                (onClick)="confirmDelete(package)"
+                />
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+
+<p-dialog
+  [header]="selectedPackage() ? 'Editar paquete' : 'Nuevo paquete'"
+  [visible]="dialogVisible()"
+  (visibleChange)="!$event && closeDialog()"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(95vw, 35rem)' }"
+>
+  <app-package-form
+    [package]="selectedPackage()"
+    [saving]="saving()"
+    (saved)="save($event)"
+    (cancelled)="closeDialog()"
+  />
+</p-dialog>

@@ -37,16 +37,16 @@ export const routes: Routes = [
         },
       },
       {
-        path: 'paquetes',
-        loadComponent: () =>
-          import('./features/placeholder/placeholder').then(
-            (m) => m.Placeholder
-          ),
-        data: {
-          title: 'Paquetes turísticos',
-          description: 'Administración de los paquetes turísticos.',
-        },
-      },
+  path: 'paquetes',
+  loadComponent: () =>
+    import('./features/packages/pages/package-list/package-list').then(
+      (m) => m.PackageList
+    ),
+  data: {
+    title: 'Paquetes turísticos',
+    description: 'Administración de los paquetes turísticos.',
+  },
+},
       {
         path: 'salidas',
         loadComponent: () =>
