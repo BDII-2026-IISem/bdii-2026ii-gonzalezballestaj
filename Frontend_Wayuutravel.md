@@ -6005,3 +6005,1093 @@ Realizamos las pruebas:
 ![](images/clipboard-2090560892.png)
 
 ![](images/clipboard-919336945.png)
+
+### 
+
+#  ISS-06 · Ventas y detalle en memoria
+
+### Narrativa 
+
+Como desarrollador frontend de WayuuTravel, necesito implementar el módulo de gestión de ventas para consultar las ventas registradas y permitir el registro de nuevas operaciones comerciales relacionadas con los servicios turísticos ofrecidos por la plataforma.
+
+La funcionalidad permitirá seleccionar clientes, incorporar los conceptos turísticos correspondientes a la venta y gestionar un borrador en memoria antes de confirmar la operación. Además, se validará que no existan líneas duplicadas y que los datos ingresados sean correctos, mostrando una vista previa de los valores calculados antes de enviar la información al backend.
+
+Una vez registrada la venta, la interfaz actualizará el listado con la información devuelta por el servidor y permitirá acceder al detalle de cada operación. De esta manera, se facilitará la gestión comercial de WayuuTravel y se preparará la integración con el módulo de detalle de ventas y dashboard.
+
+### Crear la estructura del módulo de reservas
+
+Crearemos dos componentes: uno para mostrar las reservas y otro para registrar nuevas reservas.
+
+Abrimos:
+
+``` sql
+mkdir -p src/app/features/bookings/booking-list
+mkdir -p src/app/features/bookings/booking-form
+
+touch src/app/features/bookings/booking-list/booking-list.ts
+touch src/app/features/bookings/booking-list/booking-list.html
+touch src/app/features/bookings/booking-list/booking-list.css
+
+touch src/app/features/bookings/booking-form/booking-form.ts
+touch src/app/features/bookings/booking-form/booking-form.html
+touch src/app/features/bookings/booking-form/booking-form.css
+```
+
+![![](images/clipboard-3240739472.png)](images/clipboard-2679325643.png)
+
+### Adaptar el servicio de reservas al backend Django
+
+Vamos a centralizar la conversión de `camelCase` a `snake_case` y viceversa. Así Angular podrá trabajar con sus modelos actuales y Django recibirá los nombres de campos que espera.
+
+Abrimos:
+
+``` typescript
+nano src/app/core/services/booking.service.ts
+```
+
+Reemplazamos todo el contenido por:
+
+``` typescript
+import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable, map } from 'rxjs';
+
+import { environment } from '../../../environments/environment';
+import {
+  Booking,
+  CreateBooking,
+  UpdateBooking
+} from '../models/booking.model';
+import { CreateBookingPayment } from '../models/payment.model';
+
+interface BookingApi {
+  id: number;
+  client: number;
+  departure: number;
+  traveler: number;
+  start_date: string;
+  end_date: string;
+  observations: string | null;
+  status: 'active' | 'inactive';
+  created_at: string;
+  updated_at: string;
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class BookingService {
+  private readonly http = inject(HttpClient);
+
+  private readonly apiUrl =
+    `${environment.apiUrl}/sale/bookings/`;
+
+  private toModel(data: BookingApi): Booking {
+    return {
+      id: data.id,
+      client: data.client,
+      departure: data.departure,
+      traveler: data.traveler,
+      startDate: data.start_date,
+      endDate: data.end_date,
+      observations: data.observations,
+      status: data.status,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
+  }
+
+  private toApi(data: Partial<CreateBooking>) {
+    return {
+      ...(data.client !== undefined && { client: data.client }),
+      ...(data.departure !== undefined && { departure: data.departure }),
+      ...(data.traveler !== undefined && { traveler: data.traveler }),
+      ...(data.startDate !== undefined && {
+        start_date: data.startDate
+      }),
+      ...(data.endDate !== undefined && {
+        end_date: data.endDate
+      }),
+      ...(data.observations !== undefined && {
+        observations: data.observations
+      })
+    };
+  }
+
+  getAll(): Observable<Booking[]> {
+    return this.http.get<BookingApi[]>(this.apiUrl).pipe(
+      map((rows) => rows.map((row) => this.toModel(row)))
+    );
+  }
+
+  getById(id: number): Observable<Booking> {
+    return this.http.get<BookingApi>(`${this.apiUrl}${id}/`).pipe(
+      map((data) => this.toModel(data))
+    );
+  }
+
+  create(data: CreateBooking): Observable<Booking> {
+    return this.http.post<BookingApi>(
+      this.apiUrl,
+      this.toApi(data)
+    ).pipe(
+      map((response) => this.toModel(response))
+    );
+  }
+
+  register(
+    data: CreateBooking & { payments: CreateBookingPayment[] }
+  ): Observable<Booking> {
+    const payload = {
+      ...this.toApi(data),
+      payments: data.payments.map((payment) => ({
+        reference_type: payment.referenceType,
+        method: payment.method,
+        amount: payment.amount,
+        payment_date: payment.paymentDate
+      }))
+    };
+
+    return this.http.post<BookingApi>(
+      `${this.apiUrl}register/`,
+      payload
+    ).pipe(
+      map((response) => this.toModel(response))
+    );
+  }
+
+  update(id: number, data: UpdateBooking): Observable<Booking> {
+    return this.http.patch<BookingApi>(
+      `${this.apiUrl}${id}/`,
+      this.toApi(data)
+    ).pipe(
+      map((response) => this.toModel(response))
+    );
+  }
+
+  delete(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}${id}/`);
+  }
+}
+```
+
+![](images/clipboard-2717721448.png)
+
+### Construir el formulario de reservas
+
+Este formulario permitirá registrar el cliente, la salida turística, el viajero, las fechas, las observaciones y el primer pago obligatorio.
+
+Abrimos:
+
+``` typescript
+nano src/app/features/bookings/booking-form/booking-form.ts
+```
+
+Pegamos este código:
+
+```         
+import {
+  Component,
+  effect,
+  input,
+  output
+} from '@angular/core';
+
+import {
+  FormBuilder,
+  ReactiveFormsModule,
+  Validators
+} from '@angular/forms';
+
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { TextareaModule } from 'primeng/textarea';
+
+import { Client } from '../../../core/models/client.model';
+import { Departure } from '../../../core/models/departure.model';
+import { CreateBooking } from '../../../core/models/booking.model';
+import { CreateBookingPayment } from '../../../core/models/payment.model';
+
+export interface BookingPayload extends CreateBooking {
+  payments: CreateBookingPayment[];
+}
+
+@Component({
+  selector: 'app-booking-form',
+  standalone: true,
+  imports: [
+    ReactiveFormsModule,
+    ButtonModule,
+    InputTextModule,
+    TextareaModule
+  ],
+  templateUrl: './booking-form.html',
+  styleUrl: './booking-form.css'
+})
+export class BookingForm {
+  readonly clients = input<Client[]>([]);
+  readonly departures = input<Departure[]>([]);
+  readonly saving = input(false);
+
+  readonly saved = output<BookingPayload>();
+  readonly cancelled = output<void>();
+
+  private readonly fb = new FormBuilder();
+
+  readonly form = this.fb.group({
+    client: [null as number | null, Validators.required],
+    departure: [null as number | null, Validators.required],
+    traveler: [null as number | null, [
+      Validators.required,
+      Validators.min(1)
+    ]],
+    startDate: ['', Validators.required],
+    endDate: ['', Validators.required],
+    observations: [''],
+    referenceType: ['Reserva turística', Validators.required],
+    method: ['', [Validators.required, Validators.maxLength(50)]],
+    amount: [null as number | null, [
+      Validators.required,
+      Validators.min(0.01)
+    ]],
+    paymentDate: [
+      new Date().toISOString().slice(0, 16),
+      Validators.required
+    ]
+  });
+
+  constructor() {
+    effect(() => {
+      const start = this.form.controls.startDate.value;
+      const end = this.form.controls.endDate.value;
+
+      if (start && end && end < start) {
+        this.form.controls.endDate.setErrors({
+          dateOrder: true
+        });
+      } else if (this.form.controls.endDate.hasError('dateOrder')) {
+        this.form.controls.endDate.updateValueAndValidity({
+          onlySelf: true,
+          emitEvent: false
+        });
+      }
+    });
+  }
+
+  submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const value = this.form.getRawValue();
+
+    const payload: BookingPayload = {
+      client: value.client!,
+      departure: value.departure!,
+      traveler: value.traveler!,
+      startDate: value.startDate!,
+      endDate: value.endDate!,
+      observations: value.observations?.trim() || null,
+      payments: [
+        {
+          referenceType: value.referenceType!.trim(),
+          method: value.method!.trim(),
+          amount: value.amount!,
+          paymentDate: value.paymentDate!
+        }
+      ]
+    };
+
+    this.saved.emit(payload);
+  }
+
+  cancel(): void {
+    this.cancelled.emit();
+  }
+}
+```
+
+![](images/clipboard-2992695391.png)
+
+### Crear la plantilla del formulario de reservas
+
+Vamos a organizar los campos en tres secciones: información de la reserva, fechas y primer pago.
+
+Abrimos:
+
+``` html
+nano src/app/features/bookings/booking-form/booking-form.html
+```
+
+Pegamos este código:
+
+``` html
+<form [formGroup]="form" (ngSubmit)="submit()" class="space-y-6">
+
+  <!-- Información de la reserva -->
+  <section class="space-y-4">
+    <h3 class="text-base font-semibold text-slate-800">
+      Información de la reserva
+    </h3>
+
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+      <div class="space-y-2">
+        <label for="client" class="block text-sm font-medium text-slate-700">
+          ID del cliente *
+        </label>
+
+        <input
+          pInputText
+          id="client"
+          type="number"
+          formControlName="client"
+          class="w-full"
+          placeholder="ID del cliente"
+        />
+
+        @if (form.controls.client.touched && form.controls.client.invalid) {
+          <small class="text-red-600">El ID del cliente es obligatorio.</small>
+        }
+      </div>
+
+      <div class="space-y-2">
+        <label for="departure" class="block text-sm font-medium text-slate-700">
+          Salida turística *
+        </label>
+
+        <select
+          id="departure"
+          formControlName="departure"
+          class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+        >
+          <option [ngValue]="null">Selecciona una salida</option>
+
+          @for (departure of departures(); track departure.id) {
+            @if (departure.status === 'active' && departure.availableCapacity > 0) {
+              <option [ngValue]="departure.id">
+                {{ departure.name }} — {{ departure.departureDate }}
+                ({{ departure.availableCapacity }} disponibles)
+              </option>
+            }
+          }
+        </select>
+
+        @if (form.controls.departure.touched && form.controls.departure.invalid) {
+          <small class="text-red-600">Selecciona una salida turística.</small>
+        }
+      </div>
+
+      <div class="space-y-2">
+        <label for="traveler" class="block text-sm font-medium text-slate-700">
+          ID del viajero *
+        </label>
+
+        <input
+          pInputText
+          id="traveler"
+          type="number"
+          formControlName="traveler"
+          class="w-full"
+          placeholder="ID del viajero"
+        />
+
+        <small class="text-slate-500">
+          Introduce el ID registrado del viajero.
+        </small>
+
+        @if (form.controls.traveler.touched && form.controls.traveler.invalid) {
+          <small class="text-red-600">Ingresa un ID de viajero válido.</small>
+        }
+      </div>
+
+    </div>
+  </section>
+
+  <div class="border-t border-slate-200"></div>
+
+  <!-- Fechas -->
+  <section class="space-y-4">
+    <h3 class="text-base font-semibold text-slate-800">
+      Fechas del viaje
+    </h3>
+
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+      <div class="space-y-2">
+        <label for="startDate" class="block text-sm font-medium text-slate-700">
+          Fecha de inicio *
+        </label>
+
+        <input
+          pInputText
+          id="startDate"
+          type="date"
+          formControlName="startDate"
+          class="w-full"
+        />
+      </div>
+
+      <div class="space-y-2">
+        <label for="endDate" class="block text-sm font-medium text-slate-700">
+          Fecha de finalización *
+        </label>
+
+        <input
+          pInputText
+          id="endDate"
+          type="date"
+          formControlName="endDate"
+          class="w-full"
+        />
+
+        @if (form.controls.endDate.touched && form.controls.endDate.hasError('dateOrder')) {
+          <small class="text-red-600">
+            La fecha de finalización no puede ser anterior a la de inicio.
+          </small>
+        }
+      </div>
+
+    </div>
+
+    <div class="space-y-2">
+      <label for="observations" class="block text-sm font-medium text-slate-700">
+        Observaciones
+      </label>
+
+      <textarea
+        pTextarea
+        id="observations"
+        formControlName="observations"
+        rows="3"
+        class="w-full"
+        placeholder="Información adicional de la reserva..."
+      ></textarea>
+    </div>
+  </section>
+
+  <div class="border-t border-slate-200"></div>
+
+  <!-- Primer pago -->
+  <section class="space-y-4">
+    <h3 class="text-base font-semibold text-slate-800">
+      Información del primer pago
+    </h3>
+
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+      <div class="space-y-2">
+        <label for="referenceType" class="block text-sm font-medium text-slate-700">
+          Tipo de referencia *
+        </label>
+
+        <input
+          pInputText
+          id="referenceType"
+          formControlName="referenceType"
+          class="w-full"
+          placeholder="Reserva turística"
+        />
+      </div>
+
+      <div class="space-y-2">
+        <label for="method" class="block text-sm font-medium text-slate-700">
+          Método de pago *
+        </label>
+
+        <input
+          pInputText
+          id="method"
+          formControlName="method"
+          class="w-full"
+          placeholder="Ej. Efectivo, transferencia"
+        />
+      </div>
+
+      <div class="space-y-2">
+        <label for="amount" class="block text-sm font-medium text-slate-700">
+          Valor del pago *
+        </label>
+
+        <input
+          pInputText
+          id="amount"
+          type="number"
+          min="0.01"
+          step="0.01"
+          formControlName="amount"
+          class="w-full"
+          placeholder="0.00"
+        />
+      </div>
+
+      <div class="space-y-2">
+        <label for="paymentDate" class="block text-sm font-medium text-slate-700">
+          Fecha del pago *
+        </label>
+
+        <input
+          pInputText
+          id="paymentDate"
+          type="datetime-local"
+          formControlName="paymentDate"
+          class="w-full"
+        />
+      </div>
+
+    </div>
+
+    <p class="rounded-lg bg-teal-50 p-3 text-sm text-teal-800">
+      Para registrar una reserva, el sistema requiere al menos un pago.
+    </p>
+  </section>
+
+  <!-- Acciones -->
+  <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [outlined]="true"
+      type="button"
+      (onClick)="cancel()"
+    />
+
+    <p-button
+      label="Registrar reserva"
+      icon="pi pi-check"
+      type="submit"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+  </div>
+
+</form>
+```
+
+![](images/clipboard-2067160270.png)
+
+### Crear los estilos del formulario
+
+Abrimos:
+
+``` css
+nano src/app/features/bookings/booking-form/booking-form.css
+```
+
+Pegamos:
+
+``` css
+:host {
+  display: block;
+  width: 100%;
+}
+
+select:focus {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 2px;
+}
+
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+```
+
+![](images/clipboard-255092674.png)
+
+###  Construir la lógica del listado
+
+Abrimos:
+
+``` typescript
+nano src/app/features/bookings/booking-list/booking-list.ts
+```
+
+Pegamos este código:
+
+``` typescript
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal
+} from '@angular/core';
+
+import { forkJoin, finalize } from 'rxjs';
+
+import { ButtonModule } from 'primeng/button';
+import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { TableModule } from 'primeng/table';
+import { ToastModule } from 'primeng/toast';
+import { MessageService } from 'primeng/api';
+
+import { Booking } from '../../../core/models/booking.model';
+import { Client } from '../../../core/models/client.model';
+import { Departure } from '../../../core/models/departure.model';
+
+import { BookingService } from '../../../core/services/booking.service';
+import { ClientService } from '../../../core/services/client.service';
+import { DepartureService } from '../../../core/services/departure.service';
+
+import {
+  BookingForm,
+  BookingPayload
+} from '../booking-form/booking-form';
+
+import { PageHeader } from '../../../shared/ui/page-header/page-header';
+import { EmptyState } from '../../../shared/ui/empty-state/empty-state';
+import { StatusTag } from '../../../shared/ui/status-tag/status-tag';
+
+@Component({
+  selector: 'app-booking-list',
+  standalone: true,
+  imports: [
+    ButtonModule,
+    DialogModule,
+    InputTextModule,
+    TableModule,
+    ToastModule,
+    PageHeader,
+    EmptyState,
+    StatusTag,
+    BookingForm
+  ],
+  templateUrl: './booking-list.html',
+  styleUrl: './booking-list.css'
+})
+export class BookingList implements OnInit {
+  private readonly bookingService = inject(BookingService);
+  private readonly clientService = inject(ClientService);
+  private readonly departureService = inject(DepartureService);
+  private readonly messageService = inject(MessageService);
+
+  readonly rows = signal<Booking[]>([]);
+  readonly clients = signal<Client[]>([]);
+  readonly departures = signal<Departure[]>([]);
+
+  readonly loading = signal(false);
+  readonly saving = signal(false);
+  readonly error = signal<string | null>(null);
+
+  readonly filter = signal('');
+  readonly dialogVisible = signal(false);
+
+  readonly visibleRows = computed(() => {
+    const term = this.filter().trim().toLowerCase();
+
+    if (!term) {
+      return this.rows();
+    }
+
+    return this.rows().filter((booking) => {
+      const client = this.getClientName(booking.client);
+      const departure = this.getDepartureName(booking.departure);
+
+      return [
+        booking.id,
+        client,
+        departure,
+        booking.startDate,
+        booking.endDate,
+        booking.status
+      ].some((value) =>
+        String(value ?? '').toLowerCase().includes(term)
+      );
+    });
+  });
+
+  ngOnInit(): void {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+    this.error.set(null);
+
+    forkJoin({
+      bookings: this.bookingService.getAll(),
+      clients: this.clientService.list(),
+      departures: this.departureService.getAll()
+    })
+      .pipe(finalize(() => this.loading.set(false)))
+      .subscribe({
+        next: (result) => {
+          this.rows.set(result.bookings);
+          this.clients.set(result.clients);
+          this.departures.set(result.departures);
+        },
+        error: () => {
+          this.error.set(
+            'No fue posible cargar las reservas y sus datos relacionados.'
+          );
+        }
+      });
+  }
+
+  openCreate(): void {
+    this.dialogVisible.set(true);
+  }
+
+  closeDialog(): void {
+    if (!this.saving()) {
+      this.dialogVisible.set(false);
+    }
+  }
+
+  save(payload: BookingPayload): void {
+    this.saving.set(true);
+
+    this.bookingService.register(payload)
+      .pipe(finalize(() => this.saving.set(false)))
+      .subscribe({
+        next: () => {
+          this.dialogVisible.set(false);
+
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Reserva registrada',
+            detail: 'La reserva se registró correctamente.'
+          });
+
+          this.load();
+        },
+        error: (error) => {
+          const detail =
+            error?.error?.detail ||
+            'No fue posible registrar la reserva. Verifica los datos ingresados.';
+
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error al registrar',
+            detail
+          });
+        }
+      });
+  }
+
+  getClientName(id: number): string {
+    return this.clients().find((client) => client.id === id)?.name
+      ?? `Cliente #${id}`;
+  }
+
+  getDepartureName(id: number): string {
+    return this.departures().find((departure) => departure.id === id)?.name
+      ?? `Salida #${id}`;
+  }
+}
+```
+
+![](images/clipboard-42200397.png)
+
+### Crear la vista del listado
+
+Abrimos:
+
+``` html
+nano src/app/features/bookings/booking-list/booking-list.html
+```
+
+Pegamos este código:
+
+``` html
+<p-toast />
+
+<section class="space-y-6">
+  <app-page-header
+    title="Reservas"
+    description="Administra las reservas y experiencias turísticas de Wayuu Travel."
+  />
+
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="relative w-full sm:max-w-md">
+      <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+
+      <input
+        pInputText
+        type="text"
+        class="w-full pl-10"
+        placeholder="Buscar reservas..."
+        [value]="filter()"
+        (input)="filter.set($any($event.target).value)"
+      />
+    </div>
+
+    <p-button
+      label="Nueva reserva"
+      icon="pi pi-plus"
+      (onClick)="openCreate()"
+    />
+  </div>
+
+  @if (error()) {
+    <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      {{ error() }}
+
+      <p-button
+        label="Reintentar"
+        icon="pi pi-refresh"
+        severity="danger"
+        [text]="true"
+        (onClick)="load()"
+      />
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="flex justify-center py-12">
+      <i class="pi pi-spin pi-spinner text-3xl text-teal-700"></i>
+    </div>
+  } @else if (visibleRows().length === 0) {
+    <app-empty-state
+      [title]="filter() ? 'No se encontraron reservas' : 'No hay reservas registradas'"
+      [description]="filter() ? 'Intenta con otro término de búsqueda.' : 'Registra la primera reserva para comenzar.'"
+      icon="pi pi-calendar"
+    />
+  } @else {
+    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <p-table
+        [value]="visibleRows()"
+        [rowHover]="true"
+        responsiveLayout="scroll"
+      >
+        <ng-template #header>
+          <tr>
+            <th>ID</th>
+            <th>Cliente</th>
+            <th>Salida turística</th>
+            <th>Viajero</th>
+            <th>Inicio</th>
+            <th>Finalización</th>
+            <th>Estado</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-booking>
+          <tr>
+            <td class="font-medium">#{{ booking.id }}</td>
+            <td>{{ getClientName(booking.client) }}</td>
+            <td>{{ getDepartureName(booking.departure) }}</td>
+            <td>#{{ booking.traveler }}</td>
+            <td>{{ booking.startDate }}</td>
+            <td>{{ booking.endDate }}</td>
+            <td>
+              <app-status-tag [status]="booking.status" />
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</section>
+
+<p-dialog
+  header="Registrar nueva reserva"
+  [visible]="dialogVisible()"
+  (visibleChange)="!$event && closeDialog()"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(95vw, 760px)' }"
+>
+  <app-booking-form
+    [clients]="clients()"
+    [departures]="departures()"
+    [saving]="saving()"
+    (saved)="save($event)"
+    (cancelled)="closeDialog()"
+  />
+</p-dialog>
+```
+
+![](images/clipboard-1574656447.png)
+
+###  Crear los estilos del listado
+
+Abrimos:
+
+``` css
+nano src/app/features/bookings/booking-list/booking-list.css
+```
+
+Pegamos:
+
+``` css
+:host {
+  display: block;
+  width: 100%;
+}
+```
+
+![](images/clipboard-1629322680.png)
+
+###  Conectar el módulo de reservas con Angular
+
+Vamos a reemplazar la pantalla provisional por el nuevo componente `BookingList`.
+
+Abrimos:
+
+``` typescript
+nano src/app/app.routes.ts
+```
+
+Buscamos esta ruta:
+
+``` typescript
+{
+  path: 'reservas',
+  loadComponent: () =>
+    import('./features/placeholder/placeholder').then(
+      (m) => m.Placeholder
+    ),
+  data: {
+    title: 'Reservas',
+    description: 'Gestión de las reservas de los viajeros.',
+  },
+},
+```
+
+La reemplazamos por:
+
+``` typescript
+{
+  path: 'reservas',
+  loadComponent: () =>
+    import('./features/bookings/booking-list/booking-list').then(
+      (m) => m.BookingList
+    ),
+  data: {
+    title: 'Reservas',
+    description: 'Gestión de las reservas de los viajeros.',
+  },
+},
+```
+
+![](images/clipboard-3320574835.png)
+
+realizamos las pruebas:
+
+![](images/clipboard-2751535763.png)
+
+### Mejorar la selección del cliente y validar las fechas
+
+Abrimos:
+
+``` typescript
+nano src/app/features/bookings/booking-form/booking-form.ts
+```
+
+Realiza estos cambios:
+
+1\. Agrega `FormsModule` a la importación de Angular:
+
+``` typescript
+import { FormsModule } from '@angular/forms';
+```
+
+2\. Agrégalo al arreglo `imports` del componente:
+
+``` typescript
+imports: [
+  ReactiveFormsModule,
+  FormsModule,
+  ButtonModule,
+  InputTextModule,
+  TextareaModule
+],
+```
+
+3\. Eliminamos `effect` de la importación de Angular y reemplazamos la propiedad `form` por esta versión:
+
+``` typescript
+readonly form = this.fb.group({
+  client: [null as number | null, Validators.required],
+  departure: [null as number | null, Validators.required],
+  traveler: [null as number | null, [
+    Validators.required,
+    Validators.min(1)
+  ]],
+  startDate: ['', Validators.required],
+  endDate: ['', Validators.required],
+  observations: [''],
+  referenceType: ['Reserva turística', Validators.required],
+  method: ['', [Validators.required, Validators.maxLength(50)]],
+  amount: [null as number | null, [
+    Validators.required,
+    Validators.min(0.01)
+  ]],
+  paymentDate: [
+    new Date().toISOString().slice(0, 16),
+    Validators.required
+  ]
+}, {
+  validators: (group) => {
+    const start = group.get('startDate')?.value;
+    const end = group.get('endDate')?.value;
+
+    return start && end && end < start
+      ? { dateOrder: true }
+      : null;
+  }
+});
+```
+
+![](images/clipboard-3018745098.png)
+
+4\. Eliminamos el constructor anterior que contenía `effect`. No necesitamos reemplazarlo.
+
+Ahora abrimos:
+
+``` html
+nano src/app/features/bookings/booking-form/booking-form.html
+```
+
+Reemplazamos el campo del cliente por este selector:
+
+``` html
+<div class="space-y-2">
+  <label for="client" class="block text-sm font-medium text-slate-700">
+    Cliente *
+  </label>
+
+  <select
+    id="client"
+    formControlName="client"
+    class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+  >
+    <option [ngValue]="null">Selecciona un cliente</option>
+
+    @for (client of clients(); track client.id) {
+      @if (client.status === 'active') {
+        <option [ngValue]="client.id">
+          {{ client.name }} — #{{ client.id }}
+        </option>
+      }
+    }
+  </select>
+
+  @if (form.controls.client.touched && form.controls.client.invalid) {
+    <small class="text-red-600">Selecciona un cliente.</small>
+  }
+</div>
+```
+
+También reemplazamos la condición de error de la fecha de finalización por:
+
+``` html
+@if (form.controls.endDate.touched && form.hasError('dateOrder')) {
+  <small class="text-red-600">
+    La fecha de finalización no puede ser anterior a la de inicio.
+  </small>
+}
+```
+
+![](images/clipboard-4036816225.png)
+
+realizamos la prueba:
+
+![](images/clipboard-3218345692.png)
+
+![](images/clipboard-365811935.png)

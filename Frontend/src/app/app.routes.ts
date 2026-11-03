@@ -69,17 +69,17 @@ export const routes: Routes = [
           description: 'Administración de los proveedores turísticos.',
         },
       },
-      {
+            {
         path: 'reservas',
         loadComponent: () =>
-          import('./features/placeholder/placeholder').then(
-            (m) => m.Placeholder
-          ),
+            import('./features/bookings/booking-list/booking-list').then(
+            (m) => m.BookingList
+            ),
         data: {
-          title: 'Reservas',
-          description: 'Gestión de las reservas de los viajeros.',
+            title: 'Reservas',
+            description: 'Gestión de las reservas de los viajeros.',
         },
-      },
+        },
       {
         path: 'pagos',
         loadComponent: () =>

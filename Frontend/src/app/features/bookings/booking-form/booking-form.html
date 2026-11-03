@@ -1,0 +1,395 @@
+<form
+  [formGroup]="form"
+  (ngSubmit)="submit()"
+  class="space-y-6"
+>
+
+  <!-- INFORMACIÓN DE LA RESERVA -->
+  <section class="space-y-4">
+
+    <div>
+      <h3 class="text-lg font-semibold text-slate-800">
+        Información de la reserva
+      </h3>
+
+      <p class="text-sm text-slate-500">
+        Registra los datos principales del viajero y la salida turística.
+      </p>
+    </div>
+
+    <!-- CLIENTE -->
+    <div class="space-y-2">
+
+      <label
+        for="client"
+        class="block text-sm font-medium text-slate-700"
+      >
+        Cliente *
+      </label>
+
+      <select
+        id="client"
+        formControlName="client"
+        class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+      >
+        <option [ngValue]="null">
+          Selecciona un cliente
+        </option>
+
+        @for (client of clients(); track client.id) {
+          @if (client.status === 'active') {
+            <option [ngValue]="client.id">
+              {{ client.name }} — #{{ client.id }}
+            </option>
+          }
+        }
+      </select>
+
+      @if (form.controls.client.touched && form.controls.client.invalid) {
+        <small class="text-red-600">
+          Selecciona un cliente.
+        </small>
+      }
+
+    </div>
+
+    <!-- SALIDA -->
+    <div class="space-y-2">
+
+      <label
+        for="departure"
+        class="block text-sm font-medium text-slate-700"
+      >
+        Salida turística *
+      </label>
+
+      <select
+        id="departure"
+        formControlName="departure"
+        class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+      >
+        <option [ngValue]="null">
+          Selecciona una salida
+        </option>
+
+        @for (departure of departures(); track departure.id) {
+          @if (
+            departure.status === 'active' &&
+            departure.availableCapacity > 0
+          ) {
+            <option [ngValue]="departure.id">
+              {{ departure.name }} — Disponibles:
+              {{ departure.availableCapacity }}
+            </option>
+          }
+        }
+      </select>
+
+      @if (
+        form.controls.departure.touched &&
+        form.controls.departure.invalid
+      ) {
+        <small class="text-red-600">
+          Selecciona una salida turística.
+        </small>
+      }
+
+    </div>
+
+    <!-- VIAJERO -->
+    <div class="space-y-2">
+
+      <label
+        for="traveler"
+        class="block text-sm font-medium text-slate-700"
+      >
+        ID del viajero *
+      </label>
+
+      <input
+        id="traveler"
+        type="number"
+        pInputText
+        formControlName="traveler"
+        placeholder="Ingresa el ID del viajero"
+        class="w-full"
+        min="1"
+      />
+
+      @if (
+        form.controls.traveler.touched &&
+        form.controls.traveler.hasError('required')
+      ) {
+        <small class="text-red-600">
+          El ID del viajero es obligatorio.
+        </small>
+      }
+
+      @if (
+        form.controls.traveler.touched &&
+        form.controls.traveler.hasError('min')
+      ) {
+        <small class="text-red-600">
+          El ID debe ser mayor que cero.
+        </small>
+      }
+
+    </div>
+
+    <!-- FECHAS -->
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+      <div class="space-y-2">
+
+        <label
+          for="startDate"
+          class="block text-sm font-medium text-slate-700"
+        >
+          Fecha de inicio *
+        </label>
+
+        <input
+          id="startDate"
+          type="date"
+          formControlName="startDate"
+          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+
+        @if (
+          form.controls.startDate.touched &&
+          form.controls.startDate.invalid
+        ) {
+          <small class="text-red-600">
+            La fecha de inicio es obligatoria.
+          </small>
+        }
+
+      </div>
+
+      <div class="space-y-2">
+
+        <label
+          for="endDate"
+          class="block text-sm font-medium text-slate-700"
+        >
+          Fecha final *
+        </label>
+
+        <input
+          id="endDate"
+          type="date"
+          formControlName="endDate"
+          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+
+        @if (
+          form.controls.endDate.touched &&
+          form.controls.endDate.hasError('required')
+        ) {
+          <small class="text-red-600">
+            La fecha final es obligatoria.
+          </small>
+        }
+
+        @if (
+          form.controls.endDate.touched &&
+          form.hasError('dateOrder')
+        ) {
+          <small class="text-red-600">
+            La fecha final no puede ser anterior a la inicial.
+          </small>
+        }
+
+      </div>
+
+    </div>
+
+    <!-- OBSERVACIONES -->
+    <div class="space-y-2">
+
+      <label
+        for="observations"
+        class="block text-sm font-medium text-slate-700"
+      >
+        Observaciones
+      </label>
+
+      <textarea
+        id="observations"
+        pTextarea
+        formControlName="observations"
+        rows="3"
+        placeholder="Información adicional de la reserva..."
+        class="w-full"
+      ></textarea>
+
+    </div>
+
+  </section>
+
+  <!-- INFORMACIÓN DEL PAGO -->
+  <section class="space-y-4 border-t border-slate-200 pt-5">
+
+    <div>
+      <h3 class="text-lg font-semibold text-slate-800">
+        Información del pago
+      </h3>
+
+      <p class="text-sm text-slate-500">
+        Registra el primer pago asociado a la reserva.
+      </p>
+    </div>
+
+    <!-- TIPO DE REFERENCIA -->
+    <div class="space-y-2">
+
+      <label
+        for="referenceType"
+        class="block text-sm font-medium text-slate-700"
+      >
+        Tipo de referencia *
+      </label>
+
+      <input
+        id="referenceType"
+        type="text"
+        pInputText
+        formControlName="referenceType"
+        class="w-full"
+      />
+
+      @if (
+        form.controls.referenceType.touched &&
+        form.controls.referenceType.invalid
+      ) {
+        <small class="text-red-600">
+          El tipo de referencia es obligatorio.
+        </small>
+      }
+
+    </div>
+
+    <!-- MÉTODO DE PAGO -->
+    <div class="space-y-2">
+
+      <label
+        for="method"
+        class="block text-sm font-medium text-slate-700"
+      >
+        Método de pago *
+      </label>
+
+      <input
+        id="method"
+        type="text"
+        pInputText
+        formControlName="method"
+        placeholder="Ej. Efectivo, transferencia..."
+        class="w-full"
+      />
+
+      @if (
+        form.controls.method.touched &&
+        form.controls.method.invalid
+      ) {
+        <small class="text-red-600">
+          Ingresa un método de pago válido.
+        </small>
+      }
+
+    </div>
+
+    <!-- MONTO -->
+    <div class="space-y-2">
+
+      <label
+        for="amount"
+        class="block text-sm font-medium text-slate-700"
+      >
+        Valor del pago *
+      </label>
+
+      <input
+        id="amount"
+        type="number"
+        pInputText
+        formControlName="amount"
+        placeholder="0.00"
+        min="0.01"
+        step="0.01"
+        class="w-full"
+      />
+
+      @if (
+        form.controls.amount.touched &&
+        form.controls.amount.hasError('required')
+      ) {
+        <small class="text-red-600">
+          El valor del pago es obligatorio.
+        </small>
+      }
+
+      @if (
+        form.controls.amount.touched &&
+        form.controls.amount.hasError('min')
+      ) {
+        <small class="text-red-600">
+          El pago debe ser mayor que cero.
+        </small>
+      }
+
+    </div>
+
+    <!-- FECHA DEL PAGO -->
+    <div class="space-y-2">
+
+      <label
+        for="paymentDate"
+        class="block text-sm font-medium text-slate-700"
+      >
+        Fecha del pago *
+      </label>
+
+      <input
+        id="paymentDate"
+        type="datetime-local"
+        formControlName="paymentDate"
+        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+      />
+
+      @if (
+        form.controls.paymentDate.touched &&
+        form.controls.paymentDate.invalid
+      ) {
+        <small class="text-red-600">
+          La fecha del pago es obligatoria.
+        </small>
+      }
+
+    </div>
+
+  </section>
+
+  <!-- BOTONES -->
+  <div class="flex flex-col-reverse justify-end gap-3 border-t border-slate-200 pt-5 sm:flex-row">
+
+    <p-button
+      type="button"
+      label="Cancelar"
+      severity="secondary"
+      [outlined]="true"
+      [disabled]="saving()"
+      (onClick)="cancel()"
+    />
+
+    <p-button
+      type="submit"
+      label="Registrar reserva"
+      icon="pi pi-check"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+
+  </div>
+
+</form>
