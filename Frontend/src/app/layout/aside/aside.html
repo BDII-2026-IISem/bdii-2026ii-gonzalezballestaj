@@ -1,11 +1,34 @@
 
-<nav
-  aria-label="Navegación principal"
-  class="h-full bg-slate-900 px-5 py-6 text-white"
->
-  <h2 class="mb-4 text-lg font-semibold">Menú de WayuuTravel</h2>
+<div class="flex h-full flex-col border-r border-slate-200 bg-white text-slate-900">
 
-  <p class="text-sm text-slate-300">
-    En la siguiente etapa se incorporará el menú interactivo.
-  </p>
-</nav>
+  <!-- Identidad de WayuuTravel -->
+  <div class="flex h-16 items-center gap-3 border-b border-slate-200 px-5">
+    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-700 text-sm font-bold text-white">
+      WT
+    </div>
+
+    <div class="min-w-0">
+      <p class="truncate text-sm font-semibold text-slate-900">
+        {{ appName() }}
+      </p>
+
+      <p class="text-[11px] uppercase tracking-wider text-slate-400">
+        Gestión turística
+      </p>
+    </div>
+  </div>
+
+  <!-- Navegación principal -->
+  <div class="flex-1 overflow-y-auto p-3">
+    <nav
+      aria-label="Navegación principal"
+      (click)="onNavigationClick($event)"
+    >
+      <p-panelmenu
+        [model]="items()"
+        [multiple]="true"
+      />
+    </nav>
+  </div>
+
+</div>

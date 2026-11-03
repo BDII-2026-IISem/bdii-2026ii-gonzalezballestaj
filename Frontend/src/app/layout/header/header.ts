@@ -1,9 +1,10 @@
-import { Component } from '@angular/core';
+
+import { Component, input, output } from '@angular/core';
+import { ButtonModule } from 'primeng/button';
 
 @Component({
   selector: 'app-header',
-  standalone: true,
-  imports: [],
+  imports: [ButtonModule],
   templateUrl: './header.html',
   styleUrl: './header.css',
   host: {
@@ -11,5 +12,7 @@ import { Component } from '@angular/core';
   },
 })
 export class Header {
-  protected readonly title = 'WayuuTravel';
+  readonly appName = input('WayuuTravel');
+
+  readonly menuRequested = output<void>();
 }

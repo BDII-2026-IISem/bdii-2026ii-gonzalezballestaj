@@ -1,16 +1,14 @@
 
 import { Component } from '@angular/core';
-import { Header } from './layout/header/header';
-import { Aside } from './layout/aside/aside';
-import { Footer } from './layout/footer/footer';
+import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-root',
-  standalone: true,
-  imports: [Header, Aside, Footer],
+  imports: [RouterOutlet],
   templateUrl: './app.html',
   styleUrl: './app.css',
+  host: {
+    class: 'block',
+  },
 })
-export class App {
-  protected readonly title = 'Inicio';
-}
+export class App {}
