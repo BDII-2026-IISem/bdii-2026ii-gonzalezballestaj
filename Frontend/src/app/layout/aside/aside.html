@@ -18,17 +18,10 @@
     </div>
   </div>
 
-  <!-- Navegación principal -->
-  <div class="flex-1 overflow-y-auto p-3">
-    <nav
-      aria-label="Navegación principal"
-      (click)="onNavigationClick($event)"
-    >
-      <p-panelmenu
-        [model]="items()"
-        [multiple]="true"
-      />
-    </nav>
-  </div>
-
+  <nav aria-label="Navegación principal">
+  <p-panelmenu
+    [model]="items()"
+    [multiple]="true"
+  />
+</nav>
 </div>

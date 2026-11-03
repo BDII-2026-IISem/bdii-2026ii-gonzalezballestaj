@@ -3,7 +3,14 @@ import {
   provideBrowserGlobalErrorListeners
 } from '@angular/core';
 
-import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+
+import {
+  provideRouter,
+  withComponentInputBinding,
+  withInMemoryScrolling
+} from '@angular/router';
+
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 
 import { providePrimeNG } from 'primeng/config';
@@ -16,6 +23,8 @@ import { routes } from './app.routes';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
+
+    provideHttpClient(),
 
     provideRouter(
       routes,

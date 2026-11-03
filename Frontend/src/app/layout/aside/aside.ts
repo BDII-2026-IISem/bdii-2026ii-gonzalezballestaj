@@ -18,11 +18,11 @@ export class Aside {
 
   readonly navigated = output<void>();
 
-  onNavigationClick(event: Event): void {
-    const target = event.target as HTMLElement;
+onNavigationClick(event: Event): void {
+  const target = event.target as HTMLElement;
 
-    if (target.closest('a, button, [role="button"]')) {
-      this.navigated.emit();
-    }
+  if (target.closest('a')) {
+    this.navigated.emit();
   }
+}
 }
