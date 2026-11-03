@@ -1,0 +1,122 @@
+<section class="space-y-6">
+  <app-page-header
+    title="Tipos de producto"
+    description="Administra los tipos de producto registrados en StoreLab."
+  />
+
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="relative w-full sm:max-w-md">
+      <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+
+      <input
+        pInputText
+        type="text"
+        class="w-full pl-10"
+        placeholder="Buscar tipos de producto..."
+        aria-label="Buscar tipos"
+        [value]="filter()"
+        (input)="filter.set($any($event.target).value)"
+      />
+    </div>
+
+    <p-button
+      label="Nuevo tipo"
+      icon="pi pi-plus"
+      (onClick)="openCreate()"
+    />
+  </div>
+
+  @if (error()) {
+    <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      {{ error() }}
+
+      <p-button
+        label="Reintentar"
+        icon="pi pi-refresh"
+        severity="danger"
+        [text]="true"
+        (onClick)="load()"
+      />
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="flex justify-center py-12">
+      <i class="pi pi-spin pi-spinner text-3xl text-teal-700"></i>
+    </div>
+  } @else if (visibleRows().length === 0) {
+    <app-empty-state
+      [title]="filter() ? 'No se encontraron tipos de producto' : 'No hay tipos de producto activos'"
+      [description]="filter() ? 'Intenta con otro término de búsqueda.' : 'Registra el primer tipo de producto para comenzar.'"
+      icon="pi pi-tags"
+    />
+  } @else {
+    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <p-table
+        [value]="visibleRows()"
+        [rowHover]="true"
+        responsiveLayout="scroll"
+      >
+        <ng-template #header>
+          <tr>
+            <th>ID</th>
+            <th>Nombre</th>
+            <th>Descripción</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-productType>
+          <tr>
+            <td>{{ productType.id }}</td>
+            <td class="font-medium">{{ productType.name }}</td>
+            <td>{{ productType.description || '—' }}</td>
+            <td>
+              <app-status-tag [status]="productType.status" />
+            </td>
+            <td>
+              <div class="flex justify-center gap-2">
+                <p-button
+                  icon="pi pi-pencil"
+                  severity="secondary"
+                  [text]="true"
+                  [rounded]="true"
+                  pTooltip="Editar tipo de producto"
+                  (onClick)="openEdit(productType)"
+                />
+
+                <p-button
+                  icon="pi pi-ban"
+                  severity="danger"
+                  [text]="true"
+                  [rounded]="true"
+                  pTooltip="Desactivar tipo de producto"
+                  (onClick)="confirmDeactivate(productType)"
+                />
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</section>
+
+<p-dialog
+  [header]="editing() ? 'Editar tipo de producto' : 'Nuevo tipo de producto'"
+  [visible]="dialogVisible()"
+  (visibleChange)="!$event && closeDialog()"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(95vw, 600px)' }"
+>
+  <app-product-type-form
+    [productType]="editing()"
+    [saving]="saving()"
+    [resetKey]="resetKey()"
+    (saved)="save($event)"
+    (cancelled)="closeDialog()"
+  />
+</p-dialog>

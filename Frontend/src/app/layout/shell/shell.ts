@@ -38,6 +38,13 @@ export class Shell {
           label: 'Clientes',
           icon: 'pi pi-users',
           routerLink: '/clientes'
+          
+        },
+
+        {
+         label: 'Tipos de producto',
+        icon: 'pi pi-tags',
+      routerLink: '/tipos-producto'
         },
         {
           label: 'Paquetes turísticos',

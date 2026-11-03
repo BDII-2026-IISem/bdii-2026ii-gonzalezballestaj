@@ -4468,3 +4468,762 @@ ng serve
 ```
 
 ![](images/clipboard-1090359849.png)
+
+### ISS-04 · CRUD de tipos de producto
+
+En esta unidad desarrollé el CRUD de tipos de producto para el proyecto **front-storelab-django**, utilizando Angular 22, PrimeNG 22 y Tailwind CSS 4, integrando el frontend con la API REST de Django.
+
+Reutilicé la estructura y los patrones implementados en el CRUD de clientes del ISS-03, aplicando Angular Signals para gestionar el estado, servicios para consumir la API, formularios reactivos para registrar y editar información, y componentes compartidos para mantener una interfaz consistente.
+
+Implementé las operaciones de consulta, creación, edición y baja lógica de tipos de producto. También incorporé un buscador local por nombre y descripción, validaciones para el nombre entre 2 y 100 caracteres y el manejo de descripciones vacías mediante valores `null`.
+
+Finalmente, integré el módulo a la navegación del sistema mediante la ruta `/tipos-producto`, conservando la estructura principal de la aplicación. Realicé las verificaciones de compilación, pruebas y funcionamiento para comprobar el cumplimiento de los criterios de aceptación establecidos en esta unidad.
+
+###  Revisar la estructura existente
+
+Primero verificaremos qué archivos del módulo de tipos de producto ya existen para reutilizarlos y evitar duplicaciones.
+
+Ejecutamos:
+
+``` sql
+tree src/app/features/product-types -L 3
+```
+
+``` sql
+cat src/app/core/models/product-type.model.ts 
+cat src/app/core/services/product-type-api.ts
+```
+
+``` sql
+grep -R "ProductType" -n src/app/core
+```
+
+### Revisar la estructura de referencia
+
+Ejecutamos:
+
+``` sql
+tree src/app/features/clients -L 3 tree src/app/core -L 3
+```
+
+Y revisamos el servicio de clientes:
+
+``` typescript
+cat src/app/core/services/client.service.ts
+```
+
+### Crear el modelo de tipos de producto
+
+Este modelo definirá la estructura de los datos y el contenido que enviaremos a la API.
+
+Creamos el archivo:
+
+``` typescript
+touch src/app/core/models/product-type.model.ts
+```
+
+Pegamos este código:
+
+``` typescript
+import type { Status, Timestamps } from './api.model';
+
+export interface ProductType extends Timestamps {
+  id: number;
+  name: string;
+  description: string | null;
+  status: Status;
+}
+
+export interface ProductTypePayload {
+  name: string;
+  description: string | null;
+}
+```
+
+![](images/clipboard-108780420.png)
+
+### Crear el servicio de tipos de producto
+
+Este servicio conectará el frontend con los endpoints de tipos de producto del backend Django.
+
+Creamos el archivo:
+
+``` typescript
+touch src/app/core/services/product-type-api.ts
+```
+
+Pegamos este código:
+
+``` typescript
+import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+import { environment } from '../../../environments/environment';
+import { Status } from '../models/api.model';
+import {
+  ProductType,
+  ProductTypePayload
+} from '../models/product-type.model';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class ProductTypeApi {
+  private readonly http = inject(HttpClient);
+  private readonly base = `${environment.apiUrl}/product-types`;
+
+  list(status?: Status): Observable<ProductType[]> {
+    return this.http.get<ProductType[]>(
+      `${this.base}/`,
+      status ? { params: { status } } : {}
+    );
+  }
+
+  getById(id: number): Observable<ProductType> {
+    return this.http.get<ProductType>(`${this.base}/${id}/`);
+  }
+
+  create(
+    payload: ProductTypePayload & { status: Status }
+  ): Observable<ProductType> {
+    return this.http.post<ProductType>(`${this.base}/`, payload);
+  }
+
+  update(
+    id: number,
+    payload: ProductTypePayload
+  ): Observable<ProductType> {
+    return this.http.patch<ProductType>(`${this.base}/${id}/`, payload);
+  }
+
+  remove(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/${id}/`);
+  }
+}
+```
+
+![](images/clipboard-1569313054.png)
+
+###  Revisar el componente de listado
+
+Antes de construir `ProductTypeList`, revisaremos el CRUD de clientes para reutilizar su estructura, Signals, tabla y manejo de notificaciones.
+
+Ejecutamos:
+
+``` html
+cat src/app/features/clients/client-list/client-list.ts
+cat src/app/features/clients/client-list/client-list.html
+```
+
+### Crear la estructura del módulo
+
+Ejecutamos:
+
+``` sql
+mkdir -p src/app/features/product-types/product-type-list
+mkdir -p src/app/features/product-types/product-type-form
+
+touch src/app/features/product-types/product-type-list/product-type-list.ts
+touch src/app/features/product-types/product-type-list/product-type-list.html
+touch src/app/features/product-types/product-type-list/product-type-list.css
+
+touch src/app/features/product-types/product-type-form/product-type-form.ts
+touch src/app/features/product-types/product-type-form/product-type-form.html
+touch src/app/features/product-types/product-type-form/product-type-form.css
+```
+
+![](images/clipboard-773480465.png)
+
+###  Implementar ProductTypeList
+
+Abrimos:
+
+``` typescript
+nano src/app/features/product-types/product-type-list/product-type-list.ts
+```
+
+Pegamos este código:
+
+``` typescript
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { finalize } from 'rxjs';
+
+import { ConfirmationService } from 'primeng/api';
+import { ButtonModule } from 'primeng/button';
+import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { TableModule } from 'primeng/table';
+import { TooltipModule } from 'primeng/tooltip';
+
+import {
+  ProductType,
+  ProductTypePayload
+} from '../../../core/models/product-type.model';
+
+import { ProductTypeApi } from '../../../core/services/product-type-api';
+import { NotificationService } from '../../../core/services/notification.service';
+import { filterRows } from '../../../core/utils/filter-rows';
+import { toApiMessage } from '../../../core/utils/to-api-message';
+
+import { EmptyState } from '../../../shared/ui/empty-state/empty-state';
+import { PageHeader } from '../../../shared/ui/page-header/page-header';
+import { StatusTag } from '../../../shared/ui/status-tag/status-tag';
+
+import { ProductTypeForm } from '../product-type-form/product-type-form';
+
+@Component({
+  selector: 'app-product-type-list',
+  standalone: true,
+  imports: [
+    ButtonModule,
+    DialogModule,
+    InputTextModule,
+    TableModule,
+    TooltipModule,
+    PageHeader,
+    EmptyState,
+    StatusTag,
+    ProductTypeForm
+  ],
+  templateUrl: './product-type-list.html',
+  styleUrl: './product-type-list.css'
+})
+export class ProductTypeList implements OnInit {
+  private readonly api = inject(ProductTypeApi);
+  private readonly notification = inject(NotificationService);
+  private readonly confirmation = inject(ConfirmationService);
+
+  readonly rows = signal<ProductType[]>([]);
+  readonly loading = signal(false);
+  readonly saving = signal(false);
+  readonly error = signal<string | null>(null);
+
+  readonly filter = signal('');
+  readonly dialogVisible = signal(false);
+  readonly editing = signal<ProductType | null>(null);
+  readonly resetKey = signal(0);
+
+  readonly visibleRows = computed(() =>
+    filterRows(this.rows(), this.filter(), (productType) => [
+      productType.id,
+      productType.name,
+      productType.description,
+      productType.status
+    ])
+  );
+
+  ngOnInit(): void {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+    this.error.set(null);
+
+    this.api.list('active')
+      .pipe(finalize(() => this.loading.set(false)))
+      .subscribe({
+        next: (types) => this.rows.set(types),
+        error: (err) => {
+          const message = toApiMessage(err);
+          this.error.set(message);
+          this.notification.error(message);
+        }
+      });
+  }
+
+  openCreate(): void {
+    this.editing.set(null);
+    this.resetKey.update((value) => value + 1);
+    this.dialogVisible.set(true);
+  }
+
+  openEdit(productType: ProductType): void {
+    this.editing.set(productType);
+    this.dialogVisible.set(true);
+  }
+
+  closeDialog(): void {
+    this.dialogVisible.set(false);
+    this.editing.set(null);
+    this.resetKey.update((value) => value + 1);
+  }
+
+  save(payload: ProductTypePayload): void {
+    this.saving.set(true);
+
+    const productType = this.editing();
+
+    const request = productType
+      ? this.api.update(productType.id, payload)
+      : this.api.create({
+          ...payload,
+          status: 'active'
+        });
+
+    request
+      .pipe(finalize(() => this.saving.set(false)))
+      .subscribe({
+        next: () => {
+          this.notification.success(
+            productType
+              ? 'Tipo de producto actualizado correctamente.'
+              : 'Tipo de producto registrado correctamente.'
+          );
+
+          this.closeDialog();
+          this.load();
+        },
+        error: (err) => {
+          const message = toApiMessage(err);
+          this.error.set(message);
+          this.notification.error(message);
+        }
+      });
+  }
+
+  confirmDeactivate(productType: ProductType): void {
+    this.confirmation.confirm({
+      header: 'Desactivar tipo de producto',
+      message: `¿Estás seguro de desactivar "${productType.name}"?`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Desactivar',
+      rejectLabel: 'Cancelar',
+      accept: () => this.deactivate(productType)
+    });
+  }
+
+  private deactivate(productType: ProductType): void {
+    this.api.remove(productType.id).subscribe({
+      next: () => {
+        this.rows.update((rows) =>
+          rows.filter((row) => row.id !== productType.id)
+        );
+
+        this.notification.success(
+          'Tipo de producto desactivado correctamente.'
+        );
+      },
+      error: (err) => {
+        const message = toApiMessage(err);
+        this.notification.error(message);
+      }
+    });
+  }
+}
+```
+
+![](images/clipboard-2583820140.png)
+
+###  Construir la interfaz del listado
+
+Crearemos la tabla de tipos de producto con buscador, estados, acciones y diálogo para el formulario.
+
+Abrimos:
+
+``` html
+nano src/app/features/product-types/product-type-list/product-type-list.html
+```
+
+Pegamos este código:
+
+``` html
+<section class="space-y-6">
+  <app-page-header
+    title="Tipos de producto"
+    description="Administra los tipos de producto registrados en StoreLab."
+  />
+
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="relative w-full sm:max-w-md">
+      <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+
+      <input
+        pInputText
+        type="text"
+        class="w-full pl-10"
+        placeholder="Buscar tipos de producto..."
+        aria-label="Buscar tipos"
+        [value]="filter()"
+        (input)="filter.set($any($event.target).value)"
+      />
+    </div>
+
+    <p-button
+      label="Nuevo tipo"
+      icon="pi pi-plus"
+      (onClick)="openCreate()"
+    />
+  </div>
+
+  @if (error()) {
+    <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      {{ error() }}
+
+      <p-button
+        label="Reintentar"
+        icon="pi pi-refresh"
+        severity="danger"
+        [text]="true"
+        (onClick)="load()"
+      />
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="flex justify-center py-12">
+      <i class="pi pi-spin pi-spinner text-3xl text-teal-700"></i>
+    </div>
+  } @else if (visibleRows().length === 0) {
+    <app-empty-state
+      [title]="filter() ? 'No se encontraron tipos de producto' : 'No hay tipos de producto activos'"
+      [description]="filter() ? 'Intenta con otro término de búsqueda.' : 'Registra el primer tipo de producto para comenzar.'"
+      icon="pi pi-tags"
+    />
+  } @else {
+    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <p-table
+        [value]="visibleRows()"
+        [rowHover]="true"
+        responsiveLayout="scroll"
+      >
+        <ng-template #header>
+          <tr>
+            <th>ID</th>
+            <th>Nombre</th>
+            <th>Descripción</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-productType>
+          <tr>
+            <td>{{ productType.id }}</td>
+            <td class="font-medium">{{ productType.name }}</td>
+            <td>{{ productType.description || '—' }}</td>
+            <td>
+              <app-status-tag [status]="productType.status" />
+            </td>
+            <td>
+              <div class="flex justify-center gap-2">
+                <p-button
+                  icon="pi pi-pencil"
+                  severity="secondary"
+                  [text]="true"
+                  [rounded]="true"
+                  pTooltip="Editar tipo de producto"
+                  (onClick)="openEdit(productType)"
+                />
+
+                <p-button
+                  icon="pi pi-ban"
+                  severity="danger"
+                  [text]="true"
+                  [rounded]="true"
+                  pTooltip="Desactivar tipo de producto"
+                  (onClick)="confirmDeactivate(productType)"
+                />
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</section>
+
+<p-dialog
+  [header]="editing() ? 'Editar tipo de producto' : 'Nuevo tipo de producto'"
+  [visible]="dialogVisible()"
+  (visibleChange)="!$event && closeDialog()"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(95vw, 600px)' }"
+>
+  <app-product-type-form
+    [productType]="editing()"
+    [saving]="saving()"
+    [resetKey]="resetKey()"
+    (saved)="save($event)"
+    (cancelled)="closeDialog()"
+  />
+</p-dialog>
+```
+
+![](images/clipboard-621540461.png)
+
+### Revisar el formulario de clientes
+
+Usaremos el formulario existente como referencia para construir el formulario reactivo de tipos de producto.
+
+Ejecutamos:
+
+``` html
+cat src/app/features/clients/client-form/client-form.ts
+cat src/app/features/clients/client-form/client-form.html
+```
+
+### Implementar ProductTypeForm
+
+Abrimos:
+
+``` typescript
+nano src/app/features/product-types/product-type-form/product-type-form.ts
+```
+
+Pegamos este código:
+
+``` typescript
+import {
+  Component,
+  effect,
+  input,
+  output
+} from '@angular/core';
+
+import {
+  FormBuilder,
+  ReactiveFormsModule,
+  Validators
+} from '@angular/forms';
+
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { TextareaModule } from 'primeng/textarea';
+
+import {
+  ProductType,
+  ProductTypePayload
+} from '../../../core/models/product-type.model';
+
+@Component({
+  selector: 'app-product-type-form',
+  standalone: true,
+  imports: [
+    ReactiveFormsModule,
+    ButtonModule,
+    InputTextModule,
+    TextareaModule
+  ],
+  templateUrl: './product-type-form.html',
+  styleUrl: './product-type-form.css'
+})
+export class ProductTypeForm {
+  readonly productType = input<ProductType | null>(null);
+  readonly saving = input(false);
+  readonly resetKey = input(0);
+
+  readonly saved = output<ProductTypePayload>();
+  readonly cancelled = output<void>();
+
+  private readonly fb = new FormBuilder();
+
+  readonly form = this.fb.group({
+    name: ['', [
+      Validators.required,
+      Validators.minLength(2),
+      Validators.maxLength(100)
+    ]],
+    description: ['']
+  });
+
+  constructor() {
+    effect(() => {
+      const productType = this.productType();
+      this.resetKey();
+
+      if (productType) {
+        this.form.reset({
+          name: productType.name,
+          description: productType.description ?? ''
+        });
+      } else {
+        this.form.reset({
+          name: '',
+          description: ''
+        });
+      }
+    });
+  }
+
+  submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const value = this.form.getRawValue();
+
+    const payload: ProductTypePayload = {
+      name: value.name!.trim(),
+      description: value.description?.trim() || null
+    };
+
+    this.saved.emit(payload);
+  }
+
+  cancel(): void {
+    this.cancelled.emit();
+  }
+}
+```
+
+![](images/clipboard-2168951716.png)
+
+### Construir el HTML del formulario
+
+Este formulario permitirá registrar y editar tipos de producto con sus respectivas validaciones.
+
+Abrimos:
+
+``` html
+nano src/app/features/product-types/product-type-form/product-type-form.html
+```
+
+Pegamos este código:
+
+``` html
+<form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5">
+
+  <div class="space-y-2">
+    <label for="name" class="block text-sm font-medium text-slate-700">
+      Nombre *
+    </label>
+
+    <input
+      pInputText
+      id="name"
+      formControlName="name"
+      class="w-full"
+      placeholder="Nombre del tipo de producto"
+      maxlength="100"
+    />
+
+    @if (form.controls.name.touched && form.controls.name.invalid) {
+      <small class="text-red-600">
+        @if (form.controls.name.hasError('required')) {
+          El nombre es obligatorio.
+        } @else if (form.controls.name.hasError('minlength')) {
+          El nombre debe tener al menos 2 caracteres.
+        } @else {
+          El nombre no puede superar los 100 caracteres.
+        }
+      </small>
+    }
+  </div>
+
+  <div class="space-y-2">
+    <label for="description" class="block text-sm font-medium text-slate-700">
+      Descripción
+    </label>
+
+    <textarea
+      pTextarea
+      id="description"
+      formControlName="description"
+      rows="4"
+      class="w-full"
+      placeholder="Describe el tipo de producto"
+    ></textarea>
+  </div>
+
+  <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [outlined]="true"
+      type="button"
+      (onClick)="cancel()"
+    />
+
+    <p-button
+      [label]="productType() ? 'Guardar cambios' : 'Registrar tipo'"
+      icon="pi pi-check"
+      type="submit"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+  </div>
+
+</form>
+```
+
+![](images/clipboard-2431986028.png)
+
+### Integrar la ruta del módulo
+
+Revisaremos las rutas actuales para incorporar `ProductTypeList` sin modificar las demás funcionalidades.
+
+Ejecutamos:
+
+``` typescript
+cat src/app/app.routes.ts
+```
+
+También verificaremos si el menú lateral ya contiene la opción:
+
+``` typescript
+grep -R -n "Tipos de producto\|tipos-producto" src/app
+```
+
+### Registrar la ruta
+
+Abrimos:
+
+``` typescript
+nano src/app/app.routes.ts
+```
+
+Agregamos este bloque justo después de la ruta `clientes`:
+
+``` typescript
+{
+  path: 'tipos-producto',
+  loadComponent: () =>
+    import('./features/product-types/product-type-list/product-type-list').then(
+      (m) => m.ProductTypeList
+    ),
+  data: {
+    title: 'Tipos de producto · StoreLab',
+    description: 'Administración de los tipos de producto.',
+  },
+},
+```
+
+![](images/clipboard-618863067.png)
+
+### Agregar al menú lateral
+
+Incorporaremos el acceso a tipos de producto dentro de la sección Gestión turística.
+
+Abrimos:
+
+``` typescript
+nano src/app/layout/shell/shell.ts
+```
+
+Buscamos el elemento `Clientes`:
+
+``` typescript
+{   label: 'Clientes',   icon: 'pi pi-users',   routerLink: '/clientes' },
+```
+
+![](images/clipboard-4111655158.png)
+
+Verificamos que TypeScript compile:
+
+```         
+npx ng build
+```
+
+![](images/clipboard-3196033747.png)
+
+![](images/clipboard-1004369684.png)
+
+realizamos las pruebas
+
+\
+![](images/clipboard-3024088030.png)

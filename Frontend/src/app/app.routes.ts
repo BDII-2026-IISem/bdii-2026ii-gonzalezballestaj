@@ -1,4 +1,3 @@
-
 import { Routes } from '@angular/router';
 
 export const routes: Routes = [
@@ -9,22 +8,32 @@ export const routes: Routes = [
 
     children: [
       {
-  path: 'inicio',
-  loadComponent: () =>
-    import('./features/construir/construir').then(
-      (m) => m.Construir
-    ),
-},
+        path: 'inicio',
+        loadComponent: () =>
+          import('./features/construir/construir').then(
+            (m) => m.Construir
+          ),
+      },
       {
         path: 'clientes',
         loadComponent: () =>
-        import('./features/clients/client-list/client-list').then(
-         (m) => m.ClientList
-             ),
-             
+          import('./features/clients/client-list/client-list').then(
+            (m) => m.ClientList
+          ),
         data: {
           title: 'Clientes',
           description: 'Gestión de los clientes de WayuuTravel.',
+        },
+      },
+      {
+        path: 'tipos-producto',
+        loadComponent: () =>
+          import('./features/product-types/product-type-list/product-type-list').then(
+            (m) => m.ProductTypeList
+          ),
+        data: {
+          title: 'Tipos de producto',
+          description: 'Administración de los tipos de producto.',
         },
       },
       {
