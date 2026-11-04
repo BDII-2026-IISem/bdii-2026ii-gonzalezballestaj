@@ -1,0 +1,116 @@
+<div class="space-y-6">
+  <app-page-header
+    title="Comprobantes"
+    description="Emite y consulta los comprobantes de las reservas."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar por reserva o nombre..."
+      aria-label="Buscar comprobantes"
+      [ngModel]="search()"
+      (ngModelChange)="updateSearch($event)"
+    />
+
+    <p-button
+      label="Nuevo comprobante"
+      icon="pi pi-plus"
+      (onClick)="openCreate()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">
+      Cargando comprobantes...
+    </div>
+  } @else if (filteredRows().length === 0) {
+    <app-empty-state
+      title="Sin comprobantes"
+      description="No se encontraron comprobantes para mostrar."
+    />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table
+        [value]="filteredRows()"
+        [tableStyle]="{ 'min-width': '50rem' }"
+      >
+        <ng-template #header>
+          <tr>
+            <th>Comprobante</th>
+            <th>Reserva</th>
+            <th>Nombre</th>
+            <th>Descripción</th>
+            <th>Fecha</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-voucher>
+          <tr>
+            <td>#{{ voucher.id }}</td>
+            <td>
+              <a
+                [routerLink]="['/reservas', voucher.booking]"
+                class="font-semibold text-teal-700 hover:text-teal-900"
+              >
+                #{{ voucher.booking }}
+              </a>
+            </td>
+            <td class="font-medium">{{ voucher.name }}</td>
+            <td>{{ voucher.descriptions || '—' }}</td>
+            <td>{{ voucher.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+            <td>
+              <app-status-tag [status]="voucher.status" />
+            </td>
+            <td>
+              <div class="flex justify-center gap-2">
+                <p-button
+                  icon="pi pi-pencil"
+                  severity="secondary"
+                  [text]="true"
+                  [rounded]="true"
+                  ariaLabel="Editar comprobante"
+                  (onClick)="openEdit(voucher)"
+                />
+
+                @if (voucher.status === 'active') {
+                  <p-button
+                    icon="pi pi-ban"
+                    severity="danger"
+                    [text]="true"
+                    [rounded]="true"
+                    ariaLabel="Desactivar comprobante"
+                    (onClick)="confirmDeactivate(voucher)"
+                  />
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+
+<p-dialog
+  [header]="selectedVoucher() ? 'Editar comprobante' : 'Nuevo comprobante'"
+  [modal]="true"
+  [visible]="dialogVisible()"
+  (visibleChange)="onDialogVisibleChange($event)"
+  [style]="{ width: '40rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <app-voucher-form
+    [voucher]="selectedVoucher()"
+    [bookingOptions]="bookingOptions()"
+    [saving]="saving()"
+    [resetKey]="resetKey()"
+    (saved)="save($event)"
+    (cancelled)="closeDialog()"
+  />
+</p-dialog>
+
+<p-confirmdialog />

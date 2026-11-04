@@ -1,3 +1,4 @@
+
 <p-toast />
 
 <section class="space-y-6">
@@ -67,19 +68,36 @@
             <th>Inicio</th>
             <th>Finalización</th>
             <th>Estado</th>
+            <th>Acciones</th>
           </tr>
         </ng-template>
 
         <ng-template #body let-booking>
           <tr>
             <td class="font-medium">#{{ booking.id }}</td>
+
             <td>{{ getClientName(booking.client) }}</td>
+
             <td>{{ getDepartureName(booking.departure) }}</td>
+
             <td>#{{ booking.traveler }}</td>
+
             <td>{{ booking.startDate }}</td>
+
             <td>{{ booking.endDate }}</td>
+
             <td>
               <app-status-tag [status]="booking.status" />
+            </td>
+
+            <td>
+              <a
+                [routerLink]="['/reservas', booking.id]"
+                class="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-3 py-2 text-sm font-medium text-white no-underline transition-colors hover:bg-teal-800"
+              >
+                <i class="pi pi-eye"></i>
+                Ver detalle
+              </a>
             </td>
           </tr>
         </ng-template>

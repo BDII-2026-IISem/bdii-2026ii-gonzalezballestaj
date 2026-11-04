@@ -7,7 +7,7 @@ import {
 } from '@angular/core';
 
 import { forkJoin, finalize } from 'rxjs';
-
+import { RouterLink } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
@@ -36,16 +36,17 @@ import { StatusTag } from '../../../shared/ui/status-tag/status-tag';
   selector: 'app-booking-list',
   standalone: true,
   imports: [
-    ButtonModule,
-    DialogModule,
-    InputTextModule,
-    TableModule,
-    ToastModule,
-    PageHeader,
-    EmptyState,
-    StatusTag,
-    BookingForm
-  ],
+  ButtonModule,
+  DialogModule,
+  InputTextModule,
+  TableModule,
+  ToastModule,
+  RouterLink,
+  PageHeader,
+  EmptyState,
+  StatusTag,
+  BookingForm
+],
   templateUrl: './booking-list.html',
   styleUrl: './booking-list.css'
 })

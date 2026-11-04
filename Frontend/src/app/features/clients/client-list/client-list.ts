@@ -56,9 +56,10 @@ export class ClientList implements OnInit {
     filterRows(this.rows(), this.filter(), (client) => [
       client.id,
       client.name,
-      client.address,
+      client.documentType,
+      client.documentNumber,
       client.phone,
-      client.email,
+      client.email, 
       client.status
     ])
   );

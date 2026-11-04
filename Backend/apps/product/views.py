@@ -1,9 +1,7 @@
 from django.utils import timezone
 from rest_framework import viewsets
-from rest_framework.permissions import AllowAny
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import AllowAny
-
 
 from apps.common.status import RecordStatus
 from apps.product.models import (
@@ -20,19 +18,27 @@ from apps.product.serializers import (
 )
 
 
-class PackageViewSet(viewsets.ModelViewSet):
+class SoftDeleteMixin:
+    """Al recibir DELETE, marca el registro como inactivo en lugar de borrarlo."""
+
+    def perform_destroy(self, instance):
+        instance.status = RecordStatus.INACTIVE
+        instance.save(update_fields=["status", "updated_at"])
+
+
+class PackageViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     queryset = Package.objects.all()
     serializer_class = PackageSerializer
     permission_classes = [AllowAny]
 
 
-class DepartureViewSet(viewsets.ModelViewSet):
+class DepartureViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     queryset = Departure.objects.select_related("package").all()
     serializer_class = DepartureSerializer
     permission_classes = [AllowAny]
 
 
-class SupplierViewSet(viewsets.ModelViewSet):
+class SupplierViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
     permission_classes = [AllowAny]
@@ -44,6 +50,7 @@ class IncludedServiceViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = IncludedServiceSerializer
     permission_classes = [AllowAny]
+
 
 class AvailablePackageListAPIView(ListAPIView):
     serializer_class = PackageSerializer

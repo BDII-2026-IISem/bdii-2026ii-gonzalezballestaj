@@ -40,6 +40,8 @@ export const appConfig: ApplicationConfig = {
     providePrimeNG({
       ripple: true,
       inputVariant: 'outlined',
+        license: 'eyJpZCI6IjNhYzAzNmFlLWVjZmEtNDY5Zi05NmZkLTVlOTM4NTYzNzA5OCIsInByb2R1Y3QiOiJwcmltZXVpIiwidGllciI6ImNvbW11bml0eSIsInR5cGUiOiJkZXYiLCJpYXQiOjE3OTI2ODc3ODQsImV4cCI6MTgyNDIyMzc4NH0.LPd-gI9YN8sPdni1YHpm0eThRUkA4j-pkuvM3rYtyav9i71fpVIjTBGVj4C8HCRyYdjjRm8qbRZboRysQhREBg',
+
       theme: {
         preset: Aura,
         options: {

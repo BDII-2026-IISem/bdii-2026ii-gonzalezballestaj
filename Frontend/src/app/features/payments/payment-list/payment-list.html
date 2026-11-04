@@ -1,0 +1,62 @@
+<div class="p-4 sm:p-6 lg:p-8">
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-3xl font-bold text-slate-900">Pagos</h1>
+      <p class="mt-1 text-slate-500">
+        {{ filtered().length }} pagos de {{ bookingsCount() }} reservas
+      </p>
+    </div>
+
+    <input
+      type="search"
+      placeholder="Buscar por reserva, método o referencia"
+      class="w-full max-w-xs rounded-lg border border-slate-300 px-3 py-2 text-sm"
+      [ngModel]="search()"
+      (ngModelChange)="search.set($event)"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="rounded-xl bg-white p-8 text-center text-slate-500">Cargando pagos...</div>
+  } @else if (error()) {
+    <div class="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">{{ error() }}</div>
+  } @else if (filtered().length === 0) {
+    <div class="rounded-xl bg-slate-50 p-6 text-center text-slate-500">No hay pagos que coincidan.</div>
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-slate-200 text-slate-500">
+            <th class="px-4 py-3">Pago</th>
+            <th class="px-4 py-3">Reserva</th>
+            <th class="px-4 py-3">Referencia</th>
+            <th class="px-4 py-3">Método</th>
+            <th class="px-4 py-3">Fecha</th>
+            <th class="px-4 py-3">Importe</th>
+            <th class="px-4 py-3">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (payment of filtered(); track payment.id) {
+            <tr class="border-b border-slate-100 hover:bg-slate-50">
+              <td class="px-4 py-3">#{{ payment.id }}</td>
+              <td class="px-4 py-3">
+                <a
+                  [routerLink]="['/reservas', payment.booking]"
+                  class="font-semibold text-teal-700 hover:text-teal-900"
+                >
+                  #{{ payment.booking }}
+                </a>
+              </td>
+              <td class="px-4 py-3">{{ payment.referenceType }}</td>
+              <td class="px-4 py-3">{{ payment.method }}</td>
+              <td class="px-4 py-3">{{ payment.paymentDate | date: 'dd/MM/yyyy' }}</td>
+              <td class="px-4 py-3">{{ payment.amount | currency: 'COP' : 'symbol' : '1.0-2' }}</td>
+              <td class="px-4 py-3">{{ payment.status === 'active' ? 'Activo' : 'Inactivo' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

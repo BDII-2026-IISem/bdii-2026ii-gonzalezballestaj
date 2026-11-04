@@ -1,5 +1,62 @@
 <form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5">
 
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div class="space-y-2">
+      <label for="documentType" class="block text-sm font-medium text-slate-700">
+        Tipo de documento *
+      </label>
+
+      <input
+        pInputText
+        id="documentType"
+        formControlName="documentType"
+        list="document-types"
+        class="w-full"
+        placeholder="CC"
+      />
+
+      <datalist id="document-types">
+        @for (type of documentTypes; track type) {
+          <option [value]="type"></option>
+        }
+      </datalist>
+
+      @if (form.controls.documentType.touched && form.controls.documentType.invalid) {
+        <small class="text-red-600">
+          @if (form.controls.documentType.hasError('required')) {
+            El tipo de documento es obligatorio.
+          } @else {
+            Debe tener entre 2 y 20 caracteres.
+          }
+        </small>
+      }
+    </div>
+
+    <div class="space-y-2 sm:col-span-2">
+      <label for="documentNumber" class="block text-sm font-medium text-slate-700">
+        Número de documento *
+      </label>
+
+      <input
+        pInputText
+        id="documentNumber"
+        formControlName="documentNumber"
+        class="w-full"
+        placeholder="Número de identificación"
+      />
+
+      @if (form.controls.documentNumber.touched && form.controls.documentNumber.invalid) {
+        <small class="text-red-600">
+          @if (form.controls.documentNumber.hasError('required')) {
+            El número de documento es obligatorio.
+          } @else {
+            Debe tener entre 3 y 30 caracteres.
+          }
+        </small>
+      }
+    </div>
+  </div>
+
   <div class="space-y-2">
     <label for="name" class="block text-sm font-medium text-slate-700">
       Nombre completo *
@@ -24,21 +81,6 @@
         }
       </small>
     }
-  </div>
-
-  <div class="space-y-2">
-    <label for="address" class="block text-sm font-medium text-slate-700">
-      Dirección
-    </label>
-
-    <textarea
-      pTextarea
-      id="address"
-      formControlName="address"
-      rows="2"
-      class="w-full"
-      placeholder="Dirección del cliente"
-    ></textarea>
   </div>
 
   <div class="space-y-2">

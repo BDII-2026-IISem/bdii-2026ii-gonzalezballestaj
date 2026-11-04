@@ -1,0 +1,106 @@
+<div class="space-y-6">
+  <app-page-header
+    title="Proveedores"
+    description="Administra las empresas que prestan los servicios de los paquetes."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar por NIT o razón social..."
+      aria-label="Buscar proveedores"
+      [ngModel]="search()"
+      (ngModelChange)="updateSearch($event)"
+    />
+
+    <p-button
+      label="Nuevo proveedor"
+      icon="pi pi-plus"
+      (onClick)="openCreate()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">
+      Cargando proveedores...
+    </div>
+  } @else if (filteredRows().length === 0) {
+    <app-empty-state
+      title="Sin proveedores"
+      description="No se encontraron proveedores para mostrar."
+    />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table
+        [value]="filteredRows()"
+        [tableStyle]="{ 'min-width': '50rem' }"
+      >
+        <ng-template #header>
+          <tr>
+            <th>NIT</th>
+            <th>Razón social</th>
+            <th>Teléfono</th>
+            <th>Correo electrónico</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-supplier>
+          <tr>
+            <td>{{ supplier.nit }}</td>
+            <td class="font-medium">{{ supplier.razonSocial }}</td>
+            <td>{{ supplier.phone || '—' }}</td>
+            <td>{{ supplier.email || '—' }}</td>
+            <td>
+              <app-status-tag [status]="supplier.status" />
+            </td>
+            <td>
+              <div class="flex justify-center gap-2">
+                <p-button
+                  icon="pi pi-pencil"
+                  severity="secondary"
+                  [text]="true"
+                  [rounded]="true"
+                  ariaLabel="Editar proveedor"
+                  (onClick)="openEdit(supplier)"
+                />
+
+                @if (supplier.status === 'active') {
+                  <p-button
+                    icon="pi pi-ban"
+                    severity="danger"
+                    [text]="true"
+                    [rounded]="true"
+                    ariaLabel="Desactivar proveedor"
+                    (onClick)="confirmDeactivate(supplier)"
+                  />
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+
+<p-dialog
+  [header]="selectedSupplier() ? 'Editar proveedor' : 'Nuevo proveedor'"
+  [modal]="true"
+  [visible]="dialogVisible()"
+  (visibleChange)="onDialogVisibleChange($event)"
+  [style]="{ width: '40rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <app-supplier-form
+    [supplier]="selectedSupplier()"
+    [saving]="saving()"
+    [resetKey]="resetKey()"
+    (saved)="save($event)"
+    (cancelled)="closeDialog()"
+  />
+</p-dialog>
+
+<p-confirmdialog />

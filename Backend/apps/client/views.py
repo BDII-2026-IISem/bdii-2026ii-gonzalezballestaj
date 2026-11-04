@@ -1,16 +1,17 @@
-
-from rest_framework import viewsets
+from rest_framework import viewsets # pyright: ignore[reportMissingImports]
+from rest_framework.permissions import AllowAny # pyright: ignore[reportMissingImports]
 
 from apps.client.models import Client
 from apps.client.serializers import ClientSerializer
 from apps.common.status import RecordStatus
-from apps.security.permissions import HasResourceAccess
+from apps.security.permissions import HasResourceAccess  # se restaura en el ISS-08
 
 
 class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.all()
     serializer_class = ClientSerializer
-    permission_classes = [HasResourceAccess]
+    # Fase I sin autenticación. En el ISS-08 se restaura HasResourceAccess.
+    permission_classes = [AllowAny]
     lookup_value_converter = "int"
 
     def get_queryset(self):

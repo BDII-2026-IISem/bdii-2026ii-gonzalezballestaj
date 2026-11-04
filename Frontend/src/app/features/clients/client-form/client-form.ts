@@ -13,7 +13,6 @@ import {
 
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
-import { TextareaModule } from 'primeng/textarea';
 
 import { Client, ClientPayload } from '../../../core/models/client.model';
 
@@ -23,8 +22,7 @@ import { Client, ClientPayload } from '../../../core/models/client.model';
   imports: [
     ReactiveFormsModule,
     ButtonModule,
-    InputTextModule,
-    TextareaModule
+    InputTextModule
   ],
   templateUrl: './client-form.html',
   styleUrl: './client-form.css'
@@ -37,11 +35,14 @@ export class ClientForm {
   readonly saved = output<ClientPayload>();
   readonly cancelled = output<void>();
 
+  readonly documentTypes = ['CC', 'CE', 'TI', 'PAS', 'NIT'];
+
   private readonly fb = new FormBuilder();
 
   readonly form = this.fb.group({
+    documentType: ['CC', [Validators.required, Validators.minLength(2), Validators.maxLength(20)]],
+    documentNumber: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(30)]],
     name: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(150)]],
-    address: [''],
     phone: ['', [Validators.maxLength(30)]],
     email: ['', [Validators.email, Validators.maxLength(150)]]
   });
@@ -53,15 +54,17 @@ export class ClientForm {
 
       if (client) {
         this.form.reset({
+          documentType: client.documentType,
+          documentNumber: client.documentNumber,
           name: client.name,
-          address: client.address ?? '',
           phone: client.phone ?? '',
           email: client.email ?? ''
         });
       } else {
         this.form.reset({
+          documentType: 'CC',
+          documentNumber: '',
           name: '',
-          address: '',
           phone: '',
           email: ''
         });
@@ -78,8 +81,9 @@ export class ClientForm {
     const value = this.form.getRawValue();
 
     const payload: ClientPayload = {
+      documentType: value.documentType!.trim().toUpperCase(),
+      documentNumber: value.documentNumber!.trim(),
       name: value.name!.trim(),
-      address: value.address?.trim() || null,
       phone: value.phone?.trim() || null,
       email: value.email?.trim() || null
     };

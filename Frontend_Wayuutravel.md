@@ -6008,7 +6008,7 @@ Realizamos las pruebas:
 
 ### 
 
-#  ISS-06 · Ventas y detalle en memoria
+#  ISS-06 - Ventas y detalle en memoria
 
 ### Narrativa 
 
@@ -7095,3 +7095,3720 @@ realizamos la prueba:
 ![](images/clipboard-3218345692.png)
 
 ![](images/clipboard-365811935.png)
+
+## ISS-07 – Detalle de reservas, pagos y panel de control
+
+### Narrativa
+
+En esta etapa continúo con el frontend de Wayuutravel. Voy a construir la vista de detalle de una reserva con sus pagos y el proceso de cancelación, que respeta las reglas de negocio de Django: una reserva cancelada no devuelve el cupo dos veces y no se borran ni la reserva ni sus pagos. También construiré el listado general de pagos, con enlace a cada reserva, y un panel de control cuyos indicadores se derivan de cuatro respuestas del backend. Con esta ISS se cierra la Fase I. No hay login, guard ni menú filtrado; esas piezas llegan en el ISS-08.
+
+####  Método de cancelación
+
+Abrimos:
+
+bash
+
+``` python
+nano apps/sale/managers.py
+```
+
+Revisamos que arriba del archivo esté:
+
+python
+
+```         
+from django.db import transaction
+```
+
+Dentro de `BookingManager`, debajo de `register`, pegamos (o reemplazamos si ya existe):
+
+python
+
+``` python
+    def cancel(self, *, booking_id, name, descriptions=None):
+        from django.core.exceptions import ValidationError
+        from apps.sale.models import Cancellation
+        from apps.common.status import RecordStatus
+        from apps.product.models import Departure
+
+        with transaction.atomic():
+            booking = self.select_for_update().get(pk=booking_id)
+
+            if booking.status == RecordStatus.INACTIVE:
+                raise ValidationError("La reserva ya se encuentra cancelada.")
+
+            departure = Departure.objects.select_for_update().get(
+                pk=booking.departure_id
+            )
+
+            if departure.available_capacity >= departure.capacity:
+                raise ValidationError(
+                    "No es posible devolver el cupo: "
+                    "la capacidad disponible ya está completa."
+                )
+
+            booking.status = RecordStatus.INACTIVE
+            booking.save(update_fields=["status", "updated_at"])
+
+            cancellation = Cancellation.objects.create(
+                booking=booking,
+                name=name,
+                descriptions=descriptions,
+                status=RecordStatus.ACTIVE,
+            )
+
+            departure.available_capacity += 1
+            departure.save(update_fields=["available_capacity", "updated_at"])
+
+            return cancellation
+```
+
+**Corregimos bookings services.ts**
+
+y remplasamos su contenido por:
+
+``` typescript
+import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable, map } from 'rxjs';
+
+import { environment } from '../../../environments/environment';
+
+import {
+  Booking,
+  CreateBooking,
+  UpdateBooking
+} from '../models/booking.model';
+
+import { CreateBookingPayment } from '../models/payment.model';
+
+/**
+ * El backend responde en camelCase; se aceptan también las claves
+ * en snake_case por si alguna ruta las devuelve así.
+ */
+interface BookingApi {
+  id: number;
+  client: number;
+  departure: number;
+  traveler: number;
+  observations: string | null;
+  status: 'active' | 'inactive';
+  startDate?: string;
+  endDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  start_date?: string;
+  end_date?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CancelBooking {
+  name: string;
+  descriptions?: string | null;
+}
+
+export interface CancellationApi {
+  id: number;
+  booking: number;
+  name: string;
+  descriptions: string | null;
+  status: 'active' | 'inactive';
+  createdAt: string;
+  updatedAt: string;
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class BookingService {
+  private readonly http = inject(HttpClient);
+
+  private readonly apiUrl =
+    `${environment.apiUrl}/sale/bookings/`;
+
+  private toModel(data: BookingApi): Booking {
+    return {
+      id: data.id,
+      client: data.client,
+      departure: data.departure,
+      traveler: data.traveler,
+      startDate: data.startDate ?? data.start_date ?? '',
+      endDate: data.endDate ?? data.end_date ?? '',
+      observations: data.observations,
+      status: data.status,
+      createdAt: data.createdAt ?? data.created_at ?? '',
+      updatedAt: data.updatedAt ?? data.updated_at ?? ''
+    };
+  }
+
+  private toApi(data: Partial<CreateBooking>) {
+    return {
+      ...(data.client !== undefined && { client: data.client }),
+      ...(data.departure !== undefined && { departure: data.departure }),
+      ...(data.traveler !== undefined && { traveler: data.traveler }),
+      ...(data.startDate !== undefined && {
+        start_date: data.startDate
+      }),
+      ...(data.endDate !== undefined && {
+        end_date: data.endDate
+      }),
+      ...(data.observations !== undefined && {
+        observations: data.observations
+      })
+    };
+  }
+
+  getAll(): Observable<Booking[]> {
+    return this.http.get<BookingApi[]>(this.apiUrl).pipe(
+      map((rows) => rows.map((row) => this.toModel(row)))
+    );
+  }
+
+  getById(id: number): Observable<Booking> {
+    return this.http.get<BookingApi>(`${this.apiUrl}${id}/`).pipe(
+      map((data) => this.toModel(data))
+    );
+  }
+
+  create(data: CreateBooking): Observable<Booking> {
+    return this.http.post<BookingApi>(
+      this.apiUrl,
+      this.toApi(data)
+    ).pipe(
+      map((response) => this.toModel(response))
+    );
+  }
+
+  register(
+    data: CreateBooking & { payments: CreateBookingPayment[] }
+  ): Observable<Booking> {
+    const payload = {
+      ...this.toApi(data),
+      payments: data.payments.map((payment) => ({
+        reference_type: payment.referenceType,
+        method: payment.method,
+        amount: payment.amount,
+        payment_date: payment.paymentDate
+      }))
+    };
+
+    return this.http.post<BookingApi>(
+      `${this.apiUrl}register/`,
+      payload
+    ).pipe(
+      map((response) => this.toModel(response))
+    );
+  }
+
+  update(id: number, data: UpdateBooking): Observable<Booking> {
+    return this.http.patch<BookingApi>(
+      `${this.apiUrl}${id}/`,
+      this.toApi(data)
+    ).pipe(
+      map((response) => this.toModel(response))
+    );
+  }
+
+  cancel(
+    id: number,
+    data: CancelBooking
+  ): Observable<CancellationApi> {
+    return this.http.post<CancellationApi>(
+      `${this.apiUrl}${id}/cancel/`,
+      data
+    );
+  }
+}
+```
+
+### Listado de pagos (`/pagos`)
+
+Wayuutravel, el equivalente es `/pagos`: todos los pagos, cada uno con enlace a `/reservas/:id`. Aquí no hace falta aplanar nada, porque el backend ya tiene un endpoint de pagos.
+
+####  Crear la carpeta
+
+```         
+mkdir -p src/app/features/payments/payment-list
+```
+
+####  Lógica
+
+``` typescript
+cat > src/app/features/payments/payment-list/payment-list.html << 'EOF'
+<div class="p-4 sm:p-6 lg:p-8">
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-3xl font-bold text-slate-900">Pagos</h1>
+      <p class="mt-1 text-slate-500">
+        {{ filtered().length }} pagos de {{ bookingsCount() }} reservas
+      </p>
+    </div>
+
+    <input
+      type="search"
+      placeholder="Buscar por reserva, método o referencia"
+      class="w-full max-w-xs rounded-lg border border-slate-300 px-3 py-2 text-sm"
+      [ngModel]="search()"
+      (ngModelChange)="search.set($event)"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="rounded-xl bg-white p-8 text-center text-slate-500">Cargando pagos...</div>
+  } @else if (error()) {
+    <div class="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">{{ error() }}</div>
+  } @else if (filtered().length === 0) {
+    <div class="rounded-xl bg-slate-50 p-6 text-center text-slate-500">No hay pagos que coincidan.</div>
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-slate-200 text-slate-500">
+            <th class="px-4 py-3">Pago</th>
+            <th class="px-4 py-3">Reserva</th>
+            <th class="px-4 py-3">Referencia</th>
+            <th class="px-4 py-3">Método</th>
+            <th class="px-4 py-3">Fecha</th>
+            <th class="px-4 py-3">Importe</th>
+            <th class="px-4 py-3">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (payment of filtered(); track payment.id) {
+            <tr class="border-b border-slate-100 hover:bg-slate-50">
+              <td class="px-4 py-3">#{{ payment.id }}</td>
+              <td class="px-4 py-3">
+                <a
+                  [routerLink]="['/reservas', payment.booking]"
+                  class="font-semibold text-teal-700 hover:text-teal-900"
+                >
+                  #{{ payment.booking }}
+                </a>
+              </td>
+              <td class="px-4 py-3">{{ payment.referenceType }}</td>
+              <td class="px-4 py-3">{{ payment.method }}</td>
+              <td class="px-4 py-3">{{ payment.paymentDate | date: 'dd/MM/yyyy' }}</td>
+              <td class="px-4 py-3">{{ payment.amount | currency: 'COP' : 'symbol' : '1.0-2' }}</td>
+              <td class="px-4 py-3">{{ payment.status === 'active' ? 'Activo' : 'Inactivo' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+EOF
+```
+
+![](images/clipboard-2329188037.png)
+
+**Vista**
+
+``` html
+cat > src/app/features/payments/payment-list/payment-list.html << 'EOF'
+<div class="p-4 sm:p-6 lg:p-8">
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-3xl font-bold text-slate-900">Pagos</h1>
+      <p class="mt-1 text-slate-500">
+        {{ filtered().length }} pagos de {{ bookingsCount() }} reservas
+      </p>
+    </div>
+
+    <input
+      type="search"
+      placeholder="Buscar por reserva, método o referencia"
+      class="w-full max-w-xs rounded-lg border border-slate-300 px-3 py-2 text-sm"
+      [ngModel]="search()"
+      (ngModelChange)="search.set($event)"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="rounded-xl bg-white p-8 text-center text-slate-500">Cargando pagos...</div>
+  } @else if (error()) {
+    <div class="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">{{ error() }}</div>
+  } @else if (filtered().length === 0) {
+    <div class="rounded-xl bg-slate-50 p-6 text-center text-slate-500">No hay pagos que coincidan.</div>
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-slate-200 text-slate-500">
+            <th class="px-4 py-3">Pago</th>
+            <th class="px-4 py-3">Reserva</th>
+            <th class="px-4 py-3">Referencia</th>
+            <th class="px-4 py-3">Método</th>
+            <th class="px-4 py-3">Fecha</th>
+            <th class="px-4 py-3">Importe</th>
+            <th class="px-4 py-3">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (payment of filtered(); track payment.id) {
+            <tr class="border-b border-slate-100 hover:bg-slate-50">
+              <td class="px-4 py-3">#{{ payment.id }}</td>
+              <td class="px-4 py-3">
+                <a
+                  [routerLink]="['/reservas', payment.booking]"
+                  class="font-semibold text-teal-700 hover:text-teal-900"
+                >
+                  #{{ payment.booking }}
+                </a>
+              </td>
+              <td class="px-4 py-3">{{ payment.referenceType }}</td>
+              <td class="px-4 py-3">{{ payment.method }}</td>
+              <td class="px-4 py-3">{{ payment.paymentDate | date: 'dd/MM/yyyy' }}</td>
+              <td class="px-4 py-3">{{ payment.amount | currency: 'COP' : 'symbol' : '1.0-2' }}</td>
+              <td class="px-4 py-3">{{ payment.status === 'active' ? 'Activo' : 'Inactivo' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+EOF
+```
+
+#### CSS 
+
+``` typescript
+: > src/app/features/payments/payment-list/payment-list.css
+```
+
+#### Conectar la ruta
+
+```         
+nano src/app/app.routes.ts
+```
+
+Buscamos el bloque de `pagos`:
+
+``` typescript
+      {
+        path: 'pagos',
+        loadComponent: () =>
+          import('./features/placeholder/placeholder').then(
+            (m) => m.Placeholder
+          ),
+```
+
+Cambiamos solo el `loadComponent` para que quede así:
+
+``` typescript
+      {
+        path: 'pagos',
+        loadComponent: () =>
+          import('./features/payments/payment-list/payment-list').then(
+            (m) => m.PaymentList
+          ),
+```
+
+![](images/clipboard-496234266.png)
+
+### Panel de control
+
+#### Revisar el servicio de clientes
+
+El panel necesita la lista de clientes. Los servicios de reservas, pagos y salidas tienen `getAll()`, pero el de clientes usa otra estructura (`this.base`) y no sé cómo se llama su método de listado.
+
+**Cálculo de indicadores**
+
+``` typescript
+mkdir -p src/app/features/dashboard
+cat > src/app/features/dashboard/dashboard-stats.ts << 'EOF'
+export const LOW_CAPACITY_THRESHOLD = 3;
+
+type WithStatus = { status: string };
+
+/** Interpreta "2026-11-03" como fecha local, no como medianoche UTC. */
+export function toLocalDate(value: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (match) {
+    const [, y, m, d] = match;
+    return new Date(Number(y), Number(m) - 1, Number(d));
+  }
+  return new Date(value);
+}
+
+export function sameDay(value: string | null | undefined, reference: Date): boolean {
+  if (!value) {
+    return false;
+  }
+  const date = toLocalDate(value);
+  return (
+    date.getFullYear() === reference.getFullYear() &&
+    date.getMonth() === reference.getMonth() &&
+    date.getDate() === reference.getDate()
+  );
+}
+
+export function toNumber(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export interface DashboardStats<D> {
+  todayBookings: number;
+  totalBookings: number;
+  todayIncome: number;
+  lowCapacity: D[];
+  activeClients: number;
+}
+
+export function computeDashboardStats<D extends WithStatus & { availableCapacity: number }>(
+  bookings: (WithStatus & { createdAt: string })[],
+  payments: (WithStatus & { paymentDate: string; amount: string | number })[],
+  departures: D[],
+  clients: WithStatus[],
+  today: Date = new Date()
+): DashboardStats<D> {
+  return {
+    todayBookings: bookings.filter(
+      (b) => b.status === 'active' && sameDay(b.createdAt, today)
+    ).length,
+    totalBookings: bookings.length,
+    todayIncome: payments
+      .filter((p) => p.status === 'active' && sameDay(p.paymentDate, today))
+      .reduce((sum, p) => sum + toNumber(p.amount), 0),
+    lowCapacity: departures.filter(
+      (d) => d.status === 'active' && d.availableCapacity <= LOW_CAPACITY_THRESHOLD
+    ),
+    activeClients: clients.filter((c) => c.status === 'active').length,
+  };
+}
+EOF
+```
+
+![](images/clipboard-3420678606.png)
+
+**Componente**
+
+``` typescript
+cat > src/app/features/dashboard/dashboard.ts << 'EOF'
+import { Component, inject, OnInit, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { forkJoin } from 'rxjs';
+
+import { BookingService } from '../../core/services/booking.service';
+import { PaymentService } from '../../core/services/payment.service';
+import { DepartureService } from '../../core/services/departure.service';
+import { ClientService } from '../../core/services/client.service';
+import { Departure } from '../../core/models/departure.model';
+
+import {
+  computeDashboardStats,
+  DashboardStats,
+  LOW_CAPACITY_THRESHOLD,
+} from './dashboard-stats';
+
+@Component({
+  selector: 'app-dashboard',
+  standalone: true,
+  imports: [CommonModule, RouterLink],
+  templateUrl: './dashboard.html',
+  styleUrl: './dashboard.css',
+})
+export class Dashboard implements OnInit {
+  private readonly bookingService = inject(BookingService);
+  private readonly paymentService = inject(PaymentService);
+  private readonly departureService = inject(DepartureService);
+  private readonly clientService = inject(ClientService);
+
+  readonly threshold = LOW_CAPACITY_THRESHOLD;
+
+  loading = signal(true);
+  error = signal<string | null>(null);
+  stats = signal<DashboardStats<Departure> | null>(null);
+
+  ngOnInit(): void {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+    this.error.set(null);
+
+    forkJoin({
+      bookings: this.bookingService.getAll(),
+      payments: this.paymentService.getAll(),
+      departures: this.departureService.getAll(),
+      clients: this.clientService.getAll(),
+    }).subscribe({
+      next: ({ bookings, payments, departures, clients }) => {
+        this.stats.set(computeDashboardStats(bookings, payments, departures, clients));
+        this.loading.set(false);
+      },
+      error: () => {
+        this.error.set('No fue posible cargar los indicadores. Verifica la conexión con el servidor.');
+        this.loading.set(false);
+      },
+    });
+  }
+}
+EOF
+```
+
+![](images/clipboard-1686980689.png)
+
+**Vista**
+
+``` html
+cat > src/app/features/dashboard/dashboard.html << 'EOF'
+<div class="p-4 sm:p-6 lg:p-8">
+  <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <p class="text-sm font-semibold uppercase tracking-wider text-teal-700">Panel administrativo</p>
+      <h1 class="mt-2 text-3xl font-bold text-slate-900">Panel de control</h1>
+      <p class="mt-2 text-slate-500">Actividad del día en Wayuu Travel.</p>
+    </div>
+
+    <button
+      type="button"
+      (click)="load()"
+      [disabled]="loading()"
+      class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+    >
+      Recargar
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500">
+      Cargando indicadores...
+    </div>
+  } @else if (error()) {
+    <div class="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">{{ error() }}</div>
+  } @else if (stats(); as s) {
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p class="text-sm text-slate-500">Reservas de hoy</p>
+        <p class="mt-2 text-3xl font-bold text-slate-900">{{ s.todayBookings }}</p>
+        <p class="mt-1 text-xs text-slate-400">{{ s.totalBookings }} reservas en total</p>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p class="text-sm text-slate-500">Ingresos de hoy</p>
+        <p class="mt-2 text-2xl font-bold text-slate-900">
+          {{ s.todayIncome | currency: 'COP' : 'symbol' : '1.0-0' }}
+        </p>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p class="text-sm text-slate-500">Salidas con cupos bajos</p>
+        <p class="mt-2 text-3xl font-bold text-slate-900">{{ s.lowCapacity.length }}</p>
+        <p class="mt-1 text-xs text-slate-400">{{ threshold }} cupos o menos</p>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p class="text-sm text-slate-500">Clientes activos</p>
+        <p class="mt-2 text-3xl font-bold text-slate-900">{{ s.activeClients }}</p>
+      </div>
+    </div>
+
+    <section class="mt-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-xl font-semibold text-slate-900">Salidas con cupos bajos</h2>
+        <a routerLink="/salidas" class="text-sm font-semibold text-teal-700 hover:text-teal-900">
+          Ver salidas →
+        </a>
+      </div>
+
+      @if (s.lowCapacity.length === 0) {
+        <div class="rounded-lg bg-slate-50 p-6 text-center text-slate-500">
+          Ninguna salida activa tiene cupos bajos.
+        </div>
+      } @else {
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-500">
+                <th class="px-4 py-3">Salida</th>
+                <th class="px-4 py-3">Fecha</th>
+                <th class="px-4 py-3">Capacidad</th>
+                <th class="px-4 py-3">Disponibles</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (departure of s.lowCapacity; track departure.id) {
+                <tr class="border-b border-slate-100">
+                  <td class="px-4 py-3 font-medium text-slate-900">#{{ departure.id }} · {{ departure.name }}</td>
+                  <td class="px-4 py-3">{{ departure.departureDate | date: 'dd/MM/yyyy' }}</td>
+                  <td class="px-4 py-3">{{ departure.capacity }}</td>
+                  <td class="px-4 py-3 font-semibold text-orange-700">{{ departure.availableCapacity }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</div>
+EOF
+```
+
+![](images/clipboard-3179052156.png)
+
+**Organizar las rutas de la aplicación**
+
+``` typescript
+cat > src/app/app.routes.ts << 'EOF'
+import { Routes } from '@angular/router';
+
+export const routes: Routes = [
+  {
+    path: 'construir',
+    loadComponent: () =>
+      import('./features/construir/construir').then((m) => m.Construir),
+  },
+  {
+    path: '',
+    loadComponent: () =>
+      import('./layout/shell/shell').then((m) => m.Shell),
+    children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'clientes',
+      },
+      {
+        path: 'dashboard',
+        loadComponent: () =>
+          import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+        data: {
+          title: 'Panel de control',
+          description: 'Actividad del día en Wayuu Travel.',
+        },
+      },
+      {
+        path: 'clientes',
+        loadComponent: () =>
+          import('./features/clients/client-list/client-list').then(
+            (m) => m.ClientList
+          ),
+        data: {
+          title: 'Clientes',
+          description: 'Gestión de los clientes de Wayuu Travel.',
+        },
+      },
+      {
+        path: 'tipos-producto',
+        loadComponent: () =>
+          import('./features/product-types/product-type-list/product-type-list').then(
+            (m) => m.ProductTypeList
+          ),
+        data: {
+          title: 'Tipos de producto',
+          description: 'Administración de los tipos de producto.',
+        },
+      },
+      {
+        path: 'paquetes',
+        loadComponent: () =>
+          import('./features/packages/pages/package-list/package-list').then(
+            (m) => m.PackageList
+          ),
+        data: {
+          title: 'Paquetes turísticos',
+          description: 'Administración de los paquetes turísticos.',
+        },
+      },
+      {
+        path: 'salidas',
+        loadComponent: () =>
+          import('./features/placeholder/placeholder').then(
+            (m) => m.Placeholder
+          ),
+        data: {
+          title: 'Salidas',
+          description: 'Gestión de las salidas y fechas de los paquetes.',
+        },
+      },
+      {
+        path: 'proveedores',
+        loadComponent: () =>
+          import('./features/placeholder/placeholder').then(
+            (m) => m.Placeholder
+          ),
+        data: {
+          title: 'Proveedores',
+          description: 'Administración de los proveedores turísticos.',
+        },
+      },
+      {
+        path: 'reservas',
+        loadComponent: () =>
+          import('./features/bookings/booking-list/booking-list').then(
+            (m) => m.BookingList
+          ),
+        data: {
+          title: 'Reservas',
+          description: 'Gestión de las reservas de los viajeros.',
+        },
+      },
+      {
+        path: 'reservas/:id',
+        loadComponent: () =>
+          import('./features/bookings/booking-detail/booking-detail').then(
+            (m) => m.BookingDetail
+          ),
+        data: {
+          title: 'Detalle de reserva',
+          description: 'Consulta detallada de una reserva turística.',
+        },
+      },
+      {
+        path: 'pagos',
+        loadComponent: () =>
+          import('./features/payments/payment-list/payment-list').then(
+            (m) => m.PaymentList
+          ),
+        data: {
+          title: 'Pagos',
+          description: 'Pagos registrados y su reserva.',
+        },
+      },
+      {
+        path: 'cancelaciones',
+        loadComponent: () =>
+          import('./features/placeholder/placeholder').then(
+            (m) => m.Placeholder
+          ),
+        data: {
+          title: 'Cancelaciones',
+          description: 'Administración de las cancelaciones de reservas.',
+        },
+      },
+      {
+        path: 'comprobantes',
+        loadComponent: () =>
+          import('./features/placeholder/placeholder').then(
+            (m) => m.Placeholder
+          ),
+        data: {
+          title: 'Comprobantes',
+          description: 'Consulta de los comprobantes de las reservas.',
+        },
+      },
+    ],
+  },
+  {
+    path: '**',
+    redirectTo: 'construir',
+  },
+];
+EOF
+```
+
+![](images/clipboard-986100999.png)
+
+#### Actualizar el menú del Shell
+
+Al mover el panel de control de `/inicio` a `/dashboard`, el menú lateral puede seguir apuntando a una ruta que ya no existe; en ese caso, al hacer clic, la aplicación redirigiría a `/construir`. También hay que comprobar que el menú tenga una entrada para `/pagos`, la pantalla nueva de este ISS.
+
+Ejecutamos:
+
+```         
+cat > src/app/layout/shell/shell.ts << 'EOF'
+import { Component, signal } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+import { MenuItem } from 'primeng/api';
+
+import { Header } from '../header/header';
+import { Aside } from '../aside/aside';
+import { Footer } from '../footer/footer';
+
+@Component({
+  selector: 'app-shell',
+  standalone: true,
+  imports: [
+    RouterOutlet,
+    Header,
+    Aside,
+    Footer
+  ],
+  templateUrl: './shell.html',
+  styleUrl: './shell.css'
+})
+export class Shell {
+  readonly menuOpen = signal(true);
+
+  readonly menuItems: MenuItem[] = [
+    {
+      label: 'Panel de control',
+      icon: 'pi pi-chart-bar',
+      routerLink: '/dashboard'
+    },
+    {
+      separator: true
+    },
+    {
+      label: 'Gestión turística',
+      items: [
+        {
+          label: 'Clientes',
+          icon: 'pi pi-users',
+          routerLink: '/clientes'
+        },
+        {
+          label: 'Tipos de producto',
+          icon: 'pi pi-tags',
+          routerLink: '/tipos-producto'
+        },
+        {
+          label: 'Paquetes turísticos',
+          icon: 'pi pi-map',
+          routerLink: '/paquetes'
+        },
+        {
+          label: 'Salidas',
+          icon: 'pi pi-calendar',
+          routerLink: '/salidas'
+        },
+        {
+          label: 'Proveedores',
+          icon: 'pi pi-truck',
+          routerLink: '/proveedores'
+        }
+      ]
+    },
+    {
+      label: 'Gestión comercial',
+      items: [
+        {
+          label: 'Reservas',
+          icon: 'pi pi-book',
+          routerLink: '/reservas'
+        },
+        {
+          label: 'Pagos',
+          icon: 'pi pi-wallet',
+          routerLink: '/pagos'
+        },
+        {
+          label: 'Cancelaciones',
+          icon: 'pi pi-times-circle',
+          routerLink: '/cancelaciones'
+        },
+        {
+          label: 'Comprobantes',
+          icon: 'pi pi-file',
+          routerLink: '/comprobantes'
+        }
+      ]
+    }
+  ];
+
+  toggleMenu(): void {
+    this.menuOpen.update((value) => !value);
+  }
+
+  closeMenu(): void {
+    this.menuOpen.set(false);
+  }
+}
+EOF
+```
+
+![](images/clipboard-2844702237.png)
+
+Probar las pantallas en el navegador:
+
+![](images/clipboard-2022975731.png)
+
+![](images/clipboard-1805364242.png)
+
+![](images/clipboard-1757878744.png)
+
+![](images/clipboard-3237319465.png)
+
+#### Crear el formulario de salidas
+
+Para registrar y editar salidas creé el componente `DepartureForm`, con la misma estructura del formulario de clientes. Pide el nombre, la descripción, el paquete, la fecha y hora de salida y la capacidad, con las validaciones del serializer de Django: nombre entre 2 y 150 caracteres y capacidad mínima de 1. El paquete se elige en una lista que muestra solo los paquetes activos y, al editar, también el paquete actual de la salida aunque esté inactivo.
+
+**Creamos la carpeta:**
+
+```         
+mkdir -p src/app/features/departures/components/departure-form
+```
+
+**Abrimos:**
+
+```         
+nano src/app/features/departures/components/departure-form/departure-form.ts
+```
+
+**Pegamos este código:**
+
+``` typescript
+import {
+  Component,
+  computed,
+  effect,
+  input,
+  output
+} from '@angular/core';
+
+import {
+  FormBuilder,
+  ReactiveFormsModule,
+  Validators
+} from '@angular/forms';
+
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { TextareaModule } from 'primeng/textarea';
+
+import {
+  Departure,
+  CreateDeparture
+} from '../../../../core/models/departure.model';
+import { Package } from '../../../../core/models/package.model';
+
+/** Convierte la fecha ISO del backend al formato de <input type="datetime-local">. */
+export function toDateTimeInput(iso: string | null | undefined): string {
+  if (!iso) {
+    return '';
+  }
+
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const pad = (value: number) => String(value).padStart(2, '0');
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+@Component({
+  selector: 'app-departure-form',
+  standalone: true,
+  imports: [
+    ReactiveFormsModule,
+    ButtonModule,
+    InputTextModule,
+    TextareaModule
+  ],
+  templateUrl: './departure-form.html',
+  styleUrl: './departure-form.css'
+})
+export class DepartureForm {
+  readonly departure = input<Departure | null>(null);
+  readonly packages = input<Package[]>([]);
+  readonly saving = input(false);
+  readonly resetKey = input(0);
+
+  readonly saved = output<CreateDeparture>();
+  readonly cancelled = output<void>();
+
+  private readonly fb = new FormBuilder();
+
+  readonly form = this.fb.group({
+    name: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(150)]],
+    description: [''],
+    package: [null as number | null, Validators.required],
+    departureDate: ['', Validators.required],
+    capacity: [null as number | null, [Validators.required, Validators.min(1)]]
+  });
+
+  /** Cupos ya ocupados por reservas. Solo aplica al editar. */
+  readonly reserved = computed(() => {
+    const current = this.departure();
+    return current
+      ? Math.max(current.capacity - current.availableCapacity, 0)
+      : 0;
+  });
+
+  /** Paquetes activos, más el paquete actual de la salida si está inactivo. */
+  readonly selectablePackages = computed(() => {
+    const currentPackage = this.departure()?.package;
+    return this.packages().filter(
+      (item) => item.status === 'active' || item.id === currentPackage
+    );
+  });
+
+  constructor() {
+    effect(() => {
+      const current = this.departure();
+      this.resetKey();
+
+      if (current) {
+        this.form.reset({
+          name: current.name,
+          description: current.description ?? '',
+          package: current.package,
+          departureDate: toDateTimeInput(current.departureDate),
+          capacity: current.capacity
+        });
+      } else {
+        this.form.reset({
+          name: '',
+          description: '',
+          package: null,
+          departureDate: '',
+          capacity: null
+        });
+      }
+    });
+  }
+
+  submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const value = this.form.getRawValue();
+    const capacity = Number(value.capacity);
+
+    if (capacity < this.reserved()) {
+      this.form.controls.capacity.setErrors({ belowReserved: true });
+      this.form.controls.capacity.markAsTouched();
+      return;
+    }
+
+    const payload: CreateDeparture = {
+      name: value.name!.trim(),
+      description: value.description?.trim() || null,
+      package: Number(value.package),
+      departureDate: new Date(value.departureDate!).toISOString(),
+      capacity,
+      availableCapacity: capacity - this.reserved()
+    };
+
+    this.saved.emit(payload);
+  }
+
+  cancel(): void {
+    this.cancelled.emit();
+  }
+}
+```
+
+![](images/clipboard-4195113227.png)
+
+**Abrimos:**
+
+```         
+nano src/app/features/departures/components/departure-form/departure-form.html
+```
+
+**Pegamos este código:**
+
+``` html
+<form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5">
+
+  <div class="space-y-2">
+    <label for="name" class="block text-sm font-medium text-slate-700">
+      Nombre de la salida *
+    </label>
+
+    <input
+      pInputText
+      id="name"
+      formControlName="name"
+      class="w-full"
+      placeholder="Ej. Cabo de la Vela · 15 de noviembre"
+    />
+
+    @if (form.controls.name.touched && form.controls.name.invalid) {
+      <small class="text-red-600">
+        @if (form.controls.name.hasError('required')) {
+          El nombre es obligatorio.
+        } @else {
+          El nombre debe tener entre 2 y 150 caracteres.
+        }
+      </small>
+    }
+  </div>
+
+  <div class="space-y-2">
+    <label for="package" class="block text-sm font-medium text-slate-700">
+      Paquete turístico *
+    </label>
+
+    <select
+      id="package"
+      formControlName="package"
+      class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+    >
+      <option [ngValue]="null" disabled>Selecciona un paquete</option>
+      @for (item of selectablePackages(); track item.id) {
+        <option [ngValue]="item.id">{{ item.name }}</option>
+      }
+    </select>
+
+    @if (form.controls.package.touched && form.controls.package.invalid) {
+      <small class="text-red-600">Selecciona el paquete de la salida.</small>
+    }
+  </div>
+
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <div class="space-y-2">
+      <label for="departureDate" class="block text-sm font-medium text-slate-700">
+        Fecha y hora de salida *
+      </label>
+
+      <input
+        pInputText
+        id="departureDate"
+        type="datetime-local"
+        formControlName="departureDate"
+        class="w-full"
+      />
+
+      @if (form.controls.departureDate.touched && form.controls.departureDate.invalid) {
+        <small class="text-red-600">La fecha de salida es obligatoria.</small>
+      }
+    </div>
+
+    <div class="space-y-2">
+      <label for="capacity" class="block text-sm font-medium text-slate-700">
+        Capacidad total *
+      </label>
+
+      <input
+        pInputText
+        id="capacity"
+        type="number"
+        min="1"
+        formControlName="capacity"
+        class="w-full"
+        placeholder="Número de cupos"
+      />
+
+      @if (form.controls.capacity.touched && form.controls.capacity.invalid) {
+        <small class="text-red-600">
+          @if (form.controls.capacity.hasError('belowReserved')) {
+            Hay {{ reserved() }} cupos ocupados; la capacidad no puede ser menor.
+          } @else {
+            La capacidad debe ser de al menos 1 cupo.
+          }
+        </small>
+      }
+    </div>
+  </div>
+
+  @if (departure()) {
+    <p class="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+      Esta salida tiene {{ reserved() }} cupos ocupados por reservas.
+      Los cupos disponibles se recalculan a partir de la capacidad.
+    </p>
+  }
+
+  <div class="space-y-2">
+    <label for="description" class="block text-sm font-medium text-slate-700">
+      Descripción
+    </label>
+
+    <textarea
+      pTextarea
+      id="description"
+      formControlName="description"
+      rows="2"
+      class="w-full"
+      placeholder="Detalles de la salida"
+    ></textarea>
+  </div>
+
+  <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [outlined]="true"
+      type="button"
+      (onClick)="cancel()"
+    />
+
+    <p-button
+      [label]="departure() ? 'Guardar cambios' : 'Registrar salida'"
+      icon="pi pi-check"
+      type="submit"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+  </div>
+
+</form>
+```
+
+![](images/clipboard-3874585416.png)Guardamos y salimos.
+
+**Dejamos el CSS sin reglas:**
+
+```         
+: > src/app/features/departures/components/departure-form/departure-form.css
+```
+
+![](images/clipboard-2766987566.png)
+
+#### Crear el listado de salidas
+
+Para administrar las salidas creé el componente `DepartureList`, con el mismo diseño de la pantalla de paquetes: encabezado, buscador, botón para registrar, tabla y diálogo con el formulario. El listado carga en paralelo las salidas y los paquetes, para mostrar el nombre del paquete de cada salida en lugar de su número. La tabla muestra el nombre, el paquete, la fecha y hora, los cupos disponibles sobre la capacidad total y el estado; cuando una salida no tiene cupos, la columna lo indica como agotada. El buscador filtra localmente por nombre de la salida o del paquete. El botón de desactivar pide confirmación y solo aparece en las salidas activas; como el backend ahora marca el registro como inactivo, la salida se conserva junto con sus reservas. Si el backend rechaza un guardado, la notificación muestra su mensaje en lugar de un texto genérico.
+
+**Creamos la carpeta:**
+
+```         
+mkdir -p src/app/features/departures/pages/departure-list
+```
+
+**Abrimos:**
+
+```         
+nano src/app/features/departures/pages/departure-list/departure-list.ts
+```
+
+Pegamos este código:
+
+``` typescript
+import {
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+
+import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { FormsModule } from '@angular/forms';
+import { ConfirmationService } from 'primeng/api';
+import { forkJoin } from 'rxjs';
+
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { TableModule } from 'primeng/table';
+import { DialogModule } from 'primeng/dialog';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+
+import {
+  Departure,
+  CreateDeparture,
+} from '../../../../core/models/departure.model';
+import { Package } from '../../../../core/models/package.model';
+
+import { DepartureService } from '../../../../core/services/departure.service';
+import { PackageService } from '../../../../core/services/package.service';
+import { NotificationService } from '../../../../core/services/notification.service';
+
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
+import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
+
+import { DepartureForm } from '../../components/departure-form/departure-form';
+
+@Component({
+  selector: 'app-departure-list',
+  standalone: true,
+  imports: [
+    DatePipe,
+    FormsModule,
+    ButtonModule,
+    InputTextModule,
+    TableModule,
+    DialogModule,
+    ConfirmDialogModule,
+    PageHeader,
+    EmptyState,
+    StatusTag,
+    DepartureForm,
+  ],
+  templateUrl: './departure-list.html',
+  styleUrl: './departure-list.css',
+})
+export class DepartureList {
+  private readonly confirmationService = inject(ConfirmationService);
+  private readonly departureService = inject(DepartureService);
+  private readonly packageService = inject(PackageService);
+  private readonly notification = inject(NotificationService);
+
+  readonly rows = signal<Departure[]>([]);
+  readonly packages = signal<Package[]>([]);
+  readonly search = signal('');
+  readonly loading = signal(false);
+  readonly saving = signal(false);
+
+  readonly dialogVisible = signal(false);
+  readonly selectedDeparture = signal<Departure | null>(null);
+  readonly resetKey = signal(0);
+
+  private readonly packageNames = computed(
+    () => new Map(this.packages().map((item) => [item.id, item.name]))
+  );
+
+  readonly filteredRows = computed(() => {
+    const term = this.search().trim().toLowerCase();
+
+    return this.rows().filter((item) =>
+      [item.name, this.packageName(item.package)].some((value) =>
+        value.toLowerCase().includes(term)
+      )
+    );
+  });
+
+  constructor() {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+
+    forkJoin({
+      departures: this.departureService.getAll(),
+      packages: this.packageService.getAll(),
+    }).subscribe({
+      next: ({ departures, packages }) => {
+        this.rows.set(departures);
+        this.packages.set(packages);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.notification.error('Error al cargar las salidas.');
+      },
+    });
+  }
+
+  packageName(id: number): string {
+    return this.packageNames().get(id) ?? `Paquete #${id}`;
+  }
+
+  updateSearch(value: string): void {
+    this.search.set(value);
+  }
+
+  openCreate(): void {
+    this.selectedDeparture.set(null);
+    this.resetKey.update((value) => value + 1);
+    this.dialogVisible.set(true);
+  }
+
+  openEdit(item: Departure): void {
+    this.selectedDeparture.set(item);
+    this.resetKey.update((value) => value + 1);
+    this.dialogVisible.set(true);
+  }
+
+  closeDialog(): void {
+    this.dialogVisible.set(false);
+    this.selectedDeparture.set(null);
+  }
+
+  onDialogVisibleChange(visible: boolean): void {
+    if (!visible) {
+      this.closeDialog();
+    }
+  }
+
+  save(data: CreateDeparture): void {
+    this.saving.set(true);
+
+    const current = this.selectedDeparture();
+
+    const request = current
+      ? this.departureService.update(current.id, data)
+      : this.departureService.create(data);
+
+    request.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.closeDialog();
+
+        this.notification.success(
+          current
+            ? 'Salida actualizada correctamente.'
+            : 'Salida registrada correctamente.'
+        );
+
+        this.load();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.saving.set(false);
+        this.notification.error(
+          this.apiMessage(err, 'No fue posible guardar la salida.')
+        );
+      },
+    });
+  }
+
+  confirmDeactivate(item: Departure): void {
+    this.confirmationService.confirm({
+      header: 'Confirmar desactivación',
+      message: `¿Deseas desactivar la salida "${item.name}"? Sus reservas se conservan.`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Desactivar',
+      rejectLabel: 'Cancelar',
+      acceptButtonStyleClass: 'p-button-danger',
+      accept: () => this.deactivate(item),
+    });
+  }
+
+  private deactivate(item: Departure): void {
+    this.departureService.delete(item.id).subscribe({
+      next: () => {
+        this.notification.success('Salida desactivada correctamente.');
+        this.load();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.notification.error(
+          this.apiMessage(err, 'No fue posible desactivar la salida.')
+        );
+      },
+    });
+  }
+
+  /** Toma el primer mensaje de validación que envía Django, si existe. */
+  private apiMessage(err: HttpErrorResponse, fallback: string): string {
+    const body = err.error;
+
+    if (body && typeof body === 'object') {
+      const first = Object.values(body)[0];
+      const message = Array.isArray(first) ? first[0] : first;
+
+      if (typeof message === 'string' && message) {
+        return message;
+      }
+    }
+
+    return fallback;
+  }
+}
+```
+
+![](images/clipboard-3833716309.png)
+
+Abrimos:
+
+```         
+nano src/app/features/departures/pages/departure-list/departure-list.html
+```
+
+Pegamos este código:
+
+``` html
+<div class="space-y-6">
+  <app-page-header
+    title="Salidas"
+    description="Administra las fechas y los cupos de los paquetes turísticos."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar por salida o paquete..."
+      aria-label="Buscar salidas"
+      [ngModel]="search()"
+      (ngModelChange)="updateSearch($event)"
+    />
+
+    <p-button
+      label="Nueva salida"
+      icon="pi pi-plus"
+      (onClick)="openCreate()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">
+      Cargando salidas...
+    </div>
+  } @else if (filteredRows().length === 0) {
+    <app-empty-state
+      title="Sin salidas"
+      description="No se encontraron salidas para mostrar."
+    />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table
+        [value]="filteredRows()"
+        [tableStyle]="{ 'min-width': '50rem' }"
+      >
+        <ng-template #header>
+          <tr>
+            <th>Salida</th>
+            <th>Paquete</th>
+            <th>Fecha</th>
+            <th>Cupos</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-departure>
+          <tr>
+            <td class="font-medium">
+              {{ departure.name }}
+            </td>
+
+            <td>
+              {{ packageName(departure.package) }}
+            </td>
+
+            <td>
+              {{ departure.departureDate | date: 'dd/MM/yyyy HH:mm' }}
+            </td>
+
+            <td>
+              @if (departure.availableCapacity === 0) {
+                <span class="font-semibold text-red-700">Agotada</span>
+                <span class="text-slate-500"> · {{ departure.capacity }}</span>
+              } @else {
+                <span class="font-semibold text-slate-900">{{ departure.availableCapacity }}</span>
+                <span class="text-slate-500"> / {{ departure.capacity }}</span>
+              }
+            </td>
+
+            <td>
+              <app-status-tag [status]="departure.status" />
+            </td>
+
+            <td>
+              <div class="flex justify-center gap-2">
+                <p-button
+                  icon="pi pi-pencil"
+                  severity="secondary"
+                  [text]="true"
+                  [rounded]="true"
+                  ariaLabel="Editar salida"
+                  (onClick)="openEdit(departure)"
+                />
+
+                @if (departure.status === 'active') {
+                  <p-button
+                    icon="pi pi-ban"
+                    severity="danger"
+                    [text]="true"
+                    [rounded]="true"
+                    ariaLabel="Desactivar salida"
+                    (onClick)="confirmDeactivate(departure)"
+                  />
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+
+<p-dialog
+  [header]="selectedDeparture() ? 'Editar salida' : 'Nueva salida'"
+  [modal]="true"
+  [visible]="dialogVisible()"
+  (visibleChange)="onDialogVisibleChange($event)"
+  [style]="{ width: '40rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <app-departure-form
+    [departure]="selectedDeparture()"
+    [packages]="packages()"
+    [saving]="saving()"
+    [resetKey]="resetKey()"
+    (saved)="save($event)"
+    (cancelled)="closeDialog()"
+  />
+</p-dialog>
+
+<p-confirmdialog />
+```
+
+![](images/clipboard-943397546.png)Guardamos y salimos.
+
+**Dejamos el CSS sin reglas:**
+
+```         
+: > src/app/features/departures/pages/departure-list/departure-list.css
+```
+
+![](images/clipboard-2083222626.png)
+
+#### Conectar la ruta de salidas
+
+La ruta `/salidas` mostraba la pantalla de construcción. La conecto con el nuevo listado de salidas.
+
+**Abrimos y actualizamos las rutas:**
+
+```         
+nano src/app/app.routes.ts
+```
+
+``` typescript
+import { Routes } from '@angular/router';
+
+export const routes: Routes = [
+  {
+    path: 'construir',
+    loadComponent: () =>
+      import('./features/construir/construir').then((m) => m.Construir),
+  },
+  {
+    path: '',
+    loadComponent: () =>
+      import('./layout/shell/shell').then((m) => m.Shell),
+    children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'clientes',
+      },
+      {
+        path: 'dashboard',
+        loadComponent: () =>
+          import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+        data: {
+          title: 'Panel de control',
+          description: 'Actividad del día en Wayuu Travel.',
+        },
+      },
+      {
+        path: 'clientes',
+        loadComponent: () =>
+          import('./features/clients/client-list/client-list').then(
+            (m) => m.ClientList
+          ),
+        data: {
+          title: 'Clientes',
+          description: 'Gestión de los clientes de Wayuu Travel.',
+        },
+      },
+      {
+        path: 'paquetes',
+        loadComponent: () =>
+          import('./features/packages/pages/package-list/package-list').then(
+            (m) => m.PackageList
+          ),
+        data: {
+          title: 'Paquetes turísticos',
+          description: 'Administración de los paquetes turísticos.',
+        },
+      },
+      {
+        path: 'salidas',
+        loadComponent: () =>
+          import('./features/departures/pages/departure-list/departure-list').then(
+            (m) => m.DepartureList
+          ),
+        data: {
+          title: 'Salidas',
+          description: 'Gestión de las salidas y fechas de los paquetes.',
+        },
+      },
+      {
+        path: 'proveedores',
+        loadComponent: () =>
+          import('./features/placeholder/placeholder').then(
+            (m) => m.Placeholder
+          ),
+        data: {
+          title: 'Proveedores',
+          description: 'Administración de los proveedores turísticos.',
+        },
+      },
+      {
+        path: 'reservas',
+        loadComponent: () =>
+          import('./features/bookings/booking-list/booking-list').then(
+            (m) => m.BookingList
+          ),
+        data: {
+          title: 'Reservas',
+          description: 'Gestión de las reservas de los viajeros.',
+        },
+      },
+      {
+        path: 'reservas/:id',
+        loadComponent: () =>
+          import('./features/bookings/booking-detail/booking-detail').then(
+            (m) => m.BookingDetail
+          ),
+        data: {
+          title: 'Detalle de reserva',
+          description: 'Consulta detallada de una reserva turística.',
+        },
+      },
+      {
+        path: 'pagos',
+        loadComponent: () =>
+          import('./features/payments/payment-list/payment-list').then(
+            (m) => m.PaymentList
+          ),
+        data: {
+          title: 'Pagos',
+          description: 'Pagos registrados y su reserva.',
+        },
+      },
+      {
+        path: 'cancelaciones',
+        loadComponent: () =>
+          import('./features/placeholder/placeholder').then(
+            (m) => m.Placeholder
+          ),
+        data: {
+          title: 'Cancelaciones',
+          description: 'Administración de las cancelaciones de reservas.',
+        },
+      },
+      {
+        path: 'comprobantes',
+        loadComponent: () =>
+          import('./features/placeholder/placeholder').then(
+            (m) => m.Placeholder
+          ),
+        data: {
+          title: 'Comprobantes',
+          description: 'Consulta de los comprobantes de las reservas.',
+        },
+      },
+    ],
+  },
+  {
+    path: '**',
+    redirectTo: 'construir',
+  },
+];
+```
+
+![](images/clipboard-1143909296.png)
+
+#### Crear el formulario de proveedores
+
+Para registrar y editar proveedores creé el componente `SupplierForm`. Pide el NIT, la razón social, el teléfono y el correo, con las validaciones del serializer de Django: NIT obligatorio y razón social entre 2 y 150 caracteres. Al NIT le agregué una longitud de entre 5 y 20 caracteres, suficiente para el formato colombiano con dígito de verificación (por ejemplo, `900123456-7`). El teléfono y el correo son opcionales y se envían como nulos si quedan vacíos.
+
+**Creamos la carpeta:**
+
+```         
+mkdir -p src/app/features/suppliers/components/supplier-form
+```
+
+**Abrimos:**
+
+```         
+nano src/app/features/suppliers/components/supplier-form/supplier-form.ts
+```
+
+**Pegamos este código:**
+
+``` typescript
+import {
+  Component,
+  effect,
+  input,
+  output
+} from '@angular/core';
+
+import {
+  FormBuilder,
+  ReactiveFormsModule,
+  Validators
+} from '@angular/forms';
+
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+
+import {
+  Supplier,
+  CreateSupplier
+} from '../../../../core/models/supplier.model';
+
+@Component({
+  selector: 'app-supplier-form',
+  standalone: true,
+  imports: [
+    ReactiveFormsModule,
+    ButtonModule,
+    InputTextModule
+  ],
+  templateUrl: './supplier-form.html',
+  styleUrl: './supplier-form.css'
+})
+export class SupplierForm {
+  readonly supplier = input<Supplier | null>(null);
+  readonly saving = input(false);
+  readonly resetKey = input(0);
+
+  readonly saved = output<CreateSupplier>();
+  readonly cancelled = output<void>();
+
+  private readonly fb = new FormBuilder();
+
+  readonly form = this.fb.group({
+    nit: ['', [Validators.required, Validators.minLength(5), Validators.maxLength(20)]],
+    razonSocial: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(150)]],
+    phone: ['', [Validators.maxLength(30)]],
+    email: ['', [Validators.email, Validators.maxLength(150)]]
+  });
+
+  constructor() {
+    effect(() => {
+      const current = this.supplier();
+      this.resetKey();
+
+      if (current) {
+        this.form.reset({
+          nit: current.nit,
+          razonSocial: current.razonSocial,
+          phone: current.phone ?? '',
+          email: current.email ?? ''
+        });
+      } else {
+        this.form.reset({
+          nit: '',
+          razonSocial: '',
+          phone: '',
+          email: ''
+        });
+      }
+    });
+  }
+
+  submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const value = this.form.getRawValue();
+
+    const payload: CreateSupplier = {
+      nit: value.nit!.trim(),
+      razonSocial: value.razonSocial!.trim(),
+      phone: value.phone?.trim() || null,
+      email: value.email?.trim() || null
+    };
+
+    this.saved.emit(payload);
+  }
+
+  cancel(): void {
+    this.cancelled.emit();
+  }
+}
+```
+
+![](images/clipboard-3016340635.png)
+
+**Abrimos:**
+
+```         
+nano src/app/features/suppliers/components/supplier-form/supplier-form.html
+```
+
+**Pegamos este código:**
+
+``` html
+<form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5">
+
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div class="space-y-2">
+      <label for="nit" class="block text-sm font-medium text-slate-700">
+        NIT *
+      </label>
+
+      <input
+        pInputText
+        id="nit"
+        formControlName="nit"
+        class="w-full"
+        placeholder="900123456-7"
+      />
+
+      @if (form.controls.nit.touched && form.controls.nit.invalid) {
+        <small class="text-red-600">
+          @if (form.controls.nit.hasError('required')) {
+            El NIT es obligatorio.
+          } @else {
+            Debe tener entre 5 y 20 caracteres.
+          }
+        </small>
+      }
+    </div>
+
+    <div class="space-y-2 sm:col-span-2">
+      <label for="razonSocial" class="block text-sm font-medium text-slate-700">
+        Razón social *
+      </label>
+
+      <input
+        pInputText
+        id="razonSocial"
+        formControlName="razonSocial"
+        class="w-full"
+        placeholder="Nombre legal de la empresa"
+      />
+
+      @if (form.controls.razonSocial.touched && form.controls.razonSocial.invalid) {
+        <small class="text-red-600">
+          @if (form.controls.razonSocial.hasError('required')) {
+            La razón social es obligatoria.
+          } @else {
+            Debe tener entre 2 y 150 caracteres.
+          }
+        </small>
+      }
+    </div>
+  </div>
+
+  <div class="space-y-2">
+    <label for="phone" class="block text-sm font-medium text-slate-700">
+      Teléfono
+    </label>
+
+    <input
+      pInputText
+      id="phone"
+      formControlName="phone"
+      class="w-full"
+      placeholder="Número de contacto"
+    />
+
+    @if (form.controls.phone.touched && form.controls.phone.invalid) {
+      <small class="text-red-600">
+        El teléfono no puede superar los 30 caracteres.
+      </small>
+    }
+  </div>
+
+  <div class="space-y-2">
+    <label for="email" class="block text-sm font-medium text-slate-700">
+      Correo electrónico
+    </label>
+
+    <input
+      pInputText
+      id="email"
+      type="email"
+      formControlName="email"
+      class="w-full"
+      placeholder="contacto@empresa.com"
+    />
+
+    @if (form.controls.email.touched && form.controls.email.invalid) {
+      <small class="text-red-600">
+        Ingresa un correo electrónico válido.
+      </small>
+    }
+  </div>
+
+  <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [outlined]="true"
+      type="button"
+      (onClick)="cancel()"
+    />
+
+    <p-button
+      [label]="supplier() ? 'Guardar cambios' : 'Registrar proveedor'"
+      icon="pi pi-check"
+      type="submit"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+  </div>
+
+</form>
+```
+
+![](images/clipboard-2343986075.png)Guardamos y salimos.
+
+```         
+: > src/app/features/suppliers/components/supplier-form/supplier-form.css
+```
+
+![](images/clipboard-2220719436.png)
+
+#### Crear el listado de proveedores
+
+Para administrar los proveedores creé el componente `SupplierList`, con el mismo diseño de las pantallas de paquetes y salidas: encabezado, buscador, botón para registrar, tabla y diálogo con el formulario. La tabla muestra el NIT, la razón social, el teléfono, el correo y el estado. El buscador filtra localmente por NIT o razón social. El botón de desactivar pide confirmación y solo aparece en los proveedores activos; el backend conserva el registro y lo marca como inactivo. Si Django rechaza un guardado, la notificación muestra su mensaje.
+
+**Creamos la carpeta:**
+
+```         
+mkdir -p src/app/features/suppliers/pages/supplier-list
+```
+
+**Abrimos:**
+
+```         
+nano src/app/features/suppliers/pages/supplier-list/supplier-list.ts
+```
+
+**Pegamos este código:**
+
+``` typescript
+import {
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+
+import { HttpErrorResponse } from '@angular/common/http';
+import { FormsModule } from '@angular/forms';
+import { ConfirmationService } from 'primeng/api';
+
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { TableModule } from 'primeng/table';
+import { DialogModule } from 'primeng/dialog';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+
+import {
+  Supplier,
+  CreateSupplier,
+} from '../../../../core/models/supplier.model';
+
+import { SupplierService } from '../../../../core/services/supplier.service';
+import { NotificationService } from '../../../../core/services/notification.service';
+
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
+import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
+
+import { SupplierForm } from '../../components/supplier-form/supplier-form';
+
+@Component({
+  selector: 'app-supplier-list',
+  standalone: true,
+  imports: [
+    FormsModule,
+    ButtonModule,
+    InputTextModule,
+    TableModule,
+    DialogModule,
+    ConfirmDialogModule,
+    PageHeader,
+    EmptyState,
+    StatusTag,
+    SupplierForm,
+  ],
+  templateUrl: './supplier-list.html',
+  styleUrl: './supplier-list.css',
+})
+export class SupplierList {
+  private readonly confirmationService = inject(ConfirmationService);
+  private readonly supplierService = inject(SupplierService);
+  private readonly notification = inject(NotificationService);
+
+  readonly rows = signal<Supplier[]>([]);
+  readonly search = signal('');
+  readonly loading = signal(false);
+  readonly saving = signal(false);
+
+  readonly dialogVisible = signal(false);
+  readonly selectedSupplier = signal<Supplier | null>(null);
+  readonly resetKey = signal(0);
+
+  readonly filteredRows = computed(() => {
+    const term = this.search().trim().toLowerCase();
+
+    return this.rows().filter((item) =>
+      [item.nit, item.razonSocial].some((value) =>
+        (value ?? '').toLowerCase().includes(term)
+      )
+    );
+  });
+
+  constructor() {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+
+    this.supplierService.getAll().subscribe({
+      next: (data) => {
+        this.rows.set(data);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.notification.error('Error al cargar los proveedores.');
+      },
+    });
+  }
+
+  updateSearch(value: string): void {
+    this.search.set(value);
+  }
+
+  openCreate(): void {
+    this.selectedSupplier.set(null);
+    this.resetKey.update((value) => value + 1);
+    this.dialogVisible.set(true);
+  }
+
+  openEdit(item: Supplier): void {
+    this.selectedSupplier.set(item);
+    this.resetKey.update((value) => value + 1);
+    this.dialogVisible.set(true);
+  }
+
+  closeDialog(): void {
+    this.dialogVisible.set(false);
+    this.selectedSupplier.set(null);
+  }
+
+  onDialogVisibleChange(visible: boolean): void {
+    if (!visible) {
+      this.closeDialog();
+    }
+  }
+
+  save(data: CreateSupplier): void {
+    this.saving.set(true);
+
+    const current = this.selectedSupplier();
+
+    const request = current
+      ? this.supplierService.update(current.id, data)
+      : this.supplierService.create(data);
+
+    request.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.closeDialog();
+
+        this.notification.success(
+          current
+            ? 'Proveedor actualizado correctamente.'
+            : 'Proveedor registrado correctamente.'
+        );
+
+        this.load();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.saving.set(false);
+        this.notification.error(
+          this.apiMessage(err, 'No fue posible guardar el proveedor.')
+        );
+      },
+    });
+  }
+
+  confirmDeactivate(item: Supplier): void {
+    this.confirmationService.confirm({
+      header: 'Confirmar desactivación',
+      message: `¿Deseas desactivar el proveedor "${item.razonSocial}"?`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Desactivar',
+      rejectLabel: 'Cancelar',
+      acceptButtonStyleClass: 'p-button-danger',
+      accept: () => this.deactivate(item),
+    });
+  }
+
+  private deactivate(item: Supplier): void {
+    this.supplierService.delete(item.id).subscribe({
+      next: () => {
+        this.notification.success('Proveedor desactivado correctamente.');
+        this.load();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.notification.error(
+          this.apiMessage(err, 'No fue posible desactivar el proveedor.')
+        );
+      },
+    });
+  }
+
+  /** Toma el primer mensaje de validación que envía Django, si existe. */
+  private apiMessage(err: HttpErrorResponse, fallback: string): string {
+    const body = err.error;
+
+    if (body && typeof body === 'object') {
+      const first = Object.values(body)[0];
+      const message = Array.isArray(first) ? first[0] : first;
+
+      if (typeof message === 'string' && message) {
+        return message;
+      }
+    }
+
+    return fallback;
+  }
+}
+```
+
+Guardamos y salimos.
+
+![](images/clipboard-3846133938.png)
+
+**Abrimos:**
+
+```         
+nano src/app/features/suppliers/pages/supplier-list/supplier-list.html
+```
+
+Pegamos este código:
+
+``` html
+<div class="space-y-6">
+  <app-page-header
+    title="Proveedores"
+    description="Administra las empresas que prestan los servicios de los paquetes."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar por NIT o razón social..."
+      aria-label="Buscar proveedores"
+      [ngModel]="search()"
+      (ngModelChange)="updateSearch($event)"
+    />
+
+    <p-button
+      label="Nuevo proveedor"
+      icon="pi pi-plus"
+      (onClick)="openCreate()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">
+      Cargando proveedores...
+    </div>
+  } @else if (filteredRows().length === 0) {
+    <app-empty-state
+      title="Sin proveedores"
+      description="No se encontraron proveedores para mostrar."
+    />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table
+        [value]="filteredRows()"
+        [tableStyle]="{ 'min-width': '50rem' }"
+      >
+        <ng-template #header>
+          <tr>
+            <th>NIT</th>
+            <th>Razón social</th>
+            <th>Teléfono</th>
+            <th>Correo electrónico</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-supplier>
+          <tr>
+            <td>{{ supplier.nit }}</td>
+            <td class="font-medium">{{ supplier.razonSocial }}</td>
+            <td>{{ supplier.phone || '—' }}</td>
+            <td>{{ supplier.email || '—' }}</td>
+            <td>
+              <app-status-tag [status]="supplier.status" />
+            </td>
+            <td>
+              <div class="flex justify-center gap-2">
+                <p-button
+                  icon="pi pi-pencil"
+                  severity="secondary"
+                  [text]="true"
+                  [rounded]="true"
+                  ariaLabel="Editar proveedor"
+                  (onClick)="openEdit(supplier)"
+                />
+
+                @if (supplier.status === 'active') {
+                  <p-button
+                    icon="pi pi-ban"
+                    severity="danger"
+                    [text]="true"
+                    [rounded]="true"
+                    ariaLabel="Desactivar proveedor"
+                    (onClick)="confirmDeactivate(supplier)"
+                  />
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+
+<p-dialog
+  [header]="selectedSupplier() ? 'Editar proveedor' : 'Nuevo proveedor'"
+  [modal]="true"
+  [visible]="dialogVisible()"
+  (visibleChange)="onDialogVisibleChange($event)"
+  [style]="{ width: '40rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <app-supplier-form
+    [supplier]="selectedSupplier()"
+    [saving]="saving()"
+    [resetKey]="resetKey()"
+    (saved)="save($event)"
+    (cancelled)="closeDialog()"
+  />
+</p-dialog>
+
+<p-confirmdialog />
+```
+
+Guardamos y salimos.
+
+![](images/clipboard-4219330809.png)
+
+```         
+: > src/app/features/suppliers/pages/supplier-list/supplier-list.css
+```
+
+![](images/clipboard-1806342575.png)
+
+#### Conectar la ruta de proveedores
+
+La ruta `/proveedores` mostraba la pantalla de construcción. La conecto con el nuevo listado.
+
+**Abrimos:**
+
+```         
+nano src/app/app.routes.ts
+```
+
+**actualizamos las rutas :**
+
+``` typescript
+   import { Routes } from '@angular/router';
+
+export const routes: Routes = [
+  {
+    path: 'construir',
+    loadComponent: () =>
+      import('./features/construir/construir').then((m) => m.Construir),
+  },
+  {
+    path: '',
+    loadComponent: () =>
+      import('./layout/shell/shell').then((m) => m.Shell),
+    children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'clientes',
+      },
+      {
+        path: 'dashboard',
+        loadComponent: () =>
+          import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+        data: {
+          title: 'Panel de control',
+          description: 'Actividad del día en Wayuu Travel.',
+        },
+      },
+      {
+        path: 'clientes',
+        loadComponent: () =>
+          import('./features/clients/client-list/client-list').then(
+            (m) => m.ClientList
+          ),
+        data: {
+          title: 'Clientes',
+          description: 'Gestión de los clientes de Wayuu Travel.',
+        },
+      },
+      {
+        path: 'paquetes',
+        loadComponent: () =>
+          import('./features/packages/pages/package-list/package-list').then(
+            (m) => m.PackageList
+          ),
+        data: {
+          title: 'Paquetes turísticos',
+          description: 'Administración de los paquetes turísticos.',
+        },
+      },
+      {
+        path: 'salidas',
+        loadComponent: () =>
+          import('./features/departures/pages/departure-list/departure-list').then(
+            (m) => m.DepartureList
+          ),
+        data: {
+          title: 'Salidas',
+          description: 'Gestión de las salidas y fechas de los paquetes.',
+        },
+      },
+      {
+        path: 'proveedores',
+        loadComponent: () =>
+         import('./features/suppliers/pages/supplier-list/supplier-list').then(
+            (m) => m.SupplierList
+          ),
+        data: {
+          title: 'Proveedores',
+          description: 'Administración de los proveedores turísticos.',
+        },
+      },
+      {
+        path: 'reservas',
+        loadComponent: () =>
+          import('./features/bookings/booking-list/booking-list').then(
+            (m) => m.BookingList
+          ),
+        data: {
+          title: 'Reservas',
+          description: 'Gestión de las reservas de los viajeros.',
+        },
+      },
+      {
+        path: 'reservas/:id',
+        loadComponent: () =>
+          import('./features/bookings/booking-detail/booking-detail').then(
+            (m) => m.BookingDetail
+          ),
+        data: {
+          title: 'Detalle de reserva',
+          description: 'Consulta detallada de una reserva turística.',
+        },
+      },
+      {
+        path: 'pagos',
+        loadComponent: () =>
+          import('./features/payments/payment-list/payment-list').then(
+            (m) => m.PaymentList
+          ),
+        data: {
+          title: 'Pagos',
+          description: 'Pagos registrados y su reserva.',
+        },
+      },
+      {
+        path: 'cancelaciones',
+        loadComponent: () =>
+          import('./features/placeholder/placeholder').then(
+            (m) => m.Placeholder
+          ),
+        data: {
+          title: 'Cancelaciones',
+          description: 'Administración de las cancelaciones de reservas.',
+        },
+      },
+      {
+        path: 'comprobantes',
+        loadComponent: () =>
+          import('./features/placeholder/placeholder').then(
+            (m) => m.Placeholder
+          ),
+        data: {
+          title: 'Comprobantes',
+          description: 'Consulta de los comprobantes de las reservas.',
+        },
+      },
+    ],
+  },
+  {
+    path: '**',
+    redirectTo: 'construir',
+  },
+];
+```
+
+**probamos el panel:**
+
+![](images/clipboard-1827587246.png)
+
+![](images/clipboard-926520465.png)
+
+#### cancelaciones
+
+`CancellationViewSet` era un `ModelViewSet` completo, así que cualquiera podía crear, modificar o borrar cancelaciones directamente en `/api/sale/cancellations/`, sin pasar por la regla de negocio. Una cancelación creada así no cambia el estado de la reserva ni devuelve el cupo, y una borrada deja una reserva inactiva sin explicación. Cambio el ViewSet a `ReadOnlyModelViewSet`, que solo permite consultar. La única forma de registrar una cancelación queda siendo `POST /api/sale/bookings/{id}/cancel/`, que aplica todas las validaciones dentro de una transacción.
+
+#### cancelaciones en solo lectura
+
+Como el backend ya no permite crear, modificar ni borrar cancelaciones directamente, retiro esos tres métodos del servicio de Angular y dejo solo las consultas. Así ningún componente puede intentar una operación que el backend rechazaría, y la única forma de cancelar sigue siendo el botón del detalle de la reserva.
+
+**Vaciamos el archivo:**
+
+```         
+: > src/app/core/services/cancellation.service.ts
+```
+
+**Abrimos:**
+
+```         
+nano src/app/core/services/cancellation.service.ts
+```
+
+**Pegamos este código:**
+
+``` typescript
+import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+import { environment } from '../../../environments/environment';
+import { Cancellation } from '../models/cancellation.model';
+
+/**
+ * Solo lectura: las cancelaciones se registran únicamente con
+ * BookingService.cancel(), que devuelve el cupo a la salida.
+ */
+@Injectable({
+  providedIn: 'root'
+})
+export class CancellationService {
+  private readonly http = inject(HttpClient);
+  private readonly apiUrl = `${environment.apiUrl}/sale/cancellations/`;
+
+  getAll(): Observable<Cancellation[]> {
+    return this.http.get<Cancellation[]>(this.apiUrl);
+  }
+
+  getById(id: number): Observable<Cancellation> {
+    return this.http.get<Cancellation>(`${this.apiUrl}${id}/`);
+  }
+}
+```
+
+![](images/clipboard-3449012499.png)
+
+#### Crear el listado de cancelaciones
+
+Para consultar las cancelaciones registradas creé el componente `CancellationList`, de solo lectura. La tabla muestra el número de la cancelación, la reserva cancelada como enlace a su detalle, el motivo, la descripción, la fecha y el estado. El buscador filtra localmente por número de reserva o por motivo. La pantalla no tiene botones para crear ni editar: una nota indica que las cancelaciones se registran desde el detalle de cada reserva, que es donde se devuelve el cupo.
+
+**Creamos la carpeta:**
+
+```         
+mkdir -p src/app/features/cancellations/pages/cancellation-list
+```
+
+**Abrimos:**
+
+```         
+nano src/app/features/cancellations/pages/cancellation-list/cancellation-list.ts
+```
+
+**Pegamos este código:**
+
+``` typescript
+import {
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+
+import { DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+
+import { InputTextModule } from 'primeng/inputtext';
+import { TableModule } from 'primeng/table';
+
+import { Cancellation } from '../../../../core/models/cancellation.model';
+import { CancellationService } from '../../../../core/services/cancellation.service';
+import { NotificationService } from '../../../../core/services/notification.service';
+
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
+import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
+
+@Component({
+  selector: 'app-cancellation-list',
+  standalone: true,
+  imports: [
+    DatePipe,
+    FormsModule,
+    RouterLink,
+    InputTextModule,
+    TableModule,
+    PageHeader,
+    EmptyState,
+    StatusTag,
+  ],
+  templateUrl: './cancellation-list.html',
+  styleUrl: './cancellation-list.css',
+})
+export class CancellationList {
+  private readonly cancellationService = inject(CancellationService);
+  private readonly notification = inject(NotificationService);
+
+  readonly rows = signal<Cancellation[]>([]);
+  readonly search = signal('');
+  readonly loading = signal(false);
+
+  readonly filteredRows = computed(() => {
+    const term = this.search().trim().toLowerCase();
+
+    return this.rows().filter((item) =>
+      [String(item.booking), item.name].some((value) =>
+        value.toLowerCase().includes(term)
+      )
+    );
+  });
+
+  constructor() {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+
+    this.cancellationService.getAll().subscribe({
+      next: (data) => {
+        this.rows.set(data);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.notification.error('Error al cargar las cancelaciones.');
+      },
+    });
+  }
+
+  updateSearch(value: string): void {
+    this.search.set(value);
+  }
+}
+```
+
+![](images/clipboard-122986528.png)
+
+**Abrimos:**
+
+```         
+nano src/app/features/cancellations/pages/cancellation-list/cancellation-list.html
+```
+
+**Pegamos este código:**
+
+``` html
+<div class="space-y-6">
+  <app-page-header
+    title="Cancelaciones"
+    description="Consulta las cancelaciones de reservas registradas."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar por reserva o motivo..."
+      aria-label="Buscar cancelaciones"
+      [ngModel]="search()"
+      (ngModelChange)="updateSearch($event)"
+    />
+
+    <p class="text-sm text-slate-500">
+      Las cancelaciones se registran desde el detalle de cada reserva.
+    </p>
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">
+      Cargando cancelaciones...
+    </div>
+  } @else if (filteredRows().length === 0) {
+    <app-empty-state
+      title="Sin cancelaciones"
+      description="No se encontraron cancelaciones para mostrar."
+    />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table
+        [value]="filteredRows()"
+        [tableStyle]="{ 'min-width': '50rem' }"
+      >
+        <ng-template #header>
+          <tr>
+            <th>Cancelación</th>
+            <th>Reserva</th>
+            <th>Motivo</th>
+            <th>Descripción</th>
+            <th>Fecha</th>
+            <th>Estado</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-cancellation>
+          <tr>
+            <td>#{{ cancellation.id }}</td>
+            <td>
+              <a
+                [routerLink]="['/reservas', cancellation.booking]"
+                class="font-semibold text-teal-700 hover:text-teal-900"
+              >
+                #{{ cancellation.booking }}
+              </a>
+            </td>
+            <td class="font-medium">{{ cancellation.name }}</td>
+            <td>{{ cancellation.descriptions || '—' }}</td>
+            <td>{{ cancellation.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+            <td>
+              <app-status-tag [status]="cancellation.status" />
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+```
+
+![](images/clipboard-1021518328.png)
+
+Guardamos y salimos.
+
+```         
+: > src/app/features/cancellations/pages/cancellation-list/cancellation-list.css
+```
+
+#### Conectar la ruta de cancelaciones
+
+La ruta `/cancelaciones` mostraba la pantalla de construcción. La conecto con el nuevo listado.
+
+**Abrimos:**
+
+```         
+nano src/app/app.routes.ts
+```
+
+Realiza los cambio:
+
+``` typescript
+   import { Routes } from '@angular/router';
+
+export const routes: Routes = [
+  {
+    path: 'construir',
+    loadComponent: () =>
+      import('./features/construir/construir').then((m) => m.Construir),
+  },
+  {
+    path: '',
+    loadComponent: () =>
+      import('./layout/shell/shell').then((m) => m.Shell),
+    children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'clientes',
+      },
+      {
+        path: 'dashboard',
+        loadComponent: () =>
+          import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+        data: {
+          title: 'Panel de control',
+          description: 'Actividad del día en Wayuu Travel.',
+        },
+      },
+      {
+        path: 'clientes',
+        loadComponent: () =>
+          import('./features/clients/client-list/client-list').then(
+            (m) => m.ClientList
+          ),
+        data: {
+          title: 'Clientes',
+          description: 'Gestión de los clientes de Wayuu Travel.',
+        },
+      },
+      {
+        path: 'paquetes',
+        loadComponent: () =>
+          import('./features/packages/pages/package-list/package-list').then(
+            (m) => m.PackageList
+          ),
+        data: {
+          title: 'Paquetes turísticos',
+          description: 'Administración de los paquetes turísticos.',
+        },
+      },
+      {
+        path: 'salidas',
+        loadComponent: () =>
+          import('./features/departures/pages/departure-list/departure-list').then(
+            (m) => m.DepartureList
+          ),
+        data: {
+          title: 'Salidas',
+          description: 'Gestión de las salidas y fechas de los paquetes.',
+        },
+      },
+      {
+        path: 'proveedores',
+        loadComponent: () =>
+         import('./features/suppliers/pages/supplier-list/supplier-list').then(
+            (m) => m.SupplierList
+          ),
+        data: {
+          title: 'Proveedores',
+          description: 'Administración de los proveedores turísticos.',
+        },
+      },
+      {
+        path: 'reservas',
+        loadComponent: () =>
+          import('./features/bookings/booking-list/booking-list').then(
+            (m) => m.BookingList
+          ),
+        data: {
+          title: 'Reservas',
+          description: 'Gestión de las reservas de los viajeros.',
+        },
+      },
+      {
+        path: 'reservas/:id',
+        loadComponent: () =>
+          import('./features/bookings/booking-detail/booking-detail').then(
+            (m) => m.BookingDetail
+          ),
+        data: {
+          title: 'Detalle de reserva',
+          description: 'Consulta detallada de una reserva turística.',
+        },
+      },
+      {
+        path: 'pagos',
+        loadComponent: () =>
+          import('./features/payments/payment-list/payment-list').then(
+            (m) => m.PaymentList
+          ),
+        data: {
+          title: 'Pagos',
+          description: 'Pagos registrados y su reserva.',
+        },
+      },
+      {
+        path: 'cancelaciones',
+        loadComponent: () =>
+                    import('./features/cancellations/pages/cancellation-list/cancellation-list').then(
+            (m) => m.CancellationList
+          ),
+        data: {
+          title: 'Cancelaciones',
+          description: 'Administración de las cancelaciones de reservas.',
+        },
+      },
+      {
+        path: 'comprobantes',
+        loadComponent: () =>
+          import('./features/placeholder/placeholder').then(
+            (m) => m.Placeholder
+          ),
+        data: {
+          title: 'Comprobantes',
+          description: 'Consulta de los comprobantes de las reservas.',
+        },
+      },
+    ],
+  },
+  {
+    path: '**',
+    redirectTo: 'construir',
+  },
+];
+```
+
+####  probamos la pantalla de cancelaciones
+
+Verificamos que ningún otro componente use los métodos que quitamos del servicio, y que los archivos tengan contenido:
+
+![![](images/clipboard-3092599483.png)](images/clipboard-1353276866.png)
+
+#### Crear el formulario de comprobantes
+
+Para emitir y editar comprobantes creé el componente `VoucherForm`. Pide la reserva, el nombre del comprobante y una descripción opcional, con las validaciones del serializer: nombre entre 2 y 100 caracteres. La lista de reservas muestra solo las activas, con el número de la reserva y el nombre del cliente. Al editar un comprobante, la reserva queda bloqueada: un comprobante pertenece siempre a la misma reserva y solo se pueden corregir su nombre y su descripción.
+
+**Creamos la carpeta:**
+
+```         
+ mkdir -p src/app/features/vouchers/components/voucher-form
+```
+
+**Abrimos:**
+
+```         
+nano src/app/features/vouchers/components/voucher-form/voucher-form.ts
+```
+
+**Pegamos este código:**
+
+``` typescript
+import {
+  Component,
+  computed,
+  effect,
+  input,
+  output
+} from '@angular/core';
+
+import {
+  FormBuilder,
+  ReactiveFormsModule,
+  Validators
+} from '@angular/forms';
+
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { TextareaModule } from 'primeng/textarea';
+
+import {
+  Voucher,
+  CreateVoucher
+} from '../../../../core/models/voucher.model';
+
+export interface BookingOption {
+  id: number;
+  label: string;
+  active: boolean;
+}
+
+@Component({
+  selector: 'app-voucher-form',
+  standalone: true,
+  imports: [
+    ReactiveFormsModule,
+    ButtonModule,
+    InputTextModule,
+    TextareaModule
+  ],
+  templateUrl: './voucher-form.html',
+  styleUrl: './voucher-form.css'
+})
+export class VoucherForm {
+  readonly voucher = input<Voucher | null>(null);
+  readonly bookingOptions = input<BookingOption[]>([]);
+  readonly saving = input(false);
+  readonly resetKey = input(0);
+
+  readonly saved = output<CreateVoucher>();
+  readonly cancelled = output<void>();
+
+  private readonly fb = new FormBuilder();
+
+  readonly form = this.fb.group({
+    booking: [null as number | null, Validators.required],
+    name: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]],
+    descriptions: ['']
+  });
+
+  /** Reservas activas, más la reserva actual del comprobante si ya no lo está. */
+  readonly selectableBookings = computed(() => {
+    const currentBooking = this.voucher()?.booking;
+    return this.bookingOptions().filter(
+      (option) => option.active || option.id === currentBooking
+    );
+  });
+
+  constructor() {
+    effect(() => {
+      const current = this.voucher();
+      this.resetKey();
+
+      if (current) {
+        this.form.reset({
+          booking: current.booking,
+          name: current.name,
+          descriptions: current.descriptions ?? ''
+        });
+        this.form.controls.booking.disable();
+      } else {
+        this.form.reset({
+          booking: null,
+          name: '',
+          descriptions: ''
+        });
+        this.form.controls.booking.enable();
+      }
+    });
+  }
+
+  submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const value = this.form.getRawValue();
+
+    const payload: CreateVoucher = {
+      booking: Number(value.booking),
+      name: value.name!.trim(),
+      descriptions: value.descriptions?.trim() || null
+    };
+
+    this.saved.emit(payload);
+  }
+
+  cancel(): void {
+    this.cancelled.emit();
+  }
+}
+```
+
+![](images/clipboard-1315879503.png)
+
+**Abrimos:**
+
+```         
+nano src/app/features/vouchers/components/voucher-form/voucher-form.html
+```
+
+**Pegamos este código:**
+
+``` html
+<form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5">
+
+  <div class="space-y-2">
+    <label for="booking" class="block text-sm font-medium text-slate-700">
+      Reserva *
+    </label>
+
+    <select
+      id="booking"
+      formControlName="booking"
+      class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-100 disabled:text-slate-500"
+    >
+      <option [ngValue]="null" disabled>Selecciona una reserva activa</option>
+      @for (option of selectableBookings(); track option.id) {
+        <option [ngValue]="option.id">{{ option.label }}</option>
+      }
+    </select>
+
+    @if (voucher()) {
+      <small class="text-slate-500">
+        La reserva de un comprobante no se puede cambiar.
+      </small>
+    }
+
+    @if (form.controls.booking.touched && form.controls.booking.invalid) {
+      <small class="text-red-600">Selecciona la reserva del comprobante.</small>
+    }
+  </div>
+
+  <div class="space-y-2">
+    <label for="name" class="block text-sm font-medium text-slate-700">
+      Nombre del comprobante *
+    </label>
+
+    <input
+      pInputText
+      id="name"
+      formControlName="name"
+      class="w-full"
+      placeholder="Ej. Comprobante de pago de reserva"
+    />
+
+    @if (form.controls.name.touched && form.controls.name.invalid) {
+      <small class="text-red-600">
+        @if (form.controls.name.hasError('required')) {
+          El nombre es obligatorio.
+        } @else {
+          El nombre debe tener entre 2 y 100 caracteres.
+        }
+      </small>
+    }
+  </div>
+
+  <div class="space-y-2">
+    <label for="descriptions" class="block text-sm font-medium text-slate-700">
+      Descripción
+    </label>
+
+    <textarea
+      pTextarea
+      id="descriptions"
+      formControlName="descriptions"
+      rows="3"
+      class="w-full"
+      placeholder="Detalles del comprobante"
+    ></textarea>
+  </div>
+
+  <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [outlined]="true"
+      type="button"
+      (onClick)="cancel()"
+    />
+
+    <p-button
+      [label]="voucher() ? 'Guardar cambios' : 'Emitir comprobante'"
+      icon="pi pi-check"
+      type="submit"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+  </div>
+
+</form>
+```
+
+![](images/clipboard-207051686.png)
+
+Guardamos y salimos.
+
+```         
+: > src/app/features/vouchers/components/voucher-form/voucher-form.css
+```
+
+![](images/clipboard-3398770499.png)
+
+#### Crear el listado de comprobantes
+
+Para consultar y emitir comprobantes creé el componente `VoucherList`, con el mismo diseño de las demás pantallas. El listado carga en paralelo los comprobantes, las reservas y los clientes, para construir las opciones del formulario con el número de la reserva y el nombre del cliente. La tabla muestra el número del comprobante, la reserva como enlace a su detalle, el nombre, la descripción, la fecha y el estado. El buscador filtra localmente por número de reserva o por nombre. El botón de desactivar pide confirmación y solo aparece en los comprobantes activos; el backend conserva el registro. Si Django rechaza un comprobante, por ejemplo para una reserva cancelada, la notificación muestra su mensaje.
+
+**Creamos la carpeta:**
+
+```         
+mkdir -p src/app/features/vouchers/pages/voucher-list
+```
+
+**Abrimos:**
+
+```         
+nano src/app/features/vouchers/pages/voucher-list/voucher-list.ts
+```
+
+**Pegamos este código:**
+
+``` typescript
+import {
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+
+import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { ConfirmationService } from 'primeng/api';
+import { forkJoin } from 'rxjs';
+
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { TableModule } from 'primeng/table';
+import { DialogModule } from 'primeng/dialog';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+
+import {
+  Voucher,
+  CreateVoucher,
+} from '../../../../core/models/voucher.model';
+import { Booking } from '../../../../core/models/booking.model';
+import { Client } from '../../../../core/models/client.model';
+
+import { VoucherService } from '../../../../core/services/voucher.service';
+import { BookingService } from '../../../../core/services/booking.service';
+import { ClientService } from '../../../../core/services/client.service';
+import { NotificationService } from '../../../../core/services/notification.service';
+
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
+import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
+
+import {
+  BookingOption,
+  VoucherForm,
+} from '../../components/voucher-form/voucher-form';
+
+@Component({
+  selector: 'app-voucher-list',
+  standalone: true,
+  imports: [
+    DatePipe,
+    FormsModule,
+    RouterLink,
+    ButtonModule,
+    InputTextModule,
+    TableModule,
+    DialogModule,
+    ConfirmDialogModule,
+    PageHeader,
+    EmptyState,
+    StatusTag,
+    VoucherForm,
+  ],
+  templateUrl: './voucher-list.html',
+  styleUrl: './voucher-list.css',
+})
+export class VoucherList {
+  private readonly confirmationService = inject(ConfirmationService);
+  private readonly voucherService = inject(VoucherService);
+  private readonly bookingService = inject(BookingService);
+  private readonly clientService = inject(ClientService);
+  private readonly notification = inject(NotificationService);
+
+  readonly rows = signal<Voucher[]>([]);
+  readonly bookings = signal<Booking[]>([]);
+  readonly clients = signal<Client[]>([]);
+  readonly search = signal('');
+  readonly loading = signal(false);
+  readonly saving = signal(false);
+
+  readonly dialogVisible = signal(false);
+  readonly selectedVoucher = signal<Voucher | null>(null);
+  readonly resetKey = signal(0);
+
+  private readonly clientNames = computed(
+    () => new Map(this.clients().map((client) => [client.id, client.name]))
+  );
+
+  readonly bookingOptions = computed<BookingOption[]>(() =>
+    this.bookings().map((booking) => {
+      const clientName =
+        this.clientNames().get(booking.client) ?? `Cliente #${booking.client}`;
+      const active = booking.status === 'active';
+
+      return {
+        id: booking.id,
+        label: `Reserva #${booking.id} · ${clientName}${active ? '' : ' (cancelada)'}`,
+        active,
+      };
+    })
+  );
+
+  readonly filteredRows = computed(() => {
+    const term = this.search().trim().toLowerCase();
+
+    return this.rows().filter((item) =>
+      [String(item.booking), item.name].some((value) =>
+        value.toLowerCase().includes(term)
+      )
+    );
+  });
+
+  constructor() {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+
+    forkJoin({
+      vouchers: this.voucherService.getAll(),
+      bookings: this.bookingService.getAll(),
+      clients: this.clientService.list(),
+    }).subscribe({
+      next: ({ vouchers, bookings, clients }) => {
+        this.rows.set(vouchers);
+        this.bookings.set(bookings);
+        this.clients.set(clients);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.notification.error('Error al cargar los comprobantes.');
+      },
+    });
+  }
+
+  updateSearch(value: string): void {
+    this.search.set(value);
+  }
+
+  openCreate(): void {
+    this.selectedVoucher.set(null);
+    this.resetKey.update((value) => value + 1);
+    this.dialogVisible.set(true);
+  }
+
+  openEdit(item: Voucher): void {
+    this.selectedVoucher.set(item);
+    this.resetKey.update((value) => value + 1);
+    this.dialogVisible.set(true);
+  }
+
+  closeDialog(): void {
+    this.dialogVisible.set(false);
+    this.selectedVoucher.set(null);
+  }
+
+  onDialogVisibleChange(visible: boolean): void {
+    if (!visible) {
+      this.closeDialog();
+    }
+  }
+
+  save(data: CreateVoucher): void {
+    this.saving.set(true);
+
+    const current = this.selectedVoucher();
+
+    const request = current
+      ? this.voucherService.update(current.id, {
+          name: data.name,
+          descriptions: data.descriptions,
+        })
+      : this.voucherService.create(data);
+
+    request.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.closeDialog();
+
+        this.notification.success(
+          current
+            ? 'Comprobante actualizado correctamente.'
+            : 'Comprobante emitido correctamente.'
+        );
+
+        this.load();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.saving.set(false);
+        this.notification.error(
+          this.apiMessage(err, 'No fue posible guardar el comprobante.')
+        );
+      },
+    });
+  }
+
+  confirmDeactivate(item: Voucher): void {
+    this.confirmationService.confirm({
+      header: 'Confirmar desactivación',
+      message: `¿Deseas desactivar el comprobante "${item.name}"?`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Desactivar',
+      rejectLabel: 'Cancelar',
+      acceptButtonStyleClass: 'p-button-danger',
+      accept: () => this.deactivate(item),
+    });
+  }
+
+  private deactivate(item: Voucher): void {
+    this.voucherService.delete(item.id).subscribe({
+      next: () => {
+        this.notification.success('Comprobante desactivado correctamente.');
+        this.load();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.notification.error(
+          this.apiMessage(err, 'No fue posible desactivar el comprobante.')
+        );
+      },
+    });
+  }
+
+  /** Toma el primer mensaje de validación que envía Django, si existe. */
+  private apiMessage(err: HttpErrorResponse, fallback: string): string {
+    const body = err.error;
+
+    if (body && typeof body === 'object') {
+      const first = Object.values(body)[0];
+      const message = Array.isArray(first) ? first[0] : first;
+
+      if (typeof message === 'string' && message) {
+        return message;
+      }
+    }
+
+    return fallback;
+  }
+}
+```
+
+![](images/clipboard-2329366439.png)
+
+Guardamos y salimos.
+
+**Abrimos:**
+
+```         
+nano src/app/features/vouchers/pages/voucher-list/voucher-list.html
+```
+
+**Pegamos este código:**
+
+``` html
+<div class="space-y-6">
+  <app-page-header
+    title="Comprobantes"
+    description="Emite y consulta los comprobantes de las reservas."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar por reserva o nombre..."
+      aria-label="Buscar comprobantes"
+      [ngModel]="search()"
+      (ngModelChange)="updateSearch($event)"
+    />
+
+    <p-button
+      label="Nuevo comprobante"
+      icon="pi pi-plus"
+      (onClick)="openCreate()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">
+      Cargando comprobantes...
+    </div>
+  } @else if (filteredRows().length === 0) {
+    <app-empty-state
+      title="Sin comprobantes"
+      description="No se encontraron comprobantes para mostrar."
+    />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table
+        [value]="filteredRows()"
+        [tableStyle]="{ 'min-width': '50rem' }"
+      >
+        <ng-template #header>
+          <tr>
+            <th>Comprobante</th>
+            <th>Reserva</th>
+            <th>Nombre</th>
+            <th>Descripción</th>
+            <th>Fecha</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-voucher>
+          <tr>
+            <td>#{{ voucher.id }}</td>
+            <td>
+              <a
+                [routerLink]="['/reservas', voucher.booking]"
+                class="font-semibold text-teal-700 hover:text-teal-900"
+              >
+                #{{ voucher.booking }}
+              </a>
+            </td>
+            <td class="font-medium">{{ voucher.name }}</td>
+            <td>{{ voucher.descriptions || '—' }}</td>
+            <td>{{ voucher.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+            <td>
+              <app-status-tag [status]="voucher.status" />
+            </td>
+            <td>
+              <div class="flex justify-center gap-2">
+                <p-button
+                  icon="pi pi-pencil"
+                  severity="secondary"
+                  [text]="true"
+                  [rounded]="true"
+                  ariaLabel="Editar comprobante"
+                  (onClick)="openEdit(voucher)"
+                />
+
+                @if (voucher.status === 'active') {
+                  <p-button
+                    icon="pi pi-ban"
+                    severity="danger"
+                    [text]="true"
+                    [rounded]="true"
+                    ariaLabel="Desactivar comprobante"
+                    (onClick)="confirmDeactivate(voucher)"
+                  />
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+
+<p-dialog
+  [header]="selectedVoucher() ? 'Editar comprobante' : 'Nuevo comprobante'"
+  [modal]="true"
+  [visible]="dialogVisible()"
+  (visibleChange)="onDialogVisibleChange($event)"
+  [style]="{ width: '40rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <app-voucher-form
+    [voucher]="selectedVoucher()"
+    [bookingOptions]="bookingOptions()"
+    [saving]="saving()"
+    [resetKey]="resetKey()"
+    (saved)="save($event)"
+    (cancelled)="closeDialog()"
+  />
+</p-dialog>
+
+<p-confirmdialog />
+```
+
+![](images/clipboard-3110957251.png)
+
+Guardamos y salimos.
+
+```         
+: > src/app/features/vouchers/pages/voucher-list/voucher-list.css
+```
+
+![](images/clipboard-2924542043.png)
+
+#### Conectar la ruta de comprobantes
+
+La ruta `/comprobantes` era el último placeholder del menú. La conecto con el nuevo listado.
+
+**Abrimos:**
+
+```         
+nano src/app/app.routes.ts
+```
+
+Realiza este cambio:
+
+``` typescript
+import { Routes } from '@angular/router';
+
+export const routes: Routes = [
+  {
+    path: 'construir',
+    loadComponent: () =>
+      import('./features/construir/construir').then((m) => m.Construir),
+  },
+  {
+    path: '',
+    loadComponent: () =>
+      import('./layout/shell/shell').then((m) => m.Shell),
+    children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'clientes',
+      },
+      {
+        path: 'dashboard',
+        loadComponent: () =>
+          import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+        data: {
+          title: 'Panel de control',
+          description: 'Actividad del día en Wayuu Travel.',
+        },
+      },
+      {
+        path: 'clientes',
+        loadComponent: () =>
+          import('./features/clients/client-list/client-list').then(
+            (m) => m.ClientList
+          ),
+        data: {
+          title: 'Clientes',
+          description: 'Gestión de los clientes de Wayuu Travel.',
+        },
+      },
+      {
+        path: 'paquetes',
+        loadComponent: () =>
+          import('./features/packages/pages/package-list/package-list').then(
+            (m) => m.PackageList
+          ),
+        data: {
+          title: 'Paquetes turísticos',
+          description: 'Administración de los paquetes turísticos.',
+        },
+      },
+      {
+        path: 'salidas',
+        loadComponent: () =>
+          import('./features/departures/pages/departure-list/departure-list').then(
+            (m) => m.DepartureList
+          ),
+        data: {
+          title: 'Salidas',
+          description: 'Gestión de las salidas y fechas de los paquetes.',
+        },
+      },
+      {
+        path: 'proveedores',
+        loadComponent: () =>
+         import('./features/suppliers/pages/supplier-list/supplier-list').then(
+            (m) => m.SupplierList
+          ),
+        data: {
+          title: 'Proveedores',
+          description: 'Administración de los proveedores turísticos.',
+        },
+      },
+      {
+        path: 'reservas',
+        loadComponent: () =>
+          import('./features/bookings/booking-list/booking-list').then(
+            (m) => m.BookingList
+          ),
+        data: {
+          title: 'Reservas',
+          description: 'Gestión de las reservas de los viajeros.',
+        },
+      },
+      {
+        path: 'reservas/:id',
+        loadComponent: () =>
+          import('./features/bookings/booking-detail/booking-detail').then(
+            (m) => m.BookingDetail
+          ),
+        data: {
+          title: 'Detalle de reserva',
+          description: 'Consulta detallada de una reserva turística.',
+        },
+      },
+      {
+        path: 'pagos',
+        loadComponent: () =>
+          import('./features/payments/payment-list/payment-list').then(
+            (m) => m.PaymentList
+          ),
+        data: {
+          title: 'Pagos',
+          description: 'Pagos registrados y su reserva.',
+        },
+      },
+      {
+        path: 'cancelaciones',
+        loadComponent: () =>
+                    import('./features/cancellations/pages/cancellation-list/cancellation-list').then(
+            (m) => m.CancellationList
+          ),
+        data: {
+          title: 'Cancelaciones',
+          description: 'Administración de las cancelaciones de reservas.',
+        },
+      },
+      {
+        path: 'comprobantes',
+        loadComponent: () =>
+                   import('./features/vouchers/pages/voucher-list/voucher-list').then(
+            (m) => m.VoucherList
+          ),
+        data: {
+          title: 'Comprobantes',
+          description: 'Consulta de los comprobantes de las reservas.',
+        },
+      },
+    ],
+  },
+  {
+    path: '**',
+    redirectTo: 'construir',
+  },
+];
+```
+
+![![](images/clipboard-3792460207.png)](images/clipboard-993966369.png)
+
+**realizamos las pruebas:**
+
+![](images/clipboard-360490510.png)

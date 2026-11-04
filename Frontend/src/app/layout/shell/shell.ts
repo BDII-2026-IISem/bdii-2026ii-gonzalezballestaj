@@ -1,4 +1,3 @@
-
 import { Component, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { MenuItem } from 'primeng/api';
@@ -24,9 +23,9 @@ export class Shell {
 
   readonly menuItems: MenuItem[] = [
     {
-      label: 'Inicio',
-      icon: 'pi pi-home',
-      routerLink: '/inicio'
+      label: 'Panel de control',
+      icon: 'pi pi-chart-bar',
+      routerLink: '/dashboard'
     },
     {
       separator: true
@@ -38,14 +37,8 @@ export class Shell {
           label: 'Clientes',
           icon: 'pi pi-users',
           routerLink: '/clientes'
-          
         },
-
-        {
-         label: 'Tipos de producto',
-        icon: 'pi pi-tags',
-      routerLink: '/tipos-producto'
-        },
+      
         {
           label: 'Paquetes turísticos',
           icon: 'pi pi-map',

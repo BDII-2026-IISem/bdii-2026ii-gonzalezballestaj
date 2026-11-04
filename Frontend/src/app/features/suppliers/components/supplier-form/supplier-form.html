@@ -1,0 +1,112 @@
+<form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5">
+
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div class="space-y-2">
+      <label for="nit" class="block text-sm font-medium text-slate-700">
+        NIT *
+      </label>
+
+      <input
+        pInputText
+        id="nit"
+        formControlName="nit"
+        class="w-full"
+        placeholder="900123456-7"
+      />
+
+      @if (form.controls.nit.touched && form.controls.nit.invalid) {
+        <small class="text-red-600">
+          @if (form.controls.nit.hasError('required')) {
+            El NIT es obligatorio.
+          } @else {
+            Debe tener entre 5 y 20 caracteres.
+          }
+        </small>
+      }
+    </div>
+
+    <div class="space-y-2 sm:col-span-2">
+      <label for="razonSocial" class="block text-sm font-medium text-slate-700">
+        Razón social *
+      </label>
+
+      <input
+        pInputText
+        id="razonSocial"
+        formControlName="razonSocial"
+        class="w-full"
+        placeholder="Nombre legal de la empresa"
+      />
+
+      @if (form.controls.razonSocial.touched && form.controls.razonSocial.invalid) {
+        <small class="text-red-600">
+          @if (form.controls.razonSocial.hasError('required')) {
+            La razón social es obligatoria.
+          } @else {
+            Debe tener entre 2 y 150 caracteres.
+          }
+        </small>
+      }
+    </div>
+  </div>
+
+  <div class="space-y-2">
+    <label for="phone" class="block text-sm font-medium text-slate-700">
+      Teléfono
+    </label>
+
+    <input
+      pInputText
+      id="phone"
+      formControlName="phone"
+      class="w-full"
+      placeholder="Número de contacto"
+    />
+
+    @if (form.controls.phone.touched && form.controls.phone.invalid) {
+      <small class="text-red-600">
+        El teléfono no puede superar los 30 caracteres.
+      </small>
+    }
+  </div>
+
+  <div class="space-y-2">
+    <label for="email" class="block text-sm font-medium text-slate-700">
+      Correo electrónico
+    </label>
+
+    <input
+      pInputText
+      id="email"
+      type="email"
+      formControlName="email"
+      class="w-full"
+      placeholder="contacto@empresa.com"
+    />
+
+    @if (form.controls.email.touched && form.controls.email.invalid) {
+      <small class="text-red-600">
+        Ingresa un correo electrónico válido.
+      </small>
+    }
+  </div>
+
+  <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [outlined]="true"
+      type="button"
+      (onClick)="cancel()"
+    />
+
+    <p-button
+      [label]="supplier() ? 'Guardar cambios' : 'Registrar proveedor'"
+      icon="pi pi-check"
+      type="submit"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+  </div>
+
+</form>

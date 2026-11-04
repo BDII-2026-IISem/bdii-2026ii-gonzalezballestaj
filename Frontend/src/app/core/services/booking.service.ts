@@ -3,24 +3,49 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
+
 import {
   Booking,
   CreateBooking,
   UpdateBooking
 } from '../models/booking.model';
+
 import { CreateBookingPayment } from '../models/payment.model';
 
+/**
+ * El backend responde en camelCase; se aceptan también las claves
+ * en snake_case por si alguna ruta las devuelve así.
+ */
 interface BookingApi {
   id: number;
   client: number;
   departure: number;
   traveler: number;
-  start_date: string;
-  end_date: string;
   observations: string | null;
   status: 'active' | 'inactive';
-  created_at: string;
-  updated_at: string;
+  startDate?: string;
+  endDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  start_date?: string;
+  end_date?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CancelBooking {
+  name: string;
+  descriptions?: string | null;
+}
+
+export interface CancellationApi {
+  id: number;
+  booking: number;
+  name: string;
+  descriptions: string | null;
+  status: 'active' | 'inactive';
+  createdAt: string;
+  updatedAt: string;
 }
 
 @Injectable({
@@ -38,12 +63,12 @@ export class BookingService {
       client: data.client,
       departure: data.departure,
       traveler: data.traveler,
-      startDate: data.start_date,
-      endDate: data.end_date,
+      startDate: data.startDate ?? data.start_date ?? '',
+      endDate: data.endDate ?? data.end_date ?? '',
       observations: data.observations,
       status: data.status,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at
+      createdAt: data.createdAt ?? data.created_at ?? '',
+      updatedAt: data.updatedAt ?? data.updated_at ?? ''
     };
   }
 
@@ -115,7 +140,13 @@ export class BookingService {
     );
   }
 
-  delete(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}${id}/`);
+  cancel(
+    id: number,
+    data: CancelBooking
+  ): Observable<CancellationApi> {
+    return this.http.post<CancellationApi>(
+      `${this.apiUrl}${id}/cancel/`,
+      data
+    );
   }
 }

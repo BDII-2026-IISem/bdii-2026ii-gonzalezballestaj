@@ -1,0 +1,134 @@
+<form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5">
+
+  <div class="space-y-2">
+    <label for="name" class="block text-sm font-medium text-slate-700">
+      Nombre de la salida *
+    </label>
+
+    <input
+      pInputText
+      id="name"
+      formControlName="name"
+      class="w-full"
+      placeholder="Ej. Cabo de la Vela · 15 de noviembre"
+    />
+
+    @if (form.controls.name.touched && form.controls.name.invalid) {
+      <small class="text-red-600">
+        @if (form.controls.name.hasError('required')) {
+          El nombre es obligatorio.
+        } @else {
+          El nombre debe tener entre 2 y 150 caracteres.
+        }
+      </small>
+    }
+  </div>
+
+  <div class="space-y-2">
+    <label for="package" class="block text-sm font-medium text-slate-700">
+      Paquete turístico *
+    </label>
+
+    <select
+      id="package"
+      formControlName="package"
+      class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+    >
+      <option [ngValue]="null" disabled>Selecciona un paquete</option>
+      @for (item of selectablePackages(); track item.id) {
+        <option [ngValue]="item.id">{{ item.name }}</option>
+      }
+    </select>
+
+    @if (form.controls.package.touched && form.controls.package.invalid) {
+      <small class="text-red-600">Selecciona el paquete de la salida.</small>
+    }
+  </div>
+
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <div class="space-y-2">
+      <label for="departureDate" class="block text-sm font-medium text-slate-700">
+        Fecha y hora de salida *
+      </label>
+
+      <input
+        pInputText
+        id="departureDate"
+        type="datetime-local"
+        formControlName="departureDate"
+        class="w-full"
+      />
+
+      @if (form.controls.departureDate.touched && form.controls.departureDate.invalid) {
+        <small class="text-red-600">La fecha de salida es obligatoria.</small>
+      }
+    </div>
+
+    <div class="space-y-2">
+      <label for="capacity" class="block text-sm font-medium text-slate-700">
+        Capacidad total *
+      </label>
+
+      <input
+        pInputText
+        id="capacity"
+        type="number"
+        min="1"
+        formControlName="capacity"
+        class="w-full"
+        placeholder="Número de cupos"
+      />
+
+      @if (form.controls.capacity.touched && form.controls.capacity.invalid) {
+        <small class="text-red-600">
+          @if (form.controls.capacity.hasError('belowReserved')) {
+            Hay {{ reserved() }} cupos ocupados; la capacidad no puede ser menor.
+          } @else {
+            La capacidad debe ser de al menos 1 cupo.
+          }
+        </small>
+      }
+    </div>
+  </div>
+
+  @if (departure()) {
+    <p class="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+      Esta salida tiene {{ reserved() }} cupos ocupados por reservas.
+      Los cupos disponibles se recalculan a partir de la capacidad.
+    </p>
+  }
+
+  <div class="space-y-2">
+    <label for="description" class="block text-sm font-medium text-slate-700">
+      Descripción
+    </label>
+
+    <textarea
+      pTextarea
+      id="description"
+      formControlName="description"
+      rows="2"
+      class="w-full"
+      placeholder="Detalles de la salida"
+    ></textarea>
+  </div>
+
+  <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [outlined]="true"
+      type="button"
+      (onClick)="cancel()"
+    />
+
+    <p-button
+      [label]="departure() ? 'Guardar cambios' : 'Registrar salida'"
+      icon="pi pi-check"
+      type="submit"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+  </div>
+
+</form>

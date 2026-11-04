@@ -2,7 +2,7 @@
 from decimal import Decimal
 
 from rest_framework import serializers
-
+from apps.common.status import RecordStatus
 from apps.sale.models import Booking, Payment, Cancellation, Voucher
 
 
@@ -168,6 +168,30 @@ class VoucherSerializer(serializers.ModelSerializer):
                 "allow_blank": True,
             },
         }
+     
+    def validate_booking(self, booking):
+        # Al editar, se permite conservar la misma reserva aunque ya esté cancelada.
+        if self.instance and self.instance.booking_id == booking.id:
+            return booking
+
+        if booking.status != RecordStatus.ACTIVE:
+            raise serializers.ValidationError(
+                "Solo se pueden emitir comprobantes para reservas activas."
+            )
+        return booking   
+
+class CancellationRequestSerializer(serializers.Serializer):
+    """Datos que el cliente envía para cancelar una reserva."""
+
+    name = serializers.CharField(min_length=2, max_length=100)
+    descriptions = serializers.CharField(
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+    )
+
+    def validate_descriptions(self, value):
+        return value or None
 
     def validate(self, attrs):
         if attrs.get("descriptions") == "":

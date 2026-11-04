@@ -1,0 +1,144 @@
+<section class="detail-container">
+
+  @if (success()) {
+    <div class="message mb-4 border border-green-200 bg-green-50 text-green-800">
+      {{ success() }}
+    </div>
+  }
+
+  @if (error() && !loading()) {
+    <div class="message error mb-4">
+      {{ error() }}
+    </div>
+  }
+
+  <div class="page-header">
+    <div>
+      <a routerLink="/reservas" class="back-link">
+        ← Volver a reservas
+      </a>
+
+      <h1>Detalle de reserva</h1>
+      <p>Consulta la información de la reserva turística.</p>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="message">
+      Cargando información de la reserva...
+    </div>
+  } @else if (booking(); as reservation) {
+
+    <article class="detail-card">
+      <div class="card-header">
+        <h2>Reserva #{{ reservation.id }}</h2>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <span
+            class="status"
+            [class.active]="reservation.status === 'active'"
+            [class.inactive]="reservation.status === 'inactive'"
+          >
+            {{ reservation.status === 'active' ? 'Activa' : 'Inactiva' }}
+          </span>
+
+          @if (reservation.status === 'active') {
+            <button
+              type="button"
+              (click)="cancelBooking()"
+              [disabled]="cancelling()"
+              class="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {{ cancelling() ? 'Cancelando...' : 'Cancelar reserva' }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="details-grid">
+        <div class="detail-item">
+          <span>Cliente</span>
+          <strong>#{{ reservation.client }}</strong>
+        </div>
+
+        <div class="detail-item">
+          <span>Salida turística</span>
+          <strong>#{{ reservation.departure }}</strong>
+        </div>
+
+        <div class="detail-item">
+          <span>Viajero</span>
+          <strong>#{{ reservation.traveler }}</strong>
+        </div>
+
+        <div class="detail-item">
+          <span>Fecha de inicio</span>
+          <strong>{{ reservation.startDate | date:'dd/MM/yyyy' }}</strong>
+        </div>
+
+        <div class="detail-item">
+          <span>Fecha de finalización</span>
+          <strong>{{ reservation.endDate | date:'dd/MM/yyyy' }}</strong>
+        </div>
+
+        <div class="detail-item">
+          <span>Fecha de creación</span>
+          <strong>{{ reservation.createdAt | date:'dd/MM/yyyy HH:mm' }}</strong>
+        </div>
+
+        <div class="detail-item full-width">
+          <span>Observaciones</span>
+          <strong>{{ reservation.observations || 'Sin observaciones' }}</strong>
+        </div>
+      </div>
+    </article>
+
+    <article class="detail-card payments-card">
+      <div class="card-header">
+        <h2>Pagos asociados</h2>
+
+        <span class="payment-count">
+          {{ payments().length }} registros
+        </span>
+      </div>
+
+      @if (payments().length === 0) {
+        <div class="message">
+          Esta reserva no tiene pagos registrados.
+        </div>
+      } @else {
+        <div class="overflow-x-auto">
+          <table class="payments-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Referencia</th>
+                <th>Método</th>
+                <th>Fecha</th>
+                <th>Importe</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              @for (payment of payments(); track payment.id) {
+                <tr>
+                  <td>#{{ payment.id }}</td>
+                  <td>{{ payment.referenceType }}</td>
+                  <td>{{ payment.method }}</td>
+                  <td>{{ payment.paymentDate | date:'dd/MM/yyyy' }}</td>
+                  <td>
+                    {{ payment.amount | currency:'COP':'symbol':'1.0-2' }}
+                  </td>
+                  <td>
+                    {{ payment.status === 'active' ? 'Activo' : 'Inactivo' }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </article>
+  }
+</section>

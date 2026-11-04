@@ -1,0 +1,87 @@
+<form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5">
+
+  <div class="space-y-2">
+    <label for="booking" class="block text-sm font-medium text-slate-700">
+      Reserva *
+    </label>
+
+    <select
+      id="booking"
+      formControlName="booking"
+      class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-100 disabled:text-slate-500"
+    >
+      <option [ngValue]="null" disabled>Selecciona una reserva activa</option>
+      @for (option of selectableBookings(); track option.id) {
+        <option [ngValue]="option.id">{{ option.label }}</option>
+      }
+    </select>
+
+    @if (voucher()) {
+      <small class="text-slate-500">
+        La reserva de un comprobante no se puede cambiar.
+      </small>
+    }
+
+    @if (form.controls.booking.touched && form.controls.booking.invalid) {
+      <small class="text-red-600">Selecciona la reserva del comprobante.</small>
+    }
+  </div>
+
+  <div class="space-y-2">
+    <label for="name" class="block text-sm font-medium text-slate-700">
+      Nombre del comprobante *
+    </label>
+
+    <input
+      pInputText
+      id="name"
+      formControlName="name"
+      class="w-full"
+      placeholder="Ej. Comprobante de pago de reserva"
+    />
+
+    @if (form.controls.name.touched && form.controls.name.invalid) {
+      <small class="text-red-600">
+        @if (form.controls.name.hasError('required')) {
+          El nombre es obligatorio.
+        } @else {
+          El nombre debe tener entre 2 y 100 caracteres.
+        }
+      </small>
+    }
+  </div>
+
+  <div class="space-y-2">
+    <label for="descriptions" class="block text-sm font-medium text-slate-700">
+      Descripción
+    </label>
+
+    <textarea
+      pTextarea
+      id="descriptions"
+      formControlName="descriptions"
+      rows="3"
+      class="w-full"
+      placeholder="Detalles del comprobante"
+    ></textarea>
+  </div>
+
+  <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+    <p-button
+      label="Cancelar"
+      severity="secondary"
+      [outlined]="true"
+      type="button"
+      (onClick)="cancel()"
+    />
+
+    <p-button
+      [label]="voucher() ? 'Guardar cambios' : 'Emitir comprobante'"
+      icon="pi pi-check"
+      type="submit"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+  </div>
+
+</form>

@@ -13,6 +13,7 @@ import {
   providedIn: 'root'
 })
 export class ClientService {
+  [x: string]: any;
   private readonly http = inject(HttpClient);
   private readonly base = `${environment.apiUrl}/clients`;
 

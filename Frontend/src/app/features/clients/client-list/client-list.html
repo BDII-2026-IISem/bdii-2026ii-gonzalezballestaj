@@ -59,7 +59,7 @@
           <tr>
             <th>ID</th>
             <th>Nombre</th>
-            <th>Dirección</th>
+            <th>Documento</th>
             <th>Teléfono</th>
             <th>Correo electrónico</th>
             <th>Estado</th>
@@ -71,7 +71,7 @@
           <tr>
             <td>{{ client.id }}</td>
             <td class="font-medium">{{ client.name }}</td>
-            <td>{{ client.address || '—' }}</td>
+            <td>{{ client.documentType }} {{ client.documentNumber }}</td>
             <td>{{ client.phone || '—' }}</td>
             <td>{{ client.email || '—' }}</td>
             <td>
