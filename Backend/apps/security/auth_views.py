@@ -247,8 +247,8 @@ def to_client_path(route):
     'api/clients/<int:pk>/'                  -> '/api/clients/:id/'
     'api/product/packages/(?P<pk>[^/.]+)/$'  -> '/api/product/packages/:id/'
     """
-    path = _CONVERTER.sub(":id", route)
-    path = _NAMED_GROUP.sub(":id", path)
+    path = _NAMED_GROUP.sub(":id", route)
+    path = _CONVERTER.sub(":id", path)
     path = path.replace("^", "").replace("$", "")
     return "/" + path.lstrip("/")
 

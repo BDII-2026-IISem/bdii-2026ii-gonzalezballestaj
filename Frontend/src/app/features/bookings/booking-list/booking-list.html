@@ -21,11 +21,13 @@
       />
     </div>
 
-    <p-button
-      label="Nueva reserva"
-      icon="pi pi-plus"
-      (onClick)="openCreate()"
-    />
+    <ng-container *appHasPermission="'POST /api/sale/bookings/register'">
+      <p-button
+        label="Nueva reserva"
+        icon="pi pi-plus"
+        (onClick)="openCreate()"
+      />
+    </ng-container>
   </div>
 
   @if (error()) {

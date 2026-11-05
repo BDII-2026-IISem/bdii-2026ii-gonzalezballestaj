@@ -23,11 +23,13 @@
         (onClick)="toggleAvailability()"
       />
 
-      <p-button
-        label="Nuevo paquete"
-        icon="pi pi-plus"
-        (onClick)="openCreate()"
-      />
+      <ng-container *appHasPermission="'POST /api/product/packages'">
+        <p-button
+          label="Nuevo paquete"
+          icon="pi pi-plus"
+          (onClick)="openCreate()"
+        />
+      </ng-container>
     </div>
   </div>
 
@@ -70,22 +72,26 @@
             </td>
 
             <td>
-              <p-button
-                icon="pi pi-pencil"
-                severity="secondary"
-                [text]="true"
-                [rounded]="true"
-                aria-label="Editar paquete"
-                (onClick)="openEdit(package)"
-              />
-                            <p-button
-                icon="pi pi-trash"
-                severity="danger"
-                [text]="true"
-                [rounded]="true"
-                aria-label="Desactivar paquete"
-                (onClick)="confirmDelete(package)"
+              <ng-container *appHasPermission="'PATCH /api/product/packages/:id'">
+                <p-button
+                  icon="pi pi-pencil"
+                  severity="secondary"
+                  [text]="true"
+                  [rounded]="true"
+                  aria-label="Editar paquete"
+                  (onClick)="openEdit(package)"
                 />
+              </ng-container>
+                            <ng-container *appHasPermission="'DELETE /api/product/packages/:id'">
+                              <p-button
+                  icon="pi pi-trash"
+                  severity="danger"
+                  [text]="true"
+                  [rounded]="true"
+                  aria-label="Desactivar paquete"
+                  (onClick)="confirmDelete(package)"
+                  />
+                            </ng-container>
             </td>
           </tr>
         </ng-template>

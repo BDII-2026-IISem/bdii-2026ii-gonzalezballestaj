@@ -14,11 +14,13 @@
       (ngModelChange)="updateSearch($event)"
     />
 
-    <p-button
-      label="Nueva salida"
-      icon="pi pi-plus"
-      (onClick)="openCreate()"
-    />
+    <ng-container *appHasPermission="'POST /api/product/departures'">
+      <p-button
+        label="Nueva salida"
+        icon="pi pi-plus"
+        (onClick)="openCreate()"
+      />
+    </ng-container>
   </div>
 
   @if (loading()) {
@@ -77,24 +79,28 @@
 
             <td>
               <div class="flex justify-center gap-2">
-                <p-button
-                  icon="pi pi-pencil"
-                  severity="secondary"
-                  [text]="true"
-                  [rounded]="true"
-                  ariaLabel="Editar salida"
-                  (onClick)="openEdit(departure)"
-                />
-
-                @if (departure.status === 'active') {
+                <ng-container *appHasPermission="'PATCH /api/product/departures/:id'">
                   <p-button
-                    icon="pi pi-ban"
-                    severity="danger"
+                    icon="pi pi-pencil"
+                    severity="secondary"
                     [text]="true"
                     [rounded]="true"
-                    ariaLabel="Desactivar salida"
-                    (onClick)="confirmDeactivate(departure)"
+                    ariaLabel="Editar salida"
+                    (onClick)="openEdit(departure)"
                   />
+                </ng-container>
+
+                @if (departure.status === 'active') {
+                  <ng-container *appHasPermission="'DELETE /api/product/departures/:id'">
+                    <p-button
+                      icon="pi pi-ban"
+                      severity="danger"
+                      [text]="true"
+                      [rounded]="true"
+                      ariaLabel="Desactivar salida"
+                      (onClick)="confirmDeactivate(departure)"
+                    />
+                  </ng-container>
                 }
               </div>
             </td>

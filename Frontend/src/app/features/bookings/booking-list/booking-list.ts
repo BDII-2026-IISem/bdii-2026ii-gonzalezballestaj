@@ -32,10 +32,13 @@ import { PageHeader } from '../../../shared/ui/page-header/page-header';
 import { EmptyState } from '../../../shared/ui/empty-state/empty-state';
 import { StatusTag } from '../../../shared/ui/status-tag/status-tag';
 
+import { HasPermission } from '../../../shared/directives/has-permission';
+
 @Component({
   selector: 'app-booking-list',
   standalone: true,
   imports: [
+    HasPermission,
   ButtonModule,
   DialogModule,
   InputTextModule,

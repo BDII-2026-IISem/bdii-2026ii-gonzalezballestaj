@@ -12431,3 +12431,907 @@ describe('authInterceptor', () => {
 Escribí tres archivos de pruebas para la sesión. `auth.service.spec.ts` comprueba que el login guarda el par de tokens y no emite hasta recibir el perfil y los permisos, y que limpia la sesión si una de esas consultas falla. `session-store.spec.ts` comprueba que `canPermission` resuelva el `:id`, tolere la barra final y rechace los métodos no concedidos, y que una instancia nueva del almacén restaure la sesión desde `localStorage`, como ocurre al recargar la página. `auth-interceptor.spec.ts` comprueba que las peticiones lleven el token, que dos 401 simultáneos produzcan un solo refresh y dos reintentos con el token nuevo, y que un refresh fallido limpie la sesión. La prueba del interceptor no se ejecutaba al principio porque su archivo no llegó a guardarse; tras eliminar el bloqueo que había dejado el editor y crearla de nuevo, la suite completa pasó con 19 pruebas en 7 archivos.
 
 ![](images/clipboard-632442155.png)
+
+**ISS-09 · Guards y RBAC en la UI**
+
+En esta etapa convierto la sesión del ISS-08 en autorización visible dentro de Wayuutravel. Implementaré guards que exigen sesión, protegen cada ruta con su permiso exacto y redirigen a una pantalla `/forbidden` que indica qué permiso falta. Crearé la directiva `*appHasPermission` para ocultar los botones de registrar, editar y desactivar no concedidos, y filtraré el menú lateral según la matriz de `/api/auth/permissions/`, nunca por el nombre del rol. Como ocultar un botón no es la seguridad del sistema, también restauraré en Django la validación con `HasResourceAccess`, y verificaré todo con dos usuarios, pruebas automáticas y compilaciones.
+
+#### Restaurar la autorización en las vistas de negocio
+
+Durante la Fase I las vistas de negocio usaban `AllowAny` para funcionar sin sesión. Ahora que existe el login, las vuelvo a proteger con `HasResourceAccess`, que comprueba en cada petición si alguno de los roles activos del usuario tiene concedido el método y la ruta. Sin token, Django responde 401; con token pero sin concesión, responde 403. Las vistas de autenticación no cambian, porque el login y el refresh deben seguir abiertos.
+
+``` sql
+ sed -i 's/permission_classes = \[AllowAny\]/permission_classes = [HasResourceAccess]/' \
+  apps/client/views.py apps/product/views.py apps/sale/views.py
+
+grep -n "permission_classes\|HasResourceAccess" apps/client/views.py apps/product/views.py apps/sale/views.py
+```
+
+Ahora agregamos el import donde falte. En `apps/client/views.py` ya existe; en los otros dos, abrimos cada archivo:
+
+```         
+nano apps/product/views.py
+```
+
+Junto a los imports de `apps.`, agregamos:
+
+``` python
+from apps.security.permissions import HasResourceAccess
+```
+
+![](images/clipboard-1299599683.png)
+
+#### Crear un usuario vendedor para las pruebas
+
+Para comprobar el RBAC con dos usuarios, creé el rol `vendedor`, le concedí solo las lecturas (`GET`) de clientes, catálogo y ventas, y se lo asigné a `Rafael`, que no tenía roles. Así, `gonzalez` (admin) ve todo y `Rafael` solo consulta.
+
+``` python
+python3 manage.py shell -c "
+from apps.security.models import User, Role, RoleUser, Resource, ResourceRole
+from apps.common.status import RecordStatus as S
+
+role, _ = Role.objects.get_or_create(name='vendedor', defaults={'status': S.ACTIVE})
+reads = Resource.objects.filter(status=S.ACTIVE, method='GET').filter(
+    route__regex=r'^api/(clients|product|sale)/')
+for resource in reads:
+    ResourceRole.objects.get_or_create(resource=resource, role=role, defaults={'status': S.ACTIVE})
+
+user = User.objects.get(username='Rafael')
+user.set_password('Vendedor2026!')
+user.save()
+RoleUser.objects.get_or_create(role=role, user=user, defaults={'status': S.ACTIVE})
+print('lecturas concedidas a vendedor:', reads.count())
+"
+```
+
+La contraseña de prueba de `Rafael` queda en `Vendedor2026!`. Si el comando falla por algún campo obligatorio de `Role` o `RoleUser`, pégame el error.
+
+**Probar la autorización con los dos usuarios** (con `runserver` corriendo):
+
+``` python
+API=http://localhost:8000/api
+read -s -p "Contraseña de gonzalez: " WT_PASS; echo
+
+ADMIN=$(curl -s -X POST $API/auth/login/ -H "Content-Type: application/json" \
+  -d "{\"username\": \"gonzalez\", \"password\": \"$WT_PASS\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['access'])")
+SELLER=$(curl -s -X POST $API/auth/login/ -H "Content-Type: application/json" \
+  -d '{"username": "Rafael", "password": "Vendedor2026!"}' | python3 -c "import json,sys; print(json.load(sys.stdin)['access'])")
+
+check() { curl -s -o /dev/null -w "$1 → HTTP %{http_code}\n" "${@:2}"; }
+
+check "sin token   GET clients " $API/clients/
+check "admin       GET clients " $API/clients/ -H "Authorization: Bearer $ADMIN"
+check "vendedor    GET clients " $API/clients/ -H "Authorization: Bearer $SELLER"
+check "vendedor   POST clients " -X POST $API/clients/ -H "Authorization: Bearer $SELLER" -H "Content-Type: application/json" -d '{}'
+check "admin    POST cancel #4 " -X POST $API/sale/bookings/4/cancel/ -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" -d '{"name":"x2"}'
+
+curl -s $API/auth/permissions/ -H "Authorization: Bearer $ADMIN" | python3 -c "
+import json, sys
+paths = sorted({p['method'] + ' ' + p['path'] for p in json.load(sys.stdin)['permissions'] if p['method'] == 'GET'})
+print('\n'.join(paths))
+"
+```
+
+#### Crear los guards
+
+Creé cuatro guards funcionales. `authGuard` exige una sesión iniciada y, si no la hay, lleva a `/login` con la dirección pedida en `returnUrl`. `guestGuard` hace lo contrario en la pantalla de login: si ya hay sesión, lleva al panel. `permissionGuard` lee el permiso que declara cada ruta en `data.permission` y, si la matriz no lo concede, lleva a `/forbidden` indicando cuál falta. `authOnlyGuard` es el mismo `authGuard` con un nombre que declara su intención, para las pantallas que solo piden sesión, como el perfil. Todos redirigen con `createUrlTree`, de modo que Angular decide antes de cargar la pantalla.
+
+```         
+```
+
+``` typescript
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+
+import { SessionStore } from '../services/session-store';
+
+/** ¿Quién eres? Sin sesión no hay ruta: a /login con el destino en returnUrl. */
+export const authGuard: CanActivateFn = (_route, state) => {
+  const session = inject(SessionStore);
+  const router = inject(Router);
+
+  if (session.isAuthenticated()) {
+    return true;
+  }
+
+  return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
+};
+```
+
+![](images/clipboard-2290591990.png)
+
+```         
+nano src/app/core/guards/guest-guard.ts
+```
+
+```         
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+
+import { SessionStore } from '../services/session-store';
+
+/** Con sesión abierta, /login no tiene nada que ofrecer: al panel. */
+export const guestGuard: CanActivateFn = () => {
+  const session = inject(SessionStore);
+  const router = inject(Router);
+
+  return session.isAuthenticated() ? router.createUrlTree(['/dashboard']) : true;
+};
+```
+
+![](images/clipboard-965863871.png)
+
+```         
+nano src/app/core/guards/permission-guard.ts
+```
+
+``` typescript
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+
+import { SessionStore } from '../services/session-store';
+
+/** ¿Qué puedes hacer? La ruta lo declara: data: { permission: 'GET /api/clients' }. */
+export const permissionGuard: CanActivateFn = (route) => {
+  const session = inject(SessionStore);
+  const router = inject(Router);
+  const permission = route.data?.['permission'] as string | undefined;
+
+  if (!permission || session.canPermission(permission)) {
+    return true;
+  }
+
+  return router.createUrlTree(['/forbidden'], { queryParams: { permission } });
+};
+```
+
+![](images/clipboard-2866669567.png)
+
+```         
+nano src/app/core/guards/auth-only-guard.ts
+```
+
+``` typescript
+import { authGuard } from './auth-guard';
+
+/** Mismo cuerpo, otra intención: /perfil exige sesión y ningún permiso. */
+export const authOnlyGuard = authGuard;
+```
+
+![](images/clipboard-2043201186.png)
+
+#### Crear la directiva de permisos
+
+Creé la directiva estructural `*appHasPermission`, que recibe una clave como `'POST /api/clients'` y solo pinta su bloque si la sesión tiene ese permiso. Usa un `effect` que se vuelve a ejecutar cuando cambian los permisos (al iniciar o cerrar sesión, o al actualizarlos), y la bandera `rendered` evita crear y destruir la vista innecesariamente.
+
+```         
+nano src/app/shared/directives/has-permission.ts
+```
+
+typescript
+
+``` typescript
+import {
+  Directive,
+  TemplateRef,
+  ViewContainerRef,
+  effect,
+  inject,
+  input,
+} from '@angular/core';
+
+import { SessionStore } from '../../core/services/session-store';
+
+/** Estructural: pinta el bloque solo si la sesión tiene el permiso. */
+@Directive({ selector: '[appHasPermission]', standalone: true })
+export class HasPermission {
+  private readonly templateRef = inject(TemplateRef<unknown>);
+  private readonly viewContainer = inject(ViewContainerRef);
+  private readonly session = inject(SessionStore);
+
+  readonly permission = input.required<string>({ alias: 'appHasPermission' });
+
+  private rendered = false;
+
+  constructor() {
+    effect(() => {
+      const allowed = this.session.canPermission(this.permission());
+
+      if (allowed && !this.rendered) {
+        this.viewContainer.createEmbeddedView(this.templateRef);
+        this.rendered = true;
+      } else if (!allowed && this.rendered) {
+        this.viewContainer.clear();
+        this.rendered = false;
+      }
+    });
+  }
+}
+```
+
+![](images/clipboard-1588938901.png)
+
+#### Crear la página de acceso denegado
+
+Creé la pantalla `/forbidden`, que se muestra dentro del Shell cuando el usuario intenta entrar a una ruta sin el permiso necesario. Lee de la dirección el permiso que faltó y lo muestra, para que el usuario sepa qué pedir al administrador.
+
+bash
+
+```         
+nano src/app/features/auth/forbidden/forbidden.ts
+```
+
+``` typescript
+import { Component, inject } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+
+import { ButtonModule } from 'primeng/button';
+import { CardModule } from 'primeng/card';
+
+/** Convierte un acceso denegado en una pista: qué permiso falta. */
+@Component({
+  selector: 'app-forbidden',
+  standalone: true,
+  host: { class: 'block' },
+  imports: [ButtonModule, CardModule, RouterLink],
+  templateUrl: './forbidden.html',
+  styleUrl: './forbidden.css',
+})
+export class Forbidden {
+  /** permissionGuard lo deja en la URL; llega ya decodificado. */
+  readonly permission = inject(ActivatedRoute).snapshot.queryParamMap.get('permission');
+}
+```
+
+![](images/clipboard-1439805151.png)
+
+```         
+nano src/app/features/auth/forbidden/forbidden.html
+```
+
+``` html
+<p-card header="Acceso denegado">
+  <div class="flex flex-col gap-4">
+    <p class="m-0 text-slate-600">
+      Tu sesión no tiene la concesión que exige esta pantalla. Pide el permiso al administrador.
+    </p>
+
+    @if (permission) {
+      <div class="rounded-xl bg-slate-900 px-4 py-3">
+        <p class="m-0 text-[11px] uppercase text-slate-400">Permiso requerido</p>
+        <code class="text-sm text-emerald-300">{{ permission }}</code>
+      </div>
+    }
+
+    <div class="flex flex-wrap gap-2">
+      <p-button label="Ir a mi sesión" icon="pi pi-user" routerLink="/perfil" />
+      <p-button label="Ir al panel" icon="pi pi-home" severity="secondary" [outlined]="true" routerLink="/dashboard" />
+    </div>
+  </div>
+</p-card>
+```
+
+![](images/clipboard-412935281.png)
+
+```         
+: > src/app/features/auth/forbidden/forbidden.css
+```
+
+![](images/clipboard-1815807544.png)
+
+#### Protegeremos las rutas con su permiso
+
+Cada ruta de negocio declara ahora `canActivate: [permissionGuard]` y en `data.permission` la clave exacta que la matriz debe conceder, con la forma `MÉTODO /api/recurso`. El Shell completo queda detrás de `authGuard`, así que sin sesión cualquier pantalla lleva a `/login`; el login lleva `guestGuard`, y el perfil y `/forbidden` solo exigen sesión. El panel de control se protege con la lectura de reservas, porque no existe un endpoint propio del panel. La aplicación ahora empieza en `/dashboard`.
+
+**Vaciamos el archivo:**
+
+```         
+: > src/app/app.routes.ts
+nano src/app/app.routes.ts
+```
+
+**Pegamos este código:**
+
+```         
+import { Routes } from '@angular/router';
+
+import { authGuard } from './core/guards/auth-guard';
+import { authOnlyGuard } from './core/guards/auth-only-guard';
+import { guestGuard } from './core/guards/guest-guard';
+import { permissionGuard } from './core/guards/permission-guard';
+
+export const routes: Routes = [
+  {
+    path: 'construir',
+    loadComponent: () =>
+      import('./features/construir/construir').then((m) => m.Construir),
+  },
+  {
+    path: 'login',
+    title: 'Iniciar sesión · Wayuu Travel',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./features/auth/login/login').then((m) => m.Login),
+  },
+  {
+    path: '',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./layout/shell/shell').then((m) => m.Shell),
+    children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'dashboard',
+      },
+      {
+        path: 'dashboard',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+        data: {
+          permission: 'GET /api/sale/bookings',
+          title: 'Panel de control',
+          description: 'Actividad del día en Wayuu Travel.',
+        },
+      },
+      {
+        path: 'perfil',
+        canActivate: [authOnlyGuard],
+        loadComponent: () =>
+          import('./features/auth/profile/profile').then((m) => m.Profile),
+        data: {
+          title: 'Mi sesión',
+          description: 'Usuario, roles y permisos de la sesión actual.',
+        },
+      },
+      {
+        path: 'forbidden',
+        loadComponent: () =>
+          import('./features/auth/forbidden/forbidden').then((m) => m.Forbidden),
+        data: {
+          title: 'Acceso denegado',
+          description: 'Falta un permiso para abrir esta pantalla.',
+        },
+      },
+      {
+        path: 'clientes',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/clients/client-list/client-list').then(
+            (m) => m.ClientList
+          ),
+        data: {
+          permission: 'GET /api/clients',
+          title: 'Clientes',
+          description: 'Gestión de los clientes de Wayuu Travel.',
+        },
+      },
+      {
+        path: 'paquetes',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/packages/pages/package-list/package-list').then(
+            (m) => m.PackageList
+          ),
+        data: {
+          permission: 'GET /api/product/packages',
+          title: 'Paquetes turísticos',
+          description: 'Administración de los paquetes turísticos.',
+        },
+      },
+      {
+        path: 'salidas',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/departures/pages/departure-list/departure-list').then(
+            (m) => m.DepartureList
+          ),
+        data: {
+          permission: 'GET /api/product/departures',
+          title: 'Salidas',
+          description: 'Gestión de las salidas y fechas de los paquetes.',
+        },
+      },
+      {
+        path: 'proveedores',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/suppliers/pages/supplier-list/supplier-list').then(
+            (m) => m.SupplierList
+          ),
+        data: {
+          permission: 'GET /api/product/suppliers',
+          title: 'Proveedores',
+          description: 'Administración de los proveedores turísticos.',
+        },
+      },
+      {
+        path: 'reservas',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/bookings/booking-list/booking-list').then(
+            (m) => m.BookingList
+          ),
+        data: {
+          permission: 'GET /api/sale/bookings',
+          title: 'Reservas',
+          description: 'Gestión de las reservas de los viajeros.',
+        },
+      },
+      {
+        path: 'reservas/:id',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/bookings/booking-detail/booking-detail').then(
+            (m) => m.BookingDetail
+          ),
+        data: {
+          permission: 'GET /api/sale/bookings/:id',
+          title: 'Detalle de reserva',
+          description: 'Consulta detallada de una reserva turística.',
+        },
+      },
+      {
+        path: 'pagos',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/payments/payment-list/payment-list').then(
+            (m) => m.PaymentList
+          ),
+        data: {
+          permission: 'GET /api/sale/payments',
+          title: 'Pagos',
+          description: 'Pagos registrados y su reserva.',
+        },
+      },
+      {
+        path: 'cancelaciones',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/cancellations/pages/cancellation-list/cancellation-list').then(
+            (m) => m.CancellationList
+          ),
+        data: {
+          permission: 'GET /api/sale/cancellations',
+          title: 'Cancelaciones',
+          description: 'Consulta de las cancelaciones de reservas.',
+        },
+      },
+      {
+        path: 'comprobantes',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/vouchers/pages/voucher-list/voucher-list').then(
+            (m) => m.VoucherList
+          ),
+        data: {
+          permission: 'GET /api/sale/vouchers',
+          title: 'Comprobantes',
+          description: 'Emisión y consulta de los comprobantes de las reservas.',
+        },
+      },
+    ],
+  },
+  {
+    path: '**',
+    redirectTo: 'dashboard',
+  },
+];
+```
+
+![](images/clipboard-4269665497.png)
+
+#### Filtrar el menú por permisos
+
+El menú lateral era un arreglo fijo. Lo convertí en un catálogo, `nav.config.ts`, donde cada entrada declara el mismo permiso que su ruta, y en una función pura, `visibleNav`, que conserva solo las entradas concedidas y elimina los grupos que quedan vacíos. En el Shell, el menú pasa a ser un `computed` que llama a esa función con `canPermission`, así que se repinta solo cuando cambian los permisos (al iniciar o cerrar sesión, o al refrescarlos desde el perfil), sin recargar la página. «Mi sesión» no declara permiso y siempre está visible.
+
+```         
+nano src/app/layout/shell/nav.config.ts
+```
+
+``` typescript
+export interface NavItem {
+  label: string;
+  icon: string;
+  routerLink: string;
+  /** Clave MÉTODO /api/recurso; sin permiso, la entrada siempre se ve. */
+  permission?: string;
+}
+
+export interface NavGroup {
+  /** Sin etiqueta: sus entradas van sueltas al principio del menú. */
+  label?: string;
+  items: NavItem[];
+}
+
+export const NAV: NavGroup[] = [
+  {
+    items: [
+      { label: 'Panel de control', icon: 'pi pi-chart-bar', routerLink: '/dashboard', permission: 'GET /api/sale/bookings' },
+      { label: 'Mi sesión', icon: 'pi pi-user', routerLink: '/perfil' },
+    ],
+  },
+  {
+    label: 'Gestión turística',
+    items: [
+      { label: 'Clientes', icon: 'pi pi-users', routerLink: '/clientes', permission: 'GET /api/clients' },
+      { label: 'Paquetes turísticos', icon: 'pi pi-map', routerLink: '/paquetes', permission: 'GET /api/product/packages' },
+      { label: 'Salidas', icon: 'pi pi-calendar', routerLink: '/salidas', permission: 'GET /api/product/departures' },
+      { label: 'Proveedores', icon: 'pi pi-truck', routerLink: '/proveedores', permission: 'GET /api/product/suppliers' },
+    ],
+  },
+  {
+    label: 'Gestión comercial',
+    items: [
+      { label: 'Reservas', icon: 'pi pi-book', routerLink: '/reservas', permission: 'GET /api/sale/bookings' },
+      { label: 'Pagos', icon: 'pi pi-wallet', routerLink: '/pagos', permission: 'GET /api/sale/payments' },
+      { label: 'Cancelaciones', icon: 'pi pi-times-circle', routerLink: '/cancelaciones', permission: 'GET /api/sale/cancellations' },
+      { label: 'Comprobantes', icon: 'pi pi-file', routerLink: '/comprobantes', permission: 'GET /api/sale/vouchers' },
+    ],
+  },
+];
+
+/** Filtra el catálogo con el predicado de la sesión; sin Angular, para poder probarlo. */
+export function visibleNav(can: (permission: string) => boolean): NavGroup[] {
+  return NAV.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !item.permission || can(item.permission)),
+  })).filter((group) => group.items.length > 0);
+}
+```
+
+![](images/clipboard-3723795095.png)
+
+**Reemplazamos el Shell:**
+
+```         
+: > src/app/layout/shell/shell.ts nano src/app/layout/shell/shell.ts
+```
+
+``` typescript
+export interface NavItem {
+  label: string;
+  icon: string;
+  routerLink: string;
+  /** Clave MÉTODO /api/recurso; sin permiso, la entrada siempre se ve. */
+  permission?: string;
+}
+
+export interface NavGroup {
+  /** Sin etiqueta: sus entradas van sueltas al principio del menú. */
+  label?: string;
+  items: NavItem[];
+}
+
+export const NAV: NavGroup[] = [
+  {
+    items: [
+      { label: 'Panel de control', icon: 'pi pi-chart-bar', routerLink: '/dashboard', permission: 'GET /api/sale/bookings' },
+      { label: 'Mi sesión', icon: 'pi pi-user', routerLink: '/perfil' },
+    ],
+  },
+  {
+    label: 'Gestión turística',
+    items: [
+      { label: 'Clientes', icon: 'pi pi-users', routerLink: '/clientes', permission: 'GET /api/clients' },
+      { label: 'Paquetes turísticos', icon: 'pi pi-map', routerLink: '/paquetes', permission: 'GET /api/product/packages' },
+      { label: 'Salidas', icon: 'pi pi-calendar', routerLink: '/salidas', permission: 'GET /api/product/departures' },
+      { label: 'Proveedores', icon: 'pi pi-truck', routerLink: '/proveedores', permission: 'GET /api/product/suppliers' },
+    ],
+  },
+  {
+    label: 'Gestión comercial',
+    items: [
+      { label: 'Reservas', icon: 'pi pi-book', routerLink: '/reservas', permission: 'GET /api/sale/bookings' },
+      { label: 'Pagos', icon: 'pi pi-wallet', routerLink: '/pagos', permission: 'GET /api/sale/payments' },
+      { label: 'Cancelaciones', icon: 'pi pi-times-circle', routerLink: '/cancelaciones', permission: 'GET /api/sale/cancellations' },
+      { label: 'Comprobantes', icon: 'pi pi-file', routerLink: '/comprobantes', permission: 'GET /api/sale/vouchers' },
+    ],
+  },
+];
+
+/** Filtra el catálogo con el predicado de la sesión; sin Angular, para poder probarlo. */
+export function visibleNav(can: (permission: string) => boolean): NavGroup[] {
+  return NAV.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !item.permission || can(item.permission)),
+  })).filter((group) => group.items.length > 0);
+}
+```
+
+![](images/clipboard-3868206705.png)
+
+#### Ocultar los botones sin permiso
+
+Envolví los botones de escritura de cada pantalla con `*appHasPermission` y la clave del método que envía: `POST` para registrar, `PATCH` para editar y `DELETE` para desactivar. Las pantallas no cambian su lógica; solo se envuelven sus botones y se agrega la directiva a sus imports. El botón de cancelar reserva usa la clave de la acción de cancelar.
+
+En los cuatro componentes de abajo (`departure-list.ts`, `supplier-list.ts`, `voucher-list.ts` y `booking-detail.ts`), agrega este import:
+
+typescript
+
+```         
+import { HasPermission } from '../../../../shared/directives/has-permission';
+```
+
+#### Escribir las pruebas de guards, directiva y menú
+
+Escribí tres archivos de pruebas. `rbac-guards.spec.ts` comprueba que `authGuard` lleve a `/login` con `returnUrl` cuando no hay sesión, y que `permissionGuard` deje pasar con la concesión o lleve a `/forbidden` con el permiso que falta. `has-permission.spec.ts` comprueba que la directiva pinte el botón con el permiso y no pinte nada sin él. `nav.config.spec.ts` comprueba que el menú muestre todas las entradas con todos los permisos y que, sin concesiones, solo quede «Mi sesión».
+
+```         
+nano src/app/core/guards/rbac-guards.spec.ts
+```
+
+``` typescript
+import { TestBed } from '@angular/core/testing';
+import {
+  ActivatedRouteSnapshot,
+  CanActivateFn,
+  RouterStateSnapshot,
+  UrlTree,
+  provideRouter,
+} from '@angular/router';
+
+import { SessionStore } from '../services/session-store';
+import { authGuard } from './auth-guard';
+import { guestGuard } from './guest-guard';
+import { permissionGuard } from './permission-guard';
+
+/** Ejecuta un guard con una sesión simulada y devuelve su decisión. */
+function run(
+  guard: CanActivateFn,
+  url: string,
+  allowed: boolean,
+  data: Record<string, unknown> = {}
+) {
+  TestBed.configureTestingModule({
+    providers: [
+      provideRouter([]),
+      {
+        provide: SessionStore,
+        useValue: { isAuthenticated: () => allowed, canPermission: () => allowed },
+      },
+    ],
+  });
+
+  return TestBed.runInInjectionContext(() =>
+    guard({ data } as unknown as ActivatedRouteSnapshot, { url } as RouterStateSnapshot)
+  );
+}
+
+describe('guards de RBAC', () => {
+  it('authGuard manda a /login con returnUrl cuando no hay sesión', () => {
+    const result = run(authGuard, '/clientes', false);
+    expect(result).toBeInstanceOf(UrlTree);
+    expect((result as UrlTree).queryParams['returnUrl']).toBe('/clientes');
+  });
+
+  it('guestGuard manda al panel cuando ya hay sesión', () => {
+    const result = run(guestGuard, '/login', true);
+    expect(result).toBeInstanceOf(UrlTree);
+    expect((result as UrlTree).toString()).toBe('/dashboard');
+  });
+
+  it('permissionGuard deja pasar con la concesión', () => {
+    expect(run(permissionGuard, '/clientes', true, { permission: 'GET /api/clients' })).toBe(true);
+  });
+
+  it('permissionGuard desvía a /forbidden con el permiso que falta', () => {
+    const result = run(permissionGuard, '/clientes', false, { permission: 'GET /api/clients' });
+    expect(result).toBeInstanceOf(UrlTree);
+    expect((result as UrlTree).queryParams['permission']).toBe('GET /api/clients');
+  });
+});
+```
+
+![](images/clipboard-3628034121.png)
+
+```         
+nano src/app/shared/directives/has-permission.spec.ts
+```
+
+``` typescript
+import { Component } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+
+import { SessionStore } from '../../core/services/session-store';
+import { HasPermission } from './has-permission';
+
+@Component({
+  standalone: true,
+  imports: [HasPermission],
+  template: `<button *appHasPermission="'POST /api/clients'">Nuevo</button>`,
+})
+class Host {}
+
+async function mount(allowed: boolean): Promise<HTMLElement> {
+  await TestBed.configureTestingModule({
+    imports: [Host],
+    providers: [{ provide: SessionStore, useValue: { canPermission: () => allowed } }],
+  }).compileComponents();
+
+  const fixture = TestBed.createComponent(Host);
+  fixture.detectChanges();
+  await fixture.whenStable();
+  return fixture.nativeElement as HTMLElement;
+}
+
+describe('directiva *appHasPermission', () => {
+  it('pinta el botón cuando la sesión tiene el permiso', async () => {
+    expect((await mount(true)).textContent).toContain('Nuevo');
+  });
+
+  it('no pinta nada cuando falta la concesión', async () => {
+    expect((await mount(false)).querySelector('button')).toBeNull();
+  });
+});
+```
+
+![](images/clipboard-3626946732.png)
+
+```         
+nano src/app/layout/shell/nav.config.spec.ts
+```
+
+``` typescript
+import { visibleNav } from './nav.config';
+
+describe('menú filtrado', () => {
+  it('con todos los permisos muestra las diez entradas', () => {
+    expect(visibleNav(() => true).flatMap((group) => group.items)).toHaveLength(10);
+  });
+
+  it('sin concesiones solo queda Mi sesión y desaparecen los grupos vacíos', () => {
+    const groups = visibleNav(() => false);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].items.map((item) => item.label)).toEqual(['Mi sesión']);
+  });
+});
+```
+
+![](images/clipboard-3190487356.png)
+
+#### Envolver los botones con un script
+
+Para evitar errores al editar a mano cuatro plantillas, escribí un script que busca cada botón por su texto (por ejemplo, `label="Nueva salida"` o `ariaLabel="Editar salida"`), lo rodea con `<ng-container *appHasPermission="'CLAVE'">` y conserva su sangría. Si un botón ya está envuelto, lo deja como está, así que se puede ejecutar más de una vez sin duplicar nada.
+
+**Abrimos:**
+
+```         
+nano /tmp/wrap_buttons.py
+```
+
+**Pegamos este código:**
+
+``` python
+import re
+from pathlib import Path
+
+BASE = Path("src/app/features")
+
+RULES = {
+    "departures/pages/departure-list/departure-list.html": [
+        ('label="Nueva salida"', "POST /api/product/departures"),
+        ('ariaLabel="Editar salida"', "PATCH /api/product/departures/:id"),
+        ('ariaLabel="Desactivar salida"', "DELETE /api/product/departures/:id"),
+    ],
+    "suppliers/pages/supplier-list/supplier-list.html": [
+        ('label="Nuevo proveedor"', "POST /api/product/suppliers"),
+        ('ariaLabel="Editar proveedor"', "PATCH /api/product/suppliers/:id"),
+        ('ariaLabel="Desactivar proveedor"', "DELETE /api/product/suppliers/:id"),
+    ],
+    "vouchers/pages/voucher-list/voucher-list.html": [
+        ('label="Nuevo comprobante"', "POST /api/sale/vouchers"),
+        ('ariaLabel="Editar comprobante"', "PATCH /api/sale/vouchers/:id"),
+        ('ariaLabel="Desactivar comprobante"', "DELETE /api/sale/vouchers/:id"),
+    ],
+}
+
+
+def wrap(text, element, key):
+    """Rodea el elemento con ng-container, respetando la sangría de su primera línea."""
+    start = text.index(element)
+    line_start = text.rfind("\n", 0, start) + 1
+    indent = text[line_start:start]
+    wrapped = (
+        f"<ng-container *appHasPermission=\"'{key}'\">\n"
+        + indent + "  " + element.replace("\n", "\n  ")
+        + "\n" + indent + "</ng-container>"
+    )
+    return text[:start] + wrapped + text[start + len(element):]
+
+
+for relative, rules in RULES.items():
+    path = BASE / relative
+    text = path.read_text()
+
+    for marker, key in rules:
+        if f"appHasPermission=\"'{key}'\"" in text:
+            print(f"ya envuelto  · {relative} · {key}")
+            continue
+
+        # Un <p-button … /> cuyo bloque contiene el marcador.
+        match = re.search(r"<p-button\b[^>]*?" + re.escape(marker) + r"[^>]*?/>", text, re.S)
+        if not match:
+            print(f"NO ENCONTRADO · {relative} · {marker}")
+            continue
+
+        text = wrap(text, match.group(0), key)
+        print(f"envuelto     · {relative} · {key}")
+
+    path.write_text(text)
+
+# Detalle de reserva: un <button> nativo que llama a cancelBooking().
+detail = BASE / "bookings/booking-detail/booking-detail.html"
+key = "POST /api/sale/bookings/:id/cancel"
+text = detail.read_text()
+
+if f"appHasPermission=\"'{key}'\"" in text:
+    print(f"ya envuelto  · booking-detail.html · {key}")
+else:
+    match = re.search(r"<button\b[^>]*cancelBooking\(\)[^>]*>.*?</button>", text, re.S)
+    if match:
+        detail.write_text(wrap(text, match.group(0), key))
+        print(f"envuelto     · booking-detail.html · {key}")
+    else:
+        print("NO ENCONTRADO · booking-detail.html · cancelBooking()")
+```
+
+![](images/clipboard-3000180065.png)
+
+#### Registrar el recurso de cancelación de reservas
+
+La acción de cancelar reservas se creó en el ISS-07, después de que se generaron los recursos del RBAC, así que no tenía un recurso propio y nadie podía tener permiso sobre ella. Registré el recurso con el método `POST` y la ruta exacta que Django resuelve para esa acción, obtenida con `resolve` para que coincida con lo que compara `HasResourceAccess`, y se lo concedí al rol `admin`. El rol `vendedor` no lo recibe: un vendedor solo consulta.
+
+``` python
+python3 manage.py shell -c "
+from django.urls import resolve
+from apps.security.models import Resource, ResourceRole, Role
+from apps.common.status import RecordStatus as S
+
+route = resolve('/api/sale/bookings/1/cancel/').route
+print('ruta resuelta:', route)
+
+resource, created = Resource.objects.get_or_create(
+    method='POST', route=route,
+    defaults={'name': 'Cancelar reserva', 'status': S.ACTIVE},
+)
+admin = Role.objects.get(name='admin')
+ResourceRole.objects.get_or_create(resource=resource, role=admin, defaults={'status': S.ACTIVE})
+print('recurso creado:', created, '| id:', resource.id)
+"
+```
+
+#### Confirmar la protección del backend
+
+Si todavía no aplicaste `HasResourceAccess` en las vistas de negocio, ejecuta antes los tres `sed` del mensaje anterior (sección **Aplicar `HasResourceAccess` en las vistas de negocio**) y reinicia `runserver`.
+
+**Después repetimos las pruebas:**
+
+```         
+API=http://localhost:8000/api
+ADMIN=$(curl -s -X POST $API/auth/login/ -H "Content-Type: application/json" \
+  -d "{\"username\": \"gonzalez\", \"password\": \"$WT_PASS\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['access'])")
+SELLER=$(curl -s -X POST $API/auth/login/ -H "Content-Type: application/json" \
+  -d '{"username": "Rafael", "password": "Vendedor2026!"}' | python3 -c "import json,sys; print(json.load(sys.stdin)['access'])")
+check() { curl -s -o /dev/null -w "$1 → HTTP %{http_code}\n" "${@:2}"; }
+
+check "sin token   GET clients    " $API/clients/
+check "admin       GET clients    " $API/clients/ -H "Authorization: Bearer $ADMIN"
+check "vendedor    GET clients    " $API/clients/ -H "Authorization: Bearer $SELLER"
+check "vendedor   POST clients    " -X POST $API/clients/ -H "Authorization: Bearer $SELLER" -H "Content-Type: application/json" -d '{}'
+check "vendedor    GET booking 4  " $API/sale/bookings/4/ -H "Authorization: Bearer $SELLER"
+check "admin      POST cancel #4  " -X POST $API/sale/bookings/4/cancel/ -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" -d '{"name":"x2"}'
+check "vendedor   POST cancel #4  " -X POST $API/sale/bookings/4/cancel/ -H "Authorization: Bearer $SELLER" -H "Content-Type: application/json" -d '{"name":"x2"}'
+
+curl -s $API/auth/permissions/ -H "Authorization: Bearer $ADMIN" | python3 -c "
+import json, sys
+perms = json.load(sys.stdin)['permissions']
+print('total admin:', len(perms))
+print('\n'.join(sorted({p['method'] + ' ' + p['path'] for p in perms if 'cancel' in p['path']})))
+"
+```
+
+![](images/clipboard-4288256470.png)
+
+![![](images/clipboard-2269127106.png)](images/clipboard-829290288.png)

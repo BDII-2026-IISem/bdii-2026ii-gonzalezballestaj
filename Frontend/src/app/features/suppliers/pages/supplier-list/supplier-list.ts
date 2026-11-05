@@ -29,10 +29,13 @@ import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
 
 import { SupplierForm } from '../../components/supplier-form/supplier-form';
 
+import { HasPermission } from '../../../../shared/directives/has-permission';
+
 @Component({
   selector: 'app-supplier-list',
   standalone: true,
   imports: [
+    HasPermission,
     FormsModule,
     ButtonModule,
     InputTextModule,

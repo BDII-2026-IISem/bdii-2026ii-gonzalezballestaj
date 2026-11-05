@@ -10,10 +10,12 @@ import { PaymentService } from '../../../core/services/payment.service';
 import { Booking } from '../../../core/models/booking.model';
 import { Payment } from '../../../core/models/payment.model';
 
+import { HasPermission } from '../../../shared/directives/has-permission';
+
 @Component({
   selector: 'app-booking-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [HasPermission, CommonModule, RouterLink],
   templateUrl: './booking-detail.html',
   styleUrl: './booking-detail.css'
 })

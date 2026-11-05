@@ -28,10 +28,13 @@ import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
 
 import { PackageForm } from '../../components/package-form/package-form';
 
+import { HasPermission } from '../../../../shared/directives/has-permission';
+
 @Component({
   selector: 'app-package-list',
   standalone: true,
   imports: [
+    HasPermission,
     FormsModule,
     ButtonModule,
     InputTextModule,

@@ -33,10 +33,13 @@ import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
 
 import { DepartureForm } from '../../components/departure-form/departure-form';
 
+import { HasPermission } from '../../../../shared/directives/has-permission';
+
 @Component({
   selector: 'app-departure-list',
   standalone: true,
   imports: [
+    HasPermission,
     DatePipe,
     FormsModule,
     ButtonModule,

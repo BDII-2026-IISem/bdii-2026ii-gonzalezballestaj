@@ -43,14 +43,16 @@
           </span>
 
           @if (reservation.status === 'active') {
-            <button
-              type="button"
-              (click)="cancelBooking()"
-              [disabled]="cancelling()"
-              class="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {{ cancelling() ? 'Cancelando...' : 'Cancelar reserva' }}
-            </button>
+            <ng-container *appHasPermission="'POST /api/sale/bookings/:id/cancel'">
+              <button
+                type="button"
+                (click)="cancelBooking()"
+                [disabled]="cancelling()"
+                class="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {{ cancelling() ? 'Cancelando...' : 'Cancelar reserva' }}
+              </button>
+            </ng-container>
           }
         </div>
       </div>

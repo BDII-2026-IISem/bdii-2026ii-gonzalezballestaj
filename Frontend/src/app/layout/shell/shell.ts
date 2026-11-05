@@ -1,10 +1,12 @@
-import { Component, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { MenuItem } from 'primeng/api';
 
+import { SessionStore } from '../../core/services/session-store';
 import { Header } from '../header/header';
 import { Aside } from '../aside/aside';
 import { Footer } from '../footer/footer';
+import { visibleNav } from './nav.config';
 
 @Component({
   selector: 'app-shell',
@@ -19,74 +21,30 @@ import { Footer } from '../footer/footer';
   styleUrl: './shell.css'
 })
 export class Shell {
+  private readonly session = inject(SessionStore);
+
   readonly menuOpen = signal(true);
 
-  readonly menuItems: MenuItem[] = [
-    {
-      label: 'Panel de control',
-      icon: 'pi pi-chart-bar',
-      routerLink: '/dashboard'
-    },
-        {
-      label: 'Mi sesión',
-      icon: 'pi pi-user',
-      routerLink: '/perfil'
-    },
-    {
-      separator: true
-    },
-    {
-      label: 'Gestión turística',
-      items: [
-        {
-          label: 'Clientes',
-          icon: 'pi pi-users',
-          routerLink: '/clientes'
-        },
-      
-        {
-          label: 'Paquetes turísticos',
-          icon: 'pi pi-map',
-          routerLink: '/paquetes'
-        },
-        {
-          label: 'Salidas',
-          icon: 'pi pi-calendar',
-          routerLink: '/salidas'
-        },
-        {
-          label: 'Proveedores',
-          icon: 'pi pi-truck',
-          routerLink: '/proveedores'
-        }
-      ]
-    },
-    {
-      label: 'Gestión comercial',
-      items: [
-        {
-          label: 'Reservas',
-          icon: 'pi pi-book',
-          routerLink: '/reservas'
-        },
-        {
-          label: 'Pagos',
-          icon: 'pi pi-wallet',
-          routerLink: '/pagos'
-        },
-        {
-          label: 'Cancelaciones',
-          icon: 'pi pi-times-circle',
-          routerLink: '/cancelaciones'
-        },
-        {
-          label: 'Comprobantes',
-          icon: 'pi pi-file',
-          routerLink: '/comprobantes'
-        }
-      ]
+  /** El menú se deriva de la matriz: cambia sin recargar cuando cambian los permisos. */
+  readonly menuItems = computed<MenuItem[]>(() => {
+    const result: MenuItem[] = [];
+
+    for (const group of visibleNav((permission) => this.session.canPermission(permission))) {
+      const items = group.items.map<MenuItem>((item) => ({
+        label: item.label,
+        icon: item.icon,
+        routerLink: item.routerLink,
+      }));
+
+      if (group.label) {
+        result.push({ label: group.label, items });
+      } else {
+        result.push(...items, { separator: true });
+      }
     }
-  ];
+
+    return result;
+  });
 
   toggleMenu(): void {
     this.menuOpen.update((value) => !value);

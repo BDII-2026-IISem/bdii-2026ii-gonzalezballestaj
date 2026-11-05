@@ -1,3 +1,4 @@
+from apps.security.permissions import HasResourceAccess
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from rest_framework import status, viewsets
@@ -24,7 +25,7 @@ from apps.sale.serializers import (
 class BookingViewSet(viewsets.ModelViewSet):
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [HasResourceAccess]
     http_method_names = ["get", "post", "put", "patch", "head", "options"]
 
     
@@ -63,19 +64,19 @@ class BookingViewSet(viewsets.ModelViewSet):
 class PaymentViewSet(viewsets.ModelViewSet):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [HasResourceAccess]
 
 
 class CancellationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Cancellation.objects.all()
     serializer_class = CancellationSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [HasResourceAccess]
 
 
 class VoucherViewSet(viewsets.ModelViewSet):
     queryset = Voucher.objects.all()
     serializer_class = VoucherSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [HasResourceAccess]
     
     def perform_destroy(self, instance):
         instance.status = RecordStatus.INACTIVE
@@ -84,7 +85,7 @@ class VoucherViewSet(viewsets.ModelViewSet):
 
 class ActiveBookingListView(ListAPIView):
     serializer_class = BookingSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [HasResourceAccess]
 
     def get_queryset(self):
         return Booking.objects.all()
@@ -93,7 +94,7 @@ class ActiveBookingListView(ListAPIView):
 class BookingRegistrationAPIView(APIView):
     """Registra una reserva junto con sus pagos."""
 
-    permission_classes = [AllowAny]
+    permission_classes = [HasResourceAccess]
 
     @extend_schema(
         summary="Registrar una reserva con pagos",

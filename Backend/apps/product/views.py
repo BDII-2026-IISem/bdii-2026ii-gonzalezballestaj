@@ -2,7 +2,7 @@ from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import AllowAny
-
+from apps.security.permissions import HasResourceAccess
 from apps.common.status import RecordStatus
 from apps.product.models import (
     Package,
@@ -29,19 +29,19 @@ class SoftDeleteMixin:
 class PackageViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     queryset = Package.objects.all()
     serializer_class = PackageSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [HasResourceAccess]
 
 
 class DepartureViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     queryset = Departure.objects.select_related("package").all()
     serializer_class = DepartureSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [HasResourceAccess]
 
 
 class SupplierViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [HasResourceAccess]
 
 
 class IncludedServiceViewSet(viewsets.ModelViewSet):
@@ -49,12 +49,12 @@ class IncludedServiceViewSet(viewsets.ModelViewSet):
         "package", "supplier"
     ).all()
     serializer_class = IncludedServiceSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [HasResourceAccess]
 
 
 class AvailablePackageListAPIView(ListAPIView):
     serializer_class = PackageSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [HasResourceAccess]
 
     def get_queryset(self):
         return Package.objects.filter(

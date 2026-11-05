@@ -39,10 +39,13 @@ import {
   VoucherForm,
 } from '../../components/voucher-form/voucher-form';
 
+import { HasPermission } from '../../../../shared/directives/has-permission';
+
 @Component({
   selector: 'app-voucher-list',
   standalone: true,
   imports: [
+    HasPermission,
     DatePipe,
     FormsModule,
     RouterLink,

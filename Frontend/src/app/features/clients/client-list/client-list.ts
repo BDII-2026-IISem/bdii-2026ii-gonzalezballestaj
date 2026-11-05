@@ -20,10 +20,13 @@ import { StatusTag } from '../../../shared/ui/status-tag/status-tag';
 
 import { ClientForm } from '../client-form/client-form';
 
+import { HasPermission } from '../../../shared/directives/has-permission';
+
 @Component({
   selector: 'app-client-list',
   standalone: true,
   imports: [
+    HasPermission,
     ButtonModule,
     DialogModule,
     InputTextModule,
