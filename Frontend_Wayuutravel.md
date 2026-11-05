@@ -7358,33 +7358,33 @@ cat > src/app/features/payments/payment-list/payment-list.html << 'EOF'
       <table class="w-full text-left text-sm">
   <thead>
     <tr class="border-b border-slate-200 text-slate-500">
-      <th class="px-4 py-3">Pago</th>
-      <th class="px-4 py-3">Reserva</th>
-      <th class="px-4 py-3">Referencia</th>
-      <th class="px-4 py-3">Método</th>
-      <th class="px-4 py-3">Fecha</th>
-      <th class="px-4 py-3">Importe</th>
-      <th class="px-4 py-3">Estado</th>
+<th class="px-4 py-3">Pago</th>
+<th class="px-4 py-3">Reserva</th>
+<th class="px-4 py-3">Referencia</th>
+<th class="px-4 py-3">Método</th>
+<th class="px-4 py-3">Fecha</th>
+<th class="px-4 py-3">Importe</th>
+<th class="px-4 py-3">Estado</th>
     </tr>
   </thead>
   <tbody>
     @for (payment of filtered(); track payment.id) {
-      <tr class="border-b border-slate-100 hover:bg-slate-50">
-        <td class="px-4 py-3">#{{ payment.id }}</td>
-        <td class="px-4 py-3">
-          <a
-            [routerLink]="['/reservas', payment.booking]"
-            class="font-semibold text-teal-700 hover:text-teal-900"
-          >
-            #{{ payment.booking }}
-          </a>
-        </td>
-        <td class="px-4 py-3">{{ payment.referenceType }}</td>
-        <td class="px-4 py-3">{{ payment.method }}</td>
-        <td class="px-4 py-3">{{ payment.paymentDate | date: 'dd/MM/yyyy' }}</td>
-        <td class="px-4 py-3">{{ payment.amount | currency: 'COP' : 'symbol' : '1.0-2' }}</td>
-        <td class="px-4 py-3">{{ payment.status === 'active' ? 'Activo' : 'Inactivo' }}</td>
-      </tr>
+<tr class="border-b border-slate-100 hover:bg-slate-50">
+  <td class="px-4 py-3">#{{ payment.id }}</td>
+  <td class="px-4 py-3">
+    <a
+      [routerLink]="['/reservas', payment.booking]"
+      class="font-semibold text-teal-700 hover:text-teal-900"
+    >
+      #{{ payment.booking }}
+    </a>
+  </td>
+  <td class="px-4 py-3">{{ payment.referenceType }}</td>
+  <td class="px-4 py-3">{{ payment.method }}</td>
+  <td class="px-4 py-3">{{ payment.paymentDate | date: 'dd/MM/yyyy' }}</td>
+  <td class="px-4 py-3">{{ payment.amount | currency: 'COP' : 'symbol' : '1.0-2' }}</td>
+  <td class="px-4 py-3">{{ payment.status === 'active' ? 'Activo' : 'Inactivo' }}</td>
+</tr>
     }
   </tbody>
 </table>
@@ -7429,33 +7429,33 @@ cat > src/app/features/payments/payment-list/payment-list.html << 'EOF'
       <table class="w-full text-left text-sm">
   <thead>
     <tr class="border-b border-slate-200 text-slate-500">
-      <th class="px-4 py-3">Pago</th>
-      <th class="px-4 py-3">Reserva</th>
-      <th class="px-4 py-3">Referencia</th>
-      <th class="px-4 py-3">Método</th>
-      <th class="px-4 py-3">Fecha</th>
-      <th class="px-4 py-3">Importe</th>
-      <th class="px-4 py-3">Estado</th>
+<th class="px-4 py-3">Pago</th>
+<th class="px-4 py-3">Reserva</th>
+<th class="px-4 py-3">Referencia</th>
+<th class="px-4 py-3">Método</th>
+<th class="px-4 py-3">Fecha</th>
+<th class="px-4 py-3">Importe</th>
+<th class="px-4 py-3">Estado</th>
     </tr>
   </thead>
   <tbody>
     @for (payment of filtered(); track payment.id) {
-      <tr class="border-b border-slate-100 hover:bg-slate-50">
-        <td class="px-4 py-3">#{{ payment.id }}</td>
-        <td class="px-4 py-3">
-          <a
-            [routerLink]="['/reservas', payment.booking]"
-            class="font-semibold text-teal-700 hover:text-teal-900"
-          >
-            #{{ payment.booking }}
-          </a>
-        </td>
-        <td class="px-4 py-3">{{ payment.referenceType }}</td>
-        <td class="px-4 py-3">{{ payment.method }}</td>
-        <td class="px-4 py-3">{{ payment.paymentDate | date: 'dd/MM/yyyy' }}</td>
-        <td class="px-4 py-3">{{ payment.amount | currency: 'COP' : 'symbol' : '1.0-2' }}</td>
-        <td class="px-4 py-3">{{ payment.status === 'active' ? 'Activo' : 'Inactivo' }}</td>
-      </tr>
+<tr class="border-b border-slate-100 hover:bg-slate-50">
+  <td class="px-4 py-3">#{{ payment.id }}</td>
+  <td class="px-4 py-3">
+    <a
+      [routerLink]="['/reservas', payment.booking]"
+      class="font-semibold text-teal-700 hover:text-teal-900"
+    >
+      #{{ payment.booking }}
+    </a>
+  </td>
+  <td class="px-4 py-3">{{ payment.referenceType }}</td>
+  <td class="px-4 py-3">{{ payment.method }}</td>
+  <td class="px-4 py-3">{{ payment.paymentDate | date: 'dd/MM/yyyy' }}</td>
+  <td class="px-4 py-3">{{ payment.amount | currency: 'COP' : 'symbol' : '1.0-2' }}</td>
+  <td class="px-4 py-3">{{ payment.status === 'active' ? 'Activo' : 'Inactivo' }}</td>
+</tr>
     }
   </tbody>
 </table>
@@ -16604,3 +16604,265 @@ export function visibleNav(can: (permission: string) => boolean): NavGroup[] {
 ![![](images/clipboard-2776698724.png)](images/clipboard-1529926524.png)
 
 ![](images/clipboard-53524096.png)
+
+# **ISS-11 · Build, calidad y resolución de problemas**
+
+En esta etapa cierro el recorrido de Wayuutravel convirtiendo la aplicación en una entrega verificable. Configuraré los entornos de desarrollo y producción para que ambos apunten a la misma API, y ajustaré los presupuestos de tamaño del build para que la compilación de producción termine sin advertencias falsas. Dejaré la suite de pruebas completa en verde, incluidas las pendientes de la administración RBAC, y revisaré la accesibilidad y el diseño adaptable a pantallas estrechas, registrando cada hallazgo con su corrección. Después recorreré las dos fases contra el backend real, con el administrador y con el vendedor, anotando el resultado de cada paso, y documentaré los fallos que aparecieron durante el proyecto con su causa y su comprobación, separando lo que demuestra un build, lo que demuestran las pruebas y lo que solo demuestra el recorrido real.
+
+#### Completar las pruebas de la administración RBAC
+
+Escribí las pruebas pendientes del ISS-10 y actualicé la del menú. `security-api.spec.ts` comprueba que el listado de usuarios pida `?status=all` y no traiga contraseña, que la edición de un usuario no envíe contraseña, que la consulta de permisos de un usuario desenvuelva el cuerpo y que la concesión envíe `role` y `resource` como números. `user-list.spec.ts` comprueba que el diálogo de permisos pinte una fila por permiso. En `nav.config.spec.ts` el menú completo pasa a 15 entradas y se agrega un caso: sin la lectura de concesiones, su entrada desaparece.
+
+```         
+nano src/app/features/admin/security-api.spec.ts
+```
+
+```         
+import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
+
+import { ResourceRoleApi, UserApi } from './security-api';
+import { User } from '../../core/models/security.model';
+
+const API = 'http://localhost:8000/api';
+
+const USUARIO: User = {
+  id: 3,
+  username: 'Rafael',
+  email: 'rafael@gmail.com',
+  firstName: '',
+  lastName: '',
+  status: 'active',
+  createdAt: '2026-10-12T00:00:00-05:00',
+  updatedAt: '2026-10-12T00:00:00-05:00',
+};
+
+describe('API de seguridad', () => {
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('lista usuarios con ?status=all y sin campo password', () => {
+    let rows: User[] = [];
+    TestBed.inject(UserApi).list().subscribe((response) => (rows = response));
+
+    const req = http.expectOne((r) => r.url === `${API}/users/`);
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.get('status')).toBe('all');
+    req.flush([USUARIO]);
+
+    expect(Object.keys(rows[0])).not.toContain('password');
+  });
+
+  it('no envía password al editar un usuario', () => {
+    TestBed.inject(UserApi)
+      .update(3, {
+        username: 'Rafael',
+        email: 'rafael@gmail.com',
+        firstName: 'Rafael',
+        lastName: '',
+        status: 'active',
+      })
+      .subscribe();
+
+    const patch = http.expectOne(`${API}/users/3/`);
+    expect(patch.request.method).toBe('PATCH');
+    expect('password' in (patch.request.body as object)).toBe(false);
+    patch.flush(USUARIO);
+  });
+
+  it('desenvuelve los permisos efectivos de un usuario', () => {
+    let count = 0;
+    TestBed.inject(UserApi).permissions(3).subscribe((rows) => (count = rows.length));
+
+    http.expectOne(`${API}/users/3/permissions/`).flush({
+      permissions: [
+        { method: 'GET', path: '/api/clients/', roleId: 3, roleName: 'vendedor' },
+        { method: 'GET', path: '/api/clients/:id/', roleId: 3, roleName: 'vendedor' },
+      ],
+    });
+
+    expect(count).toBe(2);
+  });
+
+  it('concede un permiso enviando role y resource numéricos', () => {
+    TestBed.inject(ResourceRoleApi).create({ role: 3, resource: 4, status: 'active' }).subscribe();
+
+    const alta = http.expectOne(`${API}/resource-roles/`);
+    expect(alta.request.method).toBe('POST');
+    expect(alta.request.body).toEqual({ role: 3, resource: 4, status: 'active' });
+    alta.flush({ id: 200, role: 3, resource: 4, status: 'active' });
+  });
+});
+```
+
+```         
+nano src/app/features/admin/users/user-list/user-list.spec.ts
+```
+
+``` typescript
+import { TestBed } from '@angular/core/testing';
+import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
+import { ConfirmationService } from 'primeng/api';
+import { of } from 'rxjs';
+
+import { UserList } from './user-list';
+import { UserApi } from '../../security-api';
+import { NotificationService } from '../../../../core/services/notification.service';
+import { SessionStore } from '../../../../core/services/session-store';
+import { User } from '../../../../core/models/security.model';
+import { EffectivePermission } from '../../../../core/models/auth.model';
+
+const USUARIO: User = {
+  id: 3,
+  username: 'Rafael',
+  email: 'rafael@gmail.com',
+  firstName: '',
+  lastName: '',
+  status: 'active',
+  createdAt: '2026-10-12T00:00:00-05:00',
+  updatedAt: '2026-10-12T00:00:00-05:00',
+};
+
+const PERMISOS: EffectivePermission[] = [
+  { method: 'GET', path: '/api/clients/', roleId: 3, roleName: 'vendedor' },
+  { method: 'GET', path: '/api/clients/:id/', roleId: 3, roleName: 'vendedor' },
+];
+
+describe('UserList', () => {
+  it('pinta una fila por permiso en el diálogo', async () => {
+    await TestBed.configureTestingModule({
+      imports: [UserList],
+      providers: [
+        provideAnimationsAsync('noop'),
+        ConfirmationService,
+        { provide: UserApi, useValue: { list: () => of([USUARIO]), permissions: () => of(PERMISOS) } },
+        { provide: NotificationService, useValue: { success() {}, warning() {}, error() {} } },
+        { provide: SessionStore, useValue: { canPermission: () => true } },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(UserList);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    fixture.componentInstance.openPermissions(USUARIO);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const filas = document.querySelectorAll('[data-testid="permisos"] tbody tr');
+    expect(filas.length).toBe(2);
+    expect(filas[0].textContent).toContain('/api/clients/');
+    expect(filas[0].textContent).toContain('vendedor');
+  });
+});
+```
+
+La prueba busca las filas en `document` y no solo dentro del componente, porque PrimeNG puede mover el contenido del diálogo al final de la página.
+
+```         
+nano src/app/layout/shell/nav.config.spec.ts
+```
+
+Reemplazamos todo el contenido por:
+
+``` typescript
+import { visibleNav } from './nav.config';
+
+describe('menú filtrado', () => {
+  it('con todos los permisos muestra las quince entradas', () => {
+    expect(visibleNav(() => true).flatMap((group) => group.items)).toHaveLength(15);
+  });
+
+  it('sin concesiones solo queda Mi sesión y desaparecen los grupos vacíos', () => {
+    const groups = visibleNav(() => false);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].items.map((item) => item.label)).toEqual(['Mi sesión']);
+  });
+
+  it('sin GET /api/resource-roles no aparece Concesiones', () => {
+    const labels = visibleNav((permission) => permission !== 'GET /api/resource-roles')
+      .flatMap((group) => group.items)
+      .map((item) => item.label);
+
+    expect(labels).not.toContain('Concesiones');
+    expect(labels).toContain('Usuarios');
+  });
+});
+```
+
+![](images/clipboard-3611294821.png)
+
+![](images/clipboard-4270177409.png)
+
+![](images/clipboard-3823054213.png)
+
+#### Ejecutar la suite completa
+
+```         
+NODE_OPTIONS=--max-old-space-size=2048 npm test -- --watch=false
+```
+
+![](images/clipboard-2395153828.png)
+
+![](images/clipboard-2716681648.png)
+
+#### Verificación final del ISS-11
+
+| AC | Comprobación | Resultado |
+|------------------------|------------------------|------------------------|
+| AC-11-01 | Entornos de producción y desarrollo con el mismo `apiUrl`, sin barra final | PASS |
+| AC-11-02 | `fileReplacements` y presupuestos de 750 kB / 1 MB y 4 kB / 8 kB | PASS |
+| AC-11-03 | `ng build` en 0, sin avisos, inicial de 684.47 kB e `index.html` en `dist/` | PASS |
+| AC-11-04 | `npm test -- --watch=false`: 33 pruebas en 12 archivos | PASS |
+| AC-11-05 | Accesibilidad y 400 px revisados | PASS |
+| AC-11-06 | Recorrido de 17 pasos contra la API real | PASS |
+| AC-11-07 | Catálogo de 14 problemas reales con causa y comprobación | PASS |
+| AC-11-08 | Lista de cierre de las dos fases | PASS |
+
+#### Cierre del recorrido de Wayuutravel
+
+**Fase I · Negocio**
+
+- Clientes con documento, paquetes, salidas, proveedores, reservas con pagos, detalle, cancelación, pagos, cancelaciones, comprobantes y panel de control.
+
+- Cancelar una reserva devuelve el cupo una sola vez (salida 1: de 9 a 10, segunda cancelación con 400).
+
+- La desactivación es lógica en todo el sistema.
+
+**Fase II · Autenticación con RBAC**
+
+- Login JWT, refresh con rotación y un solo refresh ante varios 401 simultáneos.
+
+- Guards en todas las rutas, menú filtrado, botones con `*appHasPermission` y `/forbidden` con el permiso que falta.
+
+- Django valida con `HasResourceAccess`: el vendedor recibe 403 aunque llame directamente a la API.
+
+- Las cinco pantallas de seguridad administran la matriz; conceder un permiso es crear una fila.
+
+**Conclusión general del proyecto**
+
+Con el material de apoyo y la guía del profesor Jaider Quintero logré cumplir los requisitos de cada uno de los ISS y construir Wayuutravel, una aplicación Angular con PrimeNG y Tailwind conectada a una API en Django. Empecé preparando el entorno, la estructura del proyecto, los modelos y los servicios, y luego desarrollé la operación del negocio turístico: clientes, paquetes, salidas, proveedores, reservas con sus pagos, cancelaciones, comprobantes y un panel de control, respetando siempre las reglas del backend. Después agregué la autenticación con JWT, protegí las rutas, el menú y los botones según los permisos de cada usuario, reforcé la autorización en Django y construí la administración de usuarios, roles y permisos. Al final dejé el build de producción sin advertencias, la suite de pruebas en verde y verifiqué el recorrido completo contra la API real.
+
+En el camino tuve que adaptar la guía a mi propio proyecto y resolver errores reales, como diferencias entre lo que esperaba el frontend y lo que respondía el backend, rutas mal ordenadas o falta de memoria en mi equipo. Eso me enseñó a diagnosticar con calma, a comprobar cada cambio y a entender que la interfaz solo muestra lo permitido, pero la seguridad la garantiza el backend.
+
+**Presentado por:** Jaime Rafael Gonzalez
+
+**Programa:** Ingeniería de Sistemas
+
+**Universidad:** Universidad de La Guajira
+
+**Asignatura:** Base de Datos 2
+
+**Docente:** Jaider Quintero

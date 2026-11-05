@@ -3,6 +3,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth-guard';
 import { authOnlyGuard } from './core/guards/auth-only-guard';
 import { guestGuard } from './core/guards/guest-guard';
+import { homeGuard } from './core/guards/home-guard';
 import { permissionGuard } from './core/guards/permission-guard';
 
 export const routes: Routes = [
@@ -19,6 +20,13 @@ export const routes: Routes = [
       import('./features/auth/login/login').then((m) => m.Login),
   },
   {
+    path: 'registro',
+    title: 'Crear cuenta · WayuuTravel',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./features/auth/register/register').then((m) => m.Register),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     loadComponent: () =>
@@ -27,7 +35,8 @@ export const routes: Routes = [
       {
         path: '',
         pathMatch: 'full',
-        redirectTo: 'dashboard',
+        canActivate: [homeGuard],
+        children: [],
       },
       {
         path: 'dashboard',
@@ -35,7 +44,7 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/dashboard/dashboard').then((m) => m.Dashboard),
         data: {
-          permission: 'GET /api/sale/bookings',
+          permission: 'GET /api/clients',
           title: 'Panel de control',
           description: 'Actividad del día en Wayuu Travel.',
         },
@@ -82,7 +91,7 @@ export const routes: Routes = [
         data: {
           permission: 'GET /api/product/packages',
           title: 'Paquetes turísticos',
-          description: 'Administración de los paquetes turísticos.',
+          description: 'Paquetes turísticos de Wayuu Travel.',
         },
       },
       {
@@ -95,7 +104,7 @@ export const routes: Routes = [
         data: {
           permission: 'GET /api/product/departures',
           title: 'Salidas',
-          description: 'Gestión de las salidas y fechas de los paquetes.',
+          description: 'Fechas y cupos de los paquetes.',
         },
       },
       {
@@ -121,7 +130,7 @@ export const routes: Routes = [
         data: {
           permission: 'GET /api/sale/bookings',
           title: 'Reservas',
-          description: 'Gestión de las reservas de los viajeros.',
+          description: 'Reservas de los viajeros.',
         },
       },
       {
@@ -173,7 +182,7 @@ export const routes: Routes = [
         data: {
           permission: 'GET /api/sale/vouchers',
           title: 'Comprobantes',
-          description: 'Emisión y consulta de los comprobantes de las reservas.',
+          description: 'Comprobantes de las reservas.',
         },
       },
       {
@@ -245,6 +254,6 @@ export const routes: Routes = [
   },
   {
     path: '**',
-    redirectTo: 'dashboard',
+    redirectTo: '',
   },
 ];

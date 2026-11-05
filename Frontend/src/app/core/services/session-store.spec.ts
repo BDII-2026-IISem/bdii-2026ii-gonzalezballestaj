@@ -23,6 +23,7 @@ const USER: SessionUser = {
   status: 'active',
   isSuperuser: false,
   isStaff: false,
+  clientId: null,
 };
 
 const PERMISO: EffectivePermission = {

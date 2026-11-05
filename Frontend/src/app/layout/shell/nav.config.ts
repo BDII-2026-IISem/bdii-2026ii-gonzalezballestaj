@@ -15,7 +15,7 @@ export interface NavGroup {
 export const NAV: NavGroup[] = [
   {
     items: [
-      { label: 'Panel de control', icon: 'pi pi-chart-bar', routerLink: '/dashboard', permission: 'GET /api/sale/bookings' },
+      { label: 'Panel de control', icon: 'pi pi-chart-bar', routerLink: '/dashboard', permission: 'GET /api/clients' },
       { label: 'Mi sesión', icon: 'pi pi-user', routerLink: '/perfil' },
     ],
   },
@@ -38,6 +38,7 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    
     label: 'Seguridad',
     items: [
       { label: 'Usuarios', icon: 'pi pi-user-edit', routerLink: '/admin/usuarios', permission: 'GET /api/users' },

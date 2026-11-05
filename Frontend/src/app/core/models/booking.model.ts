@@ -24,3 +24,19 @@ export type CreateBooking = Pick<
 >;
 
 export type UpdateBooking = Partial<CreateBooking>;
+
+
+/** Reserva hecha por un cliente: el backend usa su ficha y crea el viajero. */
+export interface SelfBookingRequest {
+  departure: number;
+  startDate: string;
+  endDate: string;
+  travelerName: string;
+  observations: string | null;
+  payments: {
+    referenceType: string;
+    method: string;
+    amount: number;
+    paymentDate: string;
+  }[];
+}

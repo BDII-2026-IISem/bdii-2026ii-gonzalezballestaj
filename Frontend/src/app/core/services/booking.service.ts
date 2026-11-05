@@ -7,6 +7,7 @@ import { environment } from '../../../environments/environment';
 import {
   Booking,
   CreateBooking,
+  SelfBookingRequest,
   UpdateBooking
 } from '../models/booking.model';
 
@@ -110,6 +111,7 @@ export class BookingService {
     );
   }
 
+  /** Registro del personal: reserva + pagos para el cliente y el viajero elegidos. */
   register(
     data: CreateBooking & { payments: CreateBookingPayment[] }
   ): Observable<Booking> {
@@ -126,6 +128,16 @@ export class BookingService {
     return this.http.post<BookingApi>(
       `${this.apiUrl}register/`,
       payload
+    ).pipe(
+      map((response) => this.toModel(response))
+    );
+  }
+
+  /** Reserva del cliente con sesión: sin client ni traveler, los decide el backend. */
+  registerSelf(data: SelfBookingRequest): Observable<Booking> {
+    return this.http.post<BookingApi>(
+      `${this.apiUrl}register/`,
+      data
     ).pipe(
       map((response) => this.toModel(response))
     );

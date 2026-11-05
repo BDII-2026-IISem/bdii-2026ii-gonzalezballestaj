@@ -1,0 +1,109 @@
+<main class="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+  <p-card styleClass="w-full max-w-2xl">
+    <ng-template #title>
+      <div class="text-center">
+        <p class="text-sm font-semibold uppercase tracking-wider text-teal-700">Wayuu Travel</p>
+        <h1 class="mt-1 text-2xl font-bold text-slate-900">Crear cuenta de cliente</h1>
+        <p class="mt-1 text-sm font-normal text-slate-500">
+          Consulta los paquetes y sigue tus reservas, pagos y comprobantes.
+        </p>
+      </div>
+    </ng-template>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" class="grid gap-4 sm:grid-cols-2">
+      @if (error()) {
+        <p-message severity="error" styleClass="w-full sm:col-span-2">{{ error() }}</p-message>
+      }
+
+      <p class="m-0 text-sm font-semibold text-slate-700 sm:col-span-2">Datos de la cuenta</p>
+
+      <div class="flex flex-col gap-2">
+        <label for="reg-username" class="text-sm font-medium text-slate-700">Usuario *</label>
+        <input id="reg-username" pInputText formControlName="username" autocomplete="username" class="w-full" />
+        @if (fieldErrors()['username']) {
+          <small class="text-red-600">{{ fieldErrors()['username'] }}</small>
+        } @else if (form.controls.username.touched && form.controls.username.invalid) {
+          <small class="text-red-600">Entre 3 y 150 caracteres.</small>
+        }
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <label for="reg-email" class="text-sm font-medium text-slate-700">Correo electrónico *</label>
+        <input id="reg-email" type="email" pInputText formControlName="email" autocomplete="email" class="w-full" />
+        @if (fieldErrors()['email']) {
+          <small class="text-red-600">{{ fieldErrors()['email'] }}</small>
+        } @else if (form.controls.email.touched && form.controls.email.invalid) {
+          <small class="text-red-600">Ingresa un correo válido.</small>
+        }
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <label for="reg-password" class="text-sm font-medium text-slate-700">Contraseña *</label>
+        <p-password inputId="reg-password" formControlName="password" [toggleMask]="true" [feedback]="false" [fluid]="true" autocomplete="new-password" />
+        @if (fieldErrors()['password']) {
+          <small class="text-red-600">{{ fieldErrors()['password'] }}</small>
+        } @else if (form.controls.password.touched && form.controls.password.invalid) {
+          <small class="text-red-600">Mínimo 8 caracteres.</small>
+        }
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <label for="reg-confirm" class="text-sm font-medium text-slate-700">Confirmar contraseña *</label>
+        <p-password inputId="reg-confirm" formControlName="confirm" [toggleMask]="true" [feedback]="false" [fluid]="true" autocomplete="new-password" />
+        @if (form.controls.confirm.touched && form.hasError('mismatch')) {
+          <small class="text-red-600">Las contraseñas no coinciden.</small>
+        }
+      </div>
+
+      <p class="m-0 mt-2 text-sm font-semibold text-slate-700 sm:col-span-2">Datos del cliente</p>
+
+      <div class="flex flex-col gap-2">
+        <label for="reg-doc-type" class="text-sm font-medium text-slate-700">Tipo de documento *</label>
+        <input id="reg-doc-type" pInputText formControlName="documentType" list="reg-doc-types" class="w-full" />
+        <datalist id="reg-doc-types">
+          @for (type of documentTypes; track type) {
+            <option [value]="type"></option>
+          }
+        </datalist>
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <label for="reg-doc-number" class="text-sm font-medium text-slate-700">Número de documento *</label>
+        <input id="reg-doc-number" pInputText formControlName="documentNumber" class="w-full" />
+        @if (fieldErrors()['documentNumber']) {
+          <small class="text-red-600">{{ fieldErrors()['documentNumber'] }}</small>
+        } @else if (form.controls.documentNumber.touched && form.controls.documentNumber.invalid) {
+          <small class="text-red-600">Entre 3 y 30 caracteres.</small>
+        }
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <label for="reg-name" class="text-sm font-medium text-slate-700">Nombre completo *</label>
+        <input id="reg-name" pInputText formControlName="name" autocomplete="name" class="w-full" />
+        @if (form.controls.name.touched && form.controls.name.invalid) {
+          <small class="text-red-600">Escribe tu nombre.</small>
+        }
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <label for="reg-phone" class="text-sm font-medium text-slate-700">Teléfono</label>
+        <input id="reg-phone" pInputText formControlName="phone" autocomplete="tel" class="w-full" />
+      </div>
+
+      <div class="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:col-span-2">
+        <p-button
+          type="submit"
+          label="Crear cuenta"
+          icon="pi pi-user-plus"
+          styleClass="w-full"
+          [loading]="loading()"
+          [disabled]="loading()"
+        />
+        <p class="m-0 text-center text-sm text-slate-600">
+          ¿Ya tienes cuenta?
+          <a routerLink="/login" class="font-semibold text-teal-700 hover:text-teal-900">Inicia sesión</a>
+        </p>
+      </div>
+    </form>
+  </p-card>
+</main>

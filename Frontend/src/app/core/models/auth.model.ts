@@ -25,6 +25,7 @@ export interface SessionUser {
   status: Status;
   isSuperuser: boolean;
   isStaff: boolean;
+  clientId: number | null;
 }
 
 /** Una entrada de GET /api/auth/permissions/: método, ruta y rol que la concede. */
@@ -38,4 +39,15 @@ export interface EffectivePermission {
 /** GET /api/auth/permissions/ responde envuelto en { permissions: [...] }. */
 export interface PermissionsResponse {
   permissions: EffectivePermission[];
+}
+
+/** Cuerpo de POST /api/auth/register/: cuenta de usuario + ficha de cliente. */
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+  documentType: string;
+  documentNumber: string;
+  name: string;
+  phone: string | null;
 }

@@ -1,3 +1,4 @@
+import { of } from 'rxjs';
 import {
   Component,
   computed,
@@ -21,6 +22,7 @@ import { Departure } from '../../../core/models/departure.model';
 
 import { BookingService } from '../../../core/services/booking.service';
 import { ClientService } from '../../../core/services/client.service';
+import { SessionStore } from '../../../core/services/session-store';
 import { DepartureService } from '../../../core/services/departure.service';
 
 import {
@@ -56,6 +58,7 @@ import { HasPermission } from '../../../shared/directives/has-permission';
 export class BookingList implements OnInit {
   private readonly bookingService = inject(BookingService);
   private readonly clientService = inject(ClientService);
+  private readonly session = inject(SessionStore);
   private readonly departureService = inject(DepartureService);
   private readonly messageService = inject(MessageService);
 
@@ -104,7 +107,7 @@ export class BookingList implements OnInit {
 
     forkJoin({
       bookings: this.bookingService.getAll(),
-      clients: this.clientService.list(),
+      clients: this.session.canPermission('GET /api/clients') ? this.clientService.list() : of([]),
       departures: this.departureService.getAll()
     })
       .pipe(finalize(() => this.loading.set(false)))

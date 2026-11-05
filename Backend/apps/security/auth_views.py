@@ -13,11 +13,12 @@ from django.db import transaction
 from django.utils import timezone
 from apps.security.serializers import RefreshSerializer
 from apps.common.status import RecordStatus
-from apps.security.models import RefreshToken, ResourceRole
+from apps.security.models import RefreshToken, ResourceRole, Role, RoleUser
+from apps.client.models import Client
 from apps.security.serializers import LoginSerializer, TokenPairSerializer
 from apps.security.tokens import generate_refresh_value, hash_token
 from apps.security.serializers import LogoutSerializer
-
+from apps.security.serializers import RegisterSerializer
 User = get_user_model()
 
 
@@ -327,3 +328,71 @@ class PermissionsAPIView(APIView):
         ]
 
         return Response({"permissions": permissions}, status=status.HTTP_200_OK)
+
+
+
+CLIENT_ROLE = "cliente"
+
+
+class RegisterAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=RegisterSerializer,
+        responses={201: TokenPairSerializer},
+        description=(
+            "Registro público de clientes: crea la cuenta, la ficha de cliente "
+            "y la asignación del rol cliente, y devuelve el par de tokens."
+        ),
+        tags=["Autenticación"],
+    )
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        role = Role.objects.filter(name=CLIENT_ROLE, status=RecordStatus.ACTIVE).first()
+        if role is None:
+            return Response(
+                {"detail": "El registro de clientes no está disponible."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        with transaction.atomic():
+            user = User(
+                username=data["username"],
+                email=data["email"],
+                first_name=data["name"][:150],
+                status=RecordStatus.ACTIVE,
+            )
+            user.set_password(data["password"])
+            user.save()
+
+            # Un cliente de mostrador sin cuenta se vincula; si no existe, se crea.
+            client = (
+                Client.objects.select_for_update()
+                .filter(document_number=data["document_number"])
+                .first()
+            )
+            if client is None:
+                client = Client(
+                    document_number=data["document_number"],
+                    status=RecordStatus.ACTIVE,
+                )
+
+            client.document_type = data["document_type"]
+            client.name = data["name"]
+            client.email = data["email"]
+            client.phone = data["phone"] or client.phone
+            client.user = user
+            client.save()
+
+            RoleUser.objects.create(role=role, user=user, status=RecordStatus.ACTIVE)
+
+            _stored, raw_refresh = issue_refresh(user)
+
+        return Response(
+            token_payload(user, raw_refresh),
+            status=status.HTTP_201_CREATED,
+        )

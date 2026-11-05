@@ -8,6 +8,7 @@ import {
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { ConfirmationService } from 'primeng/api';
 import { forkJoin } from 'rxjs';
 
@@ -26,14 +27,15 @@ import { Package } from '../../../../core/models/package.model';
 import { DepartureService } from '../../../../core/services/departure.service';
 import { PackageService } from '../../../../core/services/package.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { SessionStore } from '../../../../core/services/session-store';
 
 import { PageHeader } from '../../../../shared/ui/page-header/page-header';
 import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
 import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
+import { HasPermission } from '../../../../shared/directives/has-permission';
 
 import { DepartureForm } from '../../components/departure-form/departure-form';
-
-import { HasPermission } from '../../../../shared/directives/has-permission';
+import { SelfBooking } from '../../../bookings/self-booking/self-booking';
 
 @Component({
   selector: 'app-departure-list',
@@ -51,6 +53,7 @@ import { HasPermission } from '../../../../shared/directives/has-permission';
     EmptyState,
     StatusTag,
     DepartureForm,
+    SelfBooking,
   ],
   templateUrl: './departure-list.html',
   styleUrl: './departure-list.css',
@@ -60,6 +63,8 @@ export class DepartureList {
   private readonly departureService = inject(DepartureService);
   private readonly packageService = inject(PackageService);
   private readonly notification = inject(NotificationService);
+  private readonly session = inject(SessionStore);
+  private readonly router = inject(Router);
 
   readonly rows = signal<Departure[]>([]);
   readonly packages = signal<Package[]>([]);
@@ -70,6 +75,12 @@ export class DepartureList {
   readonly dialogVisible = signal(false);
   readonly selectedDeparture = signal<Departure | null>(null);
   readonly resetKey = signal(0);
+
+  /** Una sesión de cliente tiene ficha vinculada; el personal no. */
+  readonly isClient = computed(() => this.session.user()?.clientId != null);
+
+  /** Salida elegida por el cliente para reservar; null cierra el formulario. */
+  readonly bookingDeparture = signal<Departure | null>(null);
 
   private readonly packageNames = computed(
     () => new Map(this.packages().map((item) => [item.id, item.name]))
@@ -114,6 +125,16 @@ export class DepartureList {
 
   updateSearch(value: string): void {
     this.search.set(value);
+  }
+
+  openBooking(item: Departure): void {
+    this.bookingDeparture.set(item);
+  }
+
+  onBooked(bookingId: number): void {
+    this.bookingDeparture.set(null);
+    this.load();
+    void this.router.navigate(['/reservas', bookingId]);
   }
 
   openCreate(): void {

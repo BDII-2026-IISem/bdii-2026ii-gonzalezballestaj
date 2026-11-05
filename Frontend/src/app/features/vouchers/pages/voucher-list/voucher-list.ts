@@ -10,7 +10,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ConfirmationService } from 'primeng/api';
-import { forkJoin } from 'rxjs';
+import { forkJoin, of } from 'rxjs';
 
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
@@ -29,17 +29,17 @@ import { VoucherService } from '../../../../core/services/voucher.service';
 import { BookingService } from '../../../../core/services/booking.service';
 import { ClientService } from '../../../../core/services/client.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { SessionStore } from '../../../../core/services/session-store';
 
 import { PageHeader } from '../../../../shared/ui/page-header/page-header';
 import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
 import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
+import { HasPermission } from '../../../../shared/directives/has-permission';
 
 import {
   BookingOption,
   VoucherForm,
 } from '../../components/voucher-form/voucher-form';
-
-import { HasPermission } from '../../../../shared/directives/has-permission';
 
 @Component({
   selector: 'app-voucher-list',
@@ -68,6 +68,7 @@ export class VoucherList {
   private readonly bookingService = inject(BookingService);
   private readonly clientService = inject(ClientService);
   private readonly notification = inject(NotificationService);
+  private readonly session = inject(SessionStore);
 
   readonly rows = signal<Voucher[]>([]);
   readonly bookings = signal<Booking[]>([]);
@@ -118,7 +119,10 @@ export class VoucherList {
     forkJoin({
       vouchers: this.voucherService.getAll(),
       bookings: this.bookingService.getAll(),
-      clients: this.clientService.list(),
+      // Solo el personal puede leer clientes; el cliente no los necesita.
+      clients: this.session.canPermission('GET /api/clients')
+        ? this.clientService.list()
+        : of([] as Client[]),
     }).subscribe({
       next: ({ vouchers, bookings, clients }) => {
         this.rows.set(vouchers);

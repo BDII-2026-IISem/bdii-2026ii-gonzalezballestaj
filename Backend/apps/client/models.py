@@ -1,4 +1,4 @@
-
+from django.conf import settings
 from django.core.validators import MinLengthValidator
 from django.db import models
 
@@ -33,6 +33,16 @@ class Client(Wayuutravel):
         blank=True,
         null=True,
         unique=True
+    )
+
+    # Cuenta con la que el cliente inicia sesión; los clientes de mostrador no la tienen.
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="client_profile",
+        db_column="user_id",
     )
 
     class Meta:

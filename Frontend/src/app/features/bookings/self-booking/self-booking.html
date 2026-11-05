@@ -1,0 +1,58 @@
+<form [formGroup]="form" (ngSubmit)="submit()" class="grid gap-4 sm:grid-cols-2">
+  <div class="rounded-lg bg-teal-50 p-4 sm:col-span-2">
+    <p class="m-0 text-sm text-teal-800">Salida seleccionada</p>
+    <p class="m-0 mt-1 text-lg font-semibold text-slate-900">{{ departure().name }}</p>
+    <p class="m-0 text-sm text-slate-600">
+      {{ departure().departureDate | date: 'dd/MM/yyyy HH:mm' }} ·
+      {{ departure().availableCapacity }} cupos disponibles
+    </p>
+  </div>
+
+  @if (error()) {
+    <p-message severity="error" styleClass="w-full sm:col-span-2">{{ error() }}</p-message>
+  }
+
+  <div class="flex flex-col gap-2 sm:col-span-2">
+    <label for="sb-traveler" class="text-sm font-medium text-slate-700">Nombre del viajero *</label>
+    <input id="sb-traveler" pInputText formControlName="travelerName" class="w-full" />
+    @if (form.controls.travelerName.touched && form.controls.travelerName.invalid) {
+      <small class="text-red-600">Escribe el nombre de quien viaja.</small>
+    }
+  </div>
+
+  <div class="flex flex-col gap-2">
+    <label for="sb-start" class="text-sm font-medium text-slate-700">Fecha de inicio *</label>
+    <input id="sb-start" type="date" pInputText formControlName="startDate" class="w-full" />
+  </div>
+
+  <div class="flex flex-col gap-2">
+    <label for="sb-end" class="text-sm font-medium text-slate-700">Fecha de fin *</label>
+    <input id="sb-end" type="date" pInputText formControlName="endDate" class="w-full" />
+    @if (form.hasError('dateOrder')) {
+      <small class="text-red-600">La fecha de fin no puede ser anterior a la de inicio.</small>
+    }
+  </div>
+
+  <div class="flex flex-col gap-2">
+    <label for="sb-method" class="text-sm font-medium text-slate-700">Método de pago *</label>
+    <p-select inputId="sb-method" formControlName="method" [options]="methods" [fluid]="true" appendTo="body" />
+  </div>
+
+  <div class="flex flex-col gap-2">
+    <label for="sb-amount" class="text-sm font-medium text-slate-700">Valor a pagar (COP) *</label>
+    <input id="sb-amount" type="number" min="1" pInputText formControlName="amount" class="w-full" />
+    @if (form.controls.amount.touched && form.controls.amount.invalid) {
+      <small class="text-red-600">El valor debe ser mayor que cero.</small>
+    }
+  </div>
+
+  <div class="flex flex-col gap-2 sm:col-span-2">
+    <label for="sb-notes" class="text-sm font-medium text-slate-700">Observaciones</label>
+    <textarea id="sb-notes" pTextarea formControlName="observations" rows="2" class="w-full"></textarea>
+  </div>
+
+  <div class="flex justify-end gap-2 border-t border-slate-200 pt-4 sm:col-span-2">
+    <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" (onClick)="cancel()" />
+    <p-button label="Confirmar reserva" icon="pi pi-check" type="submit" [loading]="saving()" [disabled]="saving()" />
+  </div>
+</form>

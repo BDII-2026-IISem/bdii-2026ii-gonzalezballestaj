@@ -1,9 +1,21 @@
-
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
-from apps.security.models import User
+
+from apps.client.models import Client
+from apps.security.models import (
+    Resource,
+    ResourceRole,
+    Role,
+    RoleUser,
+    User,
+)
 
 
 class ProfileSerializer(serializers.ModelSerializer):
+    # Ficha de cliente vinculada; nulo para el personal de la agencia.
+    client_id = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = (
@@ -15,8 +27,14 @@ class ProfileSerializer(serializers.ModelSerializer):
             "status",
             "is_superuser",
             "is_staff",
+            "client_id",
         )
         read_only_fields = ("id", "username", "status")
+
+    def get_client_id(self, obj):
+        client = getattr(obj, "client_profile", None)
+        return client.id if client is not None else None
+
 
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=False, allow_blank=False)
@@ -44,17 +62,6 @@ class TokenPairSerializer(serializers.Serializer):
     refresh = serializers.CharField()
     token_type = serializers.CharField()
     access_expires_in = serializers.IntegerField()
-
-
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError as DjangoValidationError
-
-from apps.security.models import (
-    Resource,
-    ResourceRole,
-    Role,
-    RoleUser,
-)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -166,3 +173,57 @@ class ResourceRoleSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("id", "created_at", "updated_at")
+
+
+class RegisterSerializer(serializers.Serializer):
+    """Registro público de un cliente: cuenta de usuario + ficha de cliente."""
+
+    username = serializers.CharField(min_length=3, max_length=150)
+    email = serializers.EmailField(max_length=254)
+    password = serializers.CharField(write_only=True, min_length=8)
+    document_type = serializers.CharField(min_length=2, max_length=20)
+    document_number = serializers.CharField(min_length=3, max_length=30)
+    name = serializers.CharField(min_length=2, max_length=150)
+    phone = serializers.CharField(
+        max_length=20, required=False, allow_blank=True, allow_null=True
+    )
+
+    def validate_username(self, value):
+        value = value.strip()
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("Ese nombre de usuario ya está registrado.")
+        return value
+
+    def validate_email(self, value):
+        value = value.strip().lower()
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("Ya existe una cuenta con ese correo.")
+        return value
+
+    def validate_document_number(self, value):
+        value = value.strip()
+        client = Client.objects.filter(document_number=value).first()
+        if client is not None and client.user_id is not None:
+            raise serializers.ValidationError(
+                "Ese documento ya tiene una cuenta. Inicia sesión."
+            )
+        return value
+
+    def validate(self, attrs):
+        try:
+            validate_password(attrs["password"])
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"password": list(exc.messages)})
+
+        other = Client.objects.filter(email__iexact=attrs["email"]).exclude(
+            document_number=attrs["document_number"]
+        )
+        if other.exists():
+            raise serializers.ValidationError(
+                {"email": ["Ese correo pertenece a otro cliente."]}
+            )
+
+        attrs["document_type"] = attrs["document_type"].strip().upper()
+        attrs["name"] = attrs["name"].strip()
+        attrs["phone"] = (attrs.get("phone") or "").strip() or None
+        return attrs

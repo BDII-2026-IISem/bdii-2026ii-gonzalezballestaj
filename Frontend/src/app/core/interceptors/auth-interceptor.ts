@@ -19,7 +19,7 @@ import { SessionStore } from '../services/session-store';
 let refreshInFlight: Observable<TokenPair> | null = null;
 
 /** Rutas que emiten o revocan tokens: no llevan Bearer ni se reintentan. */
-const TOKEN_ENDPOINTS = ['/auth/login/', '/auth/refresh/', '/auth/logout/'];
+const TOKEN_ENDPOINTS = ['/auth/login/', '/auth/register/', '/auth/refresh/', '/auth/logout/'];
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const session = inject(SessionStore);

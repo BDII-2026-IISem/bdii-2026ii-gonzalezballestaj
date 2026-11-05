@@ -1,3 +1,4 @@
+from apps.security.auth_views import RegisterAPIView
 
 from django.urls import path
 from rest_framework.routers import SimpleRouter
@@ -32,6 +33,7 @@ router.register(
 
 
 urlpatterns = [
+    path("auth/register/", RegisterAPIView.as_view(), name="auth-register"),
     path("auth/login/", LoginAPIView.as_view(), name="auth-login"),
     path("auth/refresh/", RefreshAPIView.as_view(), name="auth-refresh"),
     path("auth/logout/", LogoutAPIView.as_view(), name="auth-logout"),

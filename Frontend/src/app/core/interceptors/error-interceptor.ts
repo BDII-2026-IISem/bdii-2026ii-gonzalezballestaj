@@ -5,7 +5,7 @@ import { catchError, throwError } from 'rxjs';
 import { NotificationService } from '../services/notification.service';
 
 /** Rutas de sesión: su error se explica en el formulario, no en una notificación. */
-const AUTH_ENTRY = ['/auth/login/', '/auth/refresh/', '/auth/logout/'];
+const AUTH_ENTRY = ['/auth/login/', '/auth/register/', '/auth/refresh/', '/auth/logout/'];
 
 /** Código HTTP → [mensaje, título], en el orden que recibe NotificationService. */
 const MESSAGES: Record<number, [string, string]> = {

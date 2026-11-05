@@ -1,7 +1,7 @@
 <div class="space-y-6">
   <app-page-header
     title="Salidas"
-    description="Administra las fechas y los cupos de los paquetes turísticos."
+    description="Fechas y cupos de los paquetes turísticos."
   />
 
   <div class="flex flex-wrap items-center justify-between gap-3">
@@ -79,6 +79,17 @@
 
             <td>
               <div class="flex justify-center gap-2">
+                @if (isClient() && departure.status === 'active' && departure.availableCapacity > 0) {
+                  <ng-container *appHasPermission="'POST /api/sale/bookings/register'">
+                    <p-button
+                      label="Reservar"
+                      icon="pi pi-calendar-plus"
+                      size="small"
+                      (onClick)="openBooking(departure)"
+                    />
+                  </ng-container>
+                }
+
                 <ng-container *appHasPermission="'PATCH /api/product/departures/:id'">
                   <p-button
                     icon="pi pi-pencil"
@@ -127,6 +138,23 @@
     (saved)="save($event)"
     (cancelled)="closeDialog()"
   />
+</p-dialog>
+
+<p-dialog
+  header="Reservar salida"
+  [modal]="true"
+  [visible]="bookingDeparture() !== null"
+  (visibleChange)="!$event && bookingDeparture.set(null)"
+  [style]="{ width: '40rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  @if (bookingDeparture(); as selected) {
+    <app-self-booking
+      [departure]="selected"
+      (booked)="onBooked($event)"
+      (cancelled)="bookingDeparture.set(null)"
+    />
+  }
 </p-dialog>
 
 <p-confirmdialog />

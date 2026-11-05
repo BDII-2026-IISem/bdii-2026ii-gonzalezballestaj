@@ -41,10 +41,10 @@ describe('guards de RBAC', () => {
     expect((result as UrlTree).queryParams['returnUrl']).toBe('/clientes');
   });
 
-  it('guestGuard manda al panel cuando ya hay sesión', () => {
+  it('guestGuard manda a la raíz cuando ya hay sesión', () => {
     const result = run(guestGuard, '/login', true);
     expect(result).toBeInstanceOf(UrlTree);
-    expect((result as UrlTree).toString()).toBe('/dashboard');
+    expect((result as UrlTree).toString()).toBe('/');
   });
 
   it('permissionGuard deja pasar con la concesión', () => {

@@ -4,7 +4,7 @@ import {
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -21,6 +21,7 @@ import { toApiMessage } from '../../../core/utils/to-api-message';
   standalone: true,
   host: { class: 'block' },
   imports: [
+    RouterLink,
     ReactiveFormsModule,
     ButtonModule,
     CardModule,
@@ -76,12 +77,12 @@ export class Login {
   /** returnUrl lo escribe el interceptor; solo se acepta una ruta interna. */
   private returnUrl(): string {
     const requested =
-      this.route.snapshot.queryParamMap.get('returnUrl') ?? '/dashboard';
+      this.route.snapshot.queryParamMap.get('returnUrl') ?? '/';
 
     return requested.startsWith('/') &&
       !requested.startsWith('//') &&
       !requested.startsWith('/login')
       ? requested
-      : '/dashboard';
+      : '/';
   }
 }

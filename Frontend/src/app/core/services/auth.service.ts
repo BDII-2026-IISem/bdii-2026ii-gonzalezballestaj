@@ -16,6 +16,7 @@ import { environment } from '../../../environments/environment';
 import {
   LoginRequest,
   PermissionsResponse,
+  RegisterRequest,
   SessionUser,
   TokenPair,
 } from '../models/auth.model';
@@ -32,14 +33,15 @@ export class AuthService {
   login(credentials: LoginRequest): Observable<SessionUser> {
     return this.http.post<TokenPair>(`${this.base}/login/`, credentials).pipe(
       tap((tokens) => this.session.setTokens(tokens)),
-      switchMap(() =>
-        this.me().pipe(
-          catchError((error: unknown) => {
-            this.session.clear();
-            return throwError(() => error);
-          })
-        )
-      )
+      switchMap(() => this.loadSession())
+    );
+  }
+
+  /** Registro de cliente: igual que el login, no emite hasta tener perfil y permisos. */
+  register(data: RegisterRequest): Observable<SessionUser> {
+    return this.http.post<TokenPair>(`${this.base}/register/`, data).pipe(
+      tap((tokens) => this.session.setTokens(tokens)),
+      switchMap(() => this.loadSession())
     );
   }
 
@@ -80,6 +82,16 @@ export class AuthService {
     return request.pipe(
       catchError(() => of(null)),
       finalize(() => this.session.clear())
+    );
+  }
+
+  /** Tras recibir el par: pide perfil y permisos; si fallan, no deja una sesión a medias. */
+  private loadSession(): Observable<SessionUser> {
+    return this.me().pipe(
+      catchError((error: unknown) => {
+        this.session.clear();
+        return throwError(() => error);
+      })
     );
   }
 }
