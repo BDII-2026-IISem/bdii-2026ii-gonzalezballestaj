@@ -260,7 +260,7 @@ export const appConfig: ApplicationConfig = {
 
 Verifiqué la instalación de las dependencias de PrimeNG en WayuuTravel. Se instalaron PrimeNG 22.1.4, el tema Aura mediante \@primeuix/themes 3.1.0, PrimeIcons 8.0.2 y Angular CDK 22.2.5. Con estas dependencias preparé la base para construir la interfaz y utilizar los componentes visuales de PrimeNG.
 
-###  Verificaremos la estructura actual
+### Verificaremos la estructura actual
 
 Desde la carpeta `Frontend`:
 
@@ -678,21 +678,14 @@ ng test --watch=false
 
 ![](images/clipboard-4032596888.png)
 
-+-----------------------------------+----------------------------------+
-| Verificación                      | Resultado                        |
-+===================================+==================================+
-| Creación de App                   | PASS                             |
-+-----------------------------------+----------------------------------+
-| Header                            | PASS                             |
-+-----------------------------------+----------------------------------+
-| Título WayuuTravel                | PASS                             |
-+-----------------------------------+----------------------------------+
-| Aside                             | PASS                             |
-+-----------------------------------+----------------------------------+
-| Contenido principal               | PASS                             |
-+-----------------------------------+----------------------------------+
-| Footer                            | PASS                             |
-+-----------------------------------+----------------------------------+
+| Verificación        | Resultado |
+|---------------------|-----------|
+| Creación de App     | PASS      |
+| Header              | PASS      |
+| Título WayuuTravel  | PASS      |
+| Aside               | PASS      |
+| Contenido principal | PASS      |
+| Footer              | PASS      |
 
 ### Siguiente paso: revisar los estilos
 
@@ -2876,9 +2869,9 @@ export const routes: Routes = [
 ];
 ```
 
-![ ](images/clipboard-83191985.png)
+![](images/clipboard-83191985.png)
 
-###  Crear `status-tag.ts`
+### Crear `status-tag.ts`
 
 Abrimos:
 
@@ -2955,7 +2948,7 @@ Pegamos:
 
 ![](images/clipboard-3311800244.png)
 
-###  Crear `page-header.ts`
+### Crear `page-header.ts`
 
 Este componente permitirá reutilizar los encabezados de las diferentes páginas de WayuuTravel.
 
@@ -3108,7 +3101,7 @@ Pegamos:
 
 ![](images/clipboard-1140433996.png)
 
-###  Modificar `app.ts`
+### Modificar `app.ts`
 
 Abrimos:
 
@@ -3243,7 +3236,7 @@ Pegamos:
 
 ![](images/clipboard-1292241657.png)
 
-###  Configurar las rutas placeholder
+### Configurar las rutas placeholder
 
 Ahora conectaremos las secciones de WayuuTravel con el componente `Placeholder`. Cada ruta tendrá su propio título y descripción.
 
@@ -3487,7 +3480,7 @@ export class Shell {
 
 ![](images/clipboard-1830903407.png)
 
-#  **ISS-03 · CRUD de clientes con signals**
+# **ISS-03 · CRUD de clientes con signals**
 
 ### **Narrativa**
 
@@ -3535,7 +3528,7 @@ src/app/features/clients
     └── client-list.ts
 ```
 
-###  Preparar el modelo de clientes
+### Preparar el modelo de clientes
 
 Primero verificaremos si el modelo `Client` y el servicio `ClientApi` de ISS-02 ya existen, para reutilizarlos y evitar duplicaciones.
 
@@ -3545,7 +3538,7 @@ Ejecutamos:
 tree src/app/core -L 4
 ```
 
-###  Revisar modelo y servicio existentes
+### Revisar modelo y servicio existentes
 
 Ejecutamos estos comandos:
 
@@ -3573,7 +3566,7 @@ cat src/environments/environment.ts
 
 ![](images/clipboard-2053764791.png)
 
-###  Revisar los modelos compartidos y el filtro
+### Revisar los modelos compartidos y el filtro
 
 Ejecutamos:
 
@@ -3779,7 +3772,7 @@ export function filterRows<T>(
 
 ![](images/clipboard-229189238.png)
 
-###  Revisar servicios y componentes compartidos
+### Revisar servicios y componentes compartidos
 
 Antes de construir `client-list.ts`, vamos a revisar cómo están implementadas las notificaciones y los componentes compartidos para reutilizarlos correctamente.
 
@@ -3810,7 +3803,7 @@ cat src/app/shared/ui/status-tag/status-tag.ts
 cat src/app/shared/ui/status-tag/status-tag.html
 ```
 
-###  Revisar configuración e integración
+### Revisar configuración e integración
 
 Antes de implementar el listado, revisaremos las rutas, el menú y la configuración de PrimeNG.
 
@@ -3840,7 +3833,7 @@ tree src/app/layout -L 3
 cat src/app/core/models/client.model.ts
 ```
 
-###  Conectar la ruta de clientes
+### Conectar la ruta de clientes
 
 Abrimos:
 
@@ -4291,7 +4284,7 @@ export class ClientForm {
 
 ![](images/clipboard-138298872.png)
 
-###  Implementar `client-form.html`
+### Implementar `client-form.html`
 
 Construiremos el formulario con campos, validaciones y botones para guardar o cancelar.
 
@@ -4479,7 +4472,7 @@ Implementé las operaciones de consulta, creación, edición y baja lógica de t
 
 Finalmente, integré el módulo a la navegación del sistema mediante la ruta `/tipos-producto`, conservando la estructura principal de la aplicación. Realicé las verificaciones de compilación, pruebas y funcionamiento para comprobar el cumplimiento de los criterios de aceptación establecidos en esta unidad.
 
-###  Revisar la estructura existente
+### Revisar la estructura existente
 
 Primero verificaremos qué archivos del módulo de tipos de producto ya existen para reutilizarlos y evitar duplicaciones.
 
@@ -4605,7 +4598,7 @@ export class ProductTypeApi {
 
 ![](images/clipboard-1569313054.png)
 
-###  Revisar el componente de listado
+### Revisar el componente de listado
 
 Antes de construir `ProductTypeList`, revisaremos el CRUD de clientes para reutilizar su estructura, Signals, tabla y manejo de notificaciones.
 
@@ -4635,7 +4628,7 @@ touch src/app/features/product-types/product-type-form/product-type-form.css
 
 ![](images/clipboard-773480465.png)
 
-###  Implementar ProductTypeList
+### Implementar ProductTypeList
 
 Abrimos:
 
@@ -4816,7 +4809,7 @@ export class ProductTypeList implements OnInit {
 
 ![](images/clipboard-2583820140.png)
 
-###  Construir la interfaz del listado
+### Construir la interfaz del listado
 
 Crearemos la tabla de tipos de producto con buscador, estados, acciones y diálogo para el formulario.
 
@@ -5247,7 +5240,7 @@ mkdir -p src/app/features/packages/components/package-form
 
 ![](images/clipboard-2952038870.png)
 
-###  Crear el componente ProductList
+### Crear el componente ProductList
 
 En nuestro proyecto lo llamaremos `PackageList`, porque administraremos paquetes turísticos.
 
@@ -5387,7 +5380,7 @@ export class PackageList {
 
 ![](images/clipboard-3525570397.png)
 
-###  Implementar `package-list.html`
+### Implementar `package-list.html`
 
 Abrimos:
 
@@ -5567,7 +5560,7 @@ export class PackageForm {
 
 ![](images/clipboard-3753109801.png)
 
-###  Implementar `package-form.html`
+### Implementar `package-form.html`
 
 Abrimos:
 
@@ -5797,7 +5790,7 @@ export class PackageList {
 
 ![](images/clipboard-1491119144.png)
 
-###  Actualizar `package-list.html`
+### Actualizar `package-list.html`
 
 Abrimos:
 
@@ -5916,7 +5909,7 @@ Reemplazamos el contenido por:
 
 ![](images/clipboard-4203660457.png)
 
-###  Implementar baja lógica de paquetes
+### Implementar baja lógica de paquetes
 
 Primero, vamos a integrar el servicio de confirmación en `package-list.ts`.
 
@@ -6008,9 +6001,9 @@ Realizamos las pruebas:
 
 ### 
 
-#  ISS-06 - Ventas y detalle en memoria
+# ISS-06 - Ventas y detalle en memoria
 
-### Narrativa 
+### Narrativa
 
 Como desarrollador frontend de WayuuTravel, necesito implementar el módulo de gestión de ventas para consultar las ventas registradas y permitir el registro de nuevas operaciones comerciales relacionadas con los servicios turísticos ofrecidos por la plataforma.
 
@@ -6600,7 +6593,7 @@ select:disabled {
 
 ![](images/clipboard-255092674.png)
 
-###  Construir la lógica del listado
+### Construir la lógica del listado
 
 Abrimos:
 
@@ -6908,7 +6901,7 @@ Pegamos este código:
 
 ![](images/clipboard-1574656447.png)
 
-###  Crear los estilos del listado
+### Crear los estilos del listado
 
 Abrimos:
 
@@ -6927,7 +6920,7 @@ Pegamos:
 
 ![](images/clipboard-1629322680.png)
 
-###  Conectar el módulo de reservas con Angular
+### Conectar el módulo de reservas con Angular
 
 Vamos a reemplazar la pantalla provisional por el nuevo componente `BookingList`.
 
@@ -7102,7 +7095,7 @@ realizamos la prueba:
 
 En esta etapa continúo con el frontend de Wayuutravel. Voy a construir la vista de detalle de una reserva con sus pagos y el proceso de cancelación, que respeta las reglas de negocio de Django: una reserva cancelada no devuelve el cupo dos veces y no se borran ni la reserva ni sus pagos. También construiré el listado general de pagos, con enlace a cada reserva, y un panel de control cuyos indicadores se derivan de cuatro respuestas del backend. Con esta ISS se cierra la Fase I. No hay login, guard ni menú filtrado; esas piezas llegan en el ISS-08.
 
-####  Método de cancelación
+#### Método de cancelación
 
 Abrimos:
 
@@ -7326,13 +7319,13 @@ export class BookingService {
 
 Wayuutravel, el equivalente es `/pagos`: todos los pagos, cada uno con enlace a `/reservas/:id`. Aquí no hace falta aplanar nada, porque el backend ya tiene un endpoint de pagos.
 
-####  Crear la carpeta
+#### Crear la carpeta
 
 ```         
 mkdir -p src/app/features/payments/payment-list
 ```
 
-####  Lógica
+#### Lógica
 
 ``` typescript
 cat > src/app/features/payments/payment-list/payment-list.html << 'EOF'
@@ -7363,38 +7356,38 @@ cat > src/app/features/payments/payment-list/payment-list.html << 'EOF'
   } @else {
     <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <table class="w-full text-left text-sm">
-        <thead>
-          <tr class="border-b border-slate-200 text-slate-500">
-            <th class="px-4 py-3">Pago</th>
-            <th class="px-4 py-3">Reserva</th>
-            <th class="px-4 py-3">Referencia</th>
-            <th class="px-4 py-3">Método</th>
-            <th class="px-4 py-3">Fecha</th>
-            <th class="px-4 py-3">Importe</th>
-            <th class="px-4 py-3">Estado</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (payment of filtered(); track payment.id) {
-            <tr class="border-b border-slate-100 hover:bg-slate-50">
-              <td class="px-4 py-3">#{{ payment.id }}</td>
-              <td class="px-4 py-3">
-                <a
-                  [routerLink]="['/reservas', payment.booking]"
-                  class="font-semibold text-teal-700 hover:text-teal-900"
-                >
-                  #{{ payment.booking }}
-                </a>
-              </td>
-              <td class="px-4 py-3">{{ payment.referenceType }}</td>
-              <td class="px-4 py-3">{{ payment.method }}</td>
-              <td class="px-4 py-3">{{ payment.paymentDate | date: 'dd/MM/yyyy' }}</td>
-              <td class="px-4 py-3">{{ payment.amount | currency: 'COP' : 'symbol' : '1.0-2' }}</td>
-              <td class="px-4 py-3">{{ payment.status === 'active' ? 'Activo' : 'Inactivo' }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
+  <thead>
+    <tr class="border-b border-slate-200 text-slate-500">
+      <th class="px-4 py-3">Pago</th>
+      <th class="px-4 py-3">Reserva</th>
+      <th class="px-4 py-3">Referencia</th>
+      <th class="px-4 py-3">Método</th>
+      <th class="px-4 py-3">Fecha</th>
+      <th class="px-4 py-3">Importe</th>
+      <th class="px-4 py-3">Estado</th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (payment of filtered(); track payment.id) {
+      <tr class="border-b border-slate-100 hover:bg-slate-50">
+        <td class="px-4 py-3">#{{ payment.id }}</td>
+        <td class="px-4 py-3">
+          <a
+            [routerLink]="['/reservas', payment.booking]"
+            class="font-semibold text-teal-700 hover:text-teal-900"
+          >
+            #{{ payment.booking }}
+          </a>
+        </td>
+        <td class="px-4 py-3">{{ payment.referenceType }}</td>
+        <td class="px-4 py-3">{{ payment.method }}</td>
+        <td class="px-4 py-3">{{ payment.paymentDate | date: 'dd/MM/yyyy' }}</td>
+        <td class="px-4 py-3">{{ payment.amount | currency: 'COP' : 'symbol' : '1.0-2' }}</td>
+        <td class="px-4 py-3">{{ payment.status === 'active' ? 'Activo' : 'Inactivo' }}</td>
+      </tr>
+    }
+  </tbody>
+</table>
     </div>
   }
 </div>
@@ -7434,45 +7427,45 @@ cat > src/app/features/payments/payment-list/payment-list.html << 'EOF'
   } @else {
     <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <table class="w-full text-left text-sm">
-        <thead>
-          <tr class="border-b border-slate-200 text-slate-500">
-            <th class="px-4 py-3">Pago</th>
-            <th class="px-4 py-3">Reserva</th>
-            <th class="px-4 py-3">Referencia</th>
-            <th class="px-4 py-3">Método</th>
-            <th class="px-4 py-3">Fecha</th>
-            <th class="px-4 py-3">Importe</th>
-            <th class="px-4 py-3">Estado</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (payment of filtered(); track payment.id) {
-            <tr class="border-b border-slate-100 hover:bg-slate-50">
-              <td class="px-4 py-3">#{{ payment.id }}</td>
-              <td class="px-4 py-3">
-                <a
-                  [routerLink]="['/reservas', payment.booking]"
-                  class="font-semibold text-teal-700 hover:text-teal-900"
-                >
-                  #{{ payment.booking }}
-                </a>
-              </td>
-              <td class="px-4 py-3">{{ payment.referenceType }}</td>
-              <td class="px-4 py-3">{{ payment.method }}</td>
-              <td class="px-4 py-3">{{ payment.paymentDate | date: 'dd/MM/yyyy' }}</td>
-              <td class="px-4 py-3">{{ payment.amount | currency: 'COP' : 'symbol' : '1.0-2' }}</td>
-              <td class="px-4 py-3">{{ payment.status === 'active' ? 'Activo' : 'Inactivo' }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
+  <thead>
+    <tr class="border-b border-slate-200 text-slate-500">
+      <th class="px-4 py-3">Pago</th>
+      <th class="px-4 py-3">Reserva</th>
+      <th class="px-4 py-3">Referencia</th>
+      <th class="px-4 py-3">Método</th>
+      <th class="px-4 py-3">Fecha</th>
+      <th class="px-4 py-3">Importe</th>
+      <th class="px-4 py-3">Estado</th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (payment of filtered(); track payment.id) {
+      <tr class="border-b border-slate-100 hover:bg-slate-50">
+        <td class="px-4 py-3">#{{ payment.id }}</td>
+        <td class="px-4 py-3">
+          <a
+            [routerLink]="['/reservas', payment.booking]"
+            class="font-semibold text-teal-700 hover:text-teal-900"
+          >
+            #{{ payment.booking }}
+          </a>
+        </td>
+        <td class="px-4 py-3">{{ payment.referenceType }}</td>
+        <td class="px-4 py-3">{{ payment.method }}</td>
+        <td class="px-4 py-3">{{ payment.paymentDate | date: 'dd/MM/yyyy' }}</td>
+        <td class="px-4 py-3">{{ payment.amount | currency: 'COP' : 'symbol' : '1.0-2' }}</td>
+        <td class="px-4 py-3">{{ payment.status === 'active' ? 'Activo' : 'Inactivo' }}</td>
+      </tr>
+    }
+  </tbody>
+</table>
     </div>
   }
 </div>
 EOF
 ```
 
-#### CSS 
+#### CSS
 
 ``` typescript
 : > src/app/features/payments/payment-list/payment-list.css
@@ -7724,25 +7717,25 @@ cat > src/app/features/dashboard/dashboard.html << 'EOF'
       } @else {
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm">
-            <thead>
-              <tr class="border-b border-slate-200 text-slate-500">
-                <th class="px-4 py-3">Salida</th>
-                <th class="px-4 py-3">Fecha</th>
-                <th class="px-4 py-3">Capacidad</th>
-                <th class="px-4 py-3">Disponibles</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (departure of s.lowCapacity; track departure.id) {
-                <tr class="border-b border-slate-100">
-                  <td class="px-4 py-3 font-medium text-slate-900">#{{ departure.id }} · {{ departure.name }}</td>
-                  <td class="px-4 py-3">{{ departure.departureDate | date: 'dd/MM/yyyy' }}</td>
-                  <td class="px-4 py-3">{{ departure.capacity }}</td>
-                  <td class="px-4 py-3 font-semibold text-orange-700">{{ departure.availableCapacity }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
+  <thead>
+    <tr class="border-b border-slate-200 text-slate-500">
+      <th class="px-4 py-3">Salida</th>
+      <th class="px-4 py-3">Fecha</th>
+      <th class="px-4 py-3">Capacidad</th>
+      <th class="px-4 py-3">Disponibles</th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (departure of s.lowCapacity; track departure.id) {
+      <tr class="border-b border-slate-100">
+        <td class="px-4 py-3 font-medium text-slate-900">#{{ departure.id }} · {{ departure.name }}</td>
+        <td class="px-4 py-3">{{ departure.departureDate | date: 'dd/MM/yyyy' }}</td>
+        <td class="px-4 py-3">{{ departure.capacity }}</td>
+        <td class="px-4 py-3 font-semibold text-orange-700">{{ departure.availableCapacity }}</td>
+      </tr>
+    }
+  </tbody>
+</table>
         </div>
       }
     </section>
@@ -10015,7 +10008,7 @@ export const routes: Routes = [
 ];
 ```
 
-####  probamos la pantalla de cancelaciones
+#### probamos la pantalla de cancelaciones
 
 Verificamos que ningún otro componente use los métodos que quitamos del servicio, y que los archivos tengan contenido:
 
@@ -10809,6 +10802,1632 @@ export const routes: Routes = [
 
 ![![](images/clipboard-3792460207.png)](images/clipboard-993966369.png)
 
-**realizamos las pruebas:**
+realizamos las pruebas
 
 ![](images/clipboard-360490510.png)
+
+# ISS-08 · Autenticación JWT y refresh
+
+**Narrativa**
+
+En esta etapa inicio la Fase II de Wayuutravel, dedicada a la autenticación de los usuarios del sistema. El backend en Django ya emite tokens JWT al iniciar sesión, los renueva con un refresh que rota en cada uso y revoca toda la familia de tokens si detecta que se reutiliza uno ya reemplazado. Mi objetivo es construir en Angular la sesión del cliente: los modelos de autenticación, un almacén de sesión basado en signals que sobreviva a la recarga de la página, un servicio que encadene el login con la consulta del perfil y de los permisos, y dos interceptores, uno que adjunta el token y lo renueva una sola vez ante un 401 y otro que muestra los errores generales de la API. Antes de empezar revisé el contrato real del backend y encontré que no existía el endpoint con la matriz de permisos del usuario, así que lo crearé, traduciendo las rutas de los recursos a una forma única que el frontend pueda comparar. También construiré las pantallas de inicio de sesión y de perfil. Los guards y el filtrado del menú por permisos quedan para el ISS-09, y en cada paso verificaré el funcionamiento con pruebas y compilaciones del proyecto.
+
+#### Declaramos los modelos de autenticación
+
+La sesión de Angular necesita tipos que describan exactamente lo que responde el backend. Creé `auth.model.ts` con cuatro interfaces: `LoginRequest`, con usuario o correo y contraseña; `TokenPair`, el par de tokens que devuelven el login y el refresh; `SessionUser`, con los campos reales del perfil de Wayuutravel (incluidos el nombre, el apellido y los indicadores de superusuario y staff); y `EffectivePermission`, cada entrada de la matriz de permisos. También agregué al modelo base de la API el tipo `HttpMethod`, que restringe los métodos a GET, POST, PUT, PATCH y DELETE.
+
+**Abrimos:**
+
+```         
+ nano src/app/core/models/api.model.ts
+```
+
+agregamos esto:
+
+```         
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+```
+
+![](images/clipboard-4168625265.png)
+
+**Abrimos:**
+
+```         
+nano src/app/core/models/auth.model.ts
+```
+
+**Pegamos este código:**
+
+``` typescript
+import type { HttpMethod, Status } from './api.model';
+
+/** Cuerpo de POST /api/auth/login/: se envía username o email, nunca ambos vacíos. */
+export interface LoginRequest {
+  username?: string;
+  email?: string;
+  password: string;
+}
+
+/** Respuesta de login y refresh: solo el par de tokens, sin datos del usuario. */
+export interface TokenPair {
+  access: string;
+  refresh: string;
+  tokenType: 'Bearer';
+  accessExpiresIn: number;
+}
+
+/** Respuesta de GET /api/auth/profile/ (objeto directo, sin envoltorio). */
+export interface SessionUser {
+  id: number;
+  username: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: Status;
+  isSuperuser: boolean;
+  isStaff: boolean;
+}
+
+/** Una entrada de GET /api/auth/permissions/: método, ruta y rol que la concede. */
+export interface EffectivePermission {
+  method: HttpMethod;
+  path: string;
+  roleId: number;
+  roleName: string;
+}
+
+/** GET /api/auth/permissions/ responde envuelto en { permissions: [...] }. */
+export interface PermissionsResponse {
+  permissions: EffectivePermission[];
+}
+```
+
+![](images/clipboard-2268554242.png)
+
+Guardamos y salimos.
+
+#### Crear el almacén de la sesión
+
+Creé `SessionStore`, la única fuente de verdad de la sesión en el frontend. Guarda en signals el access token, el refresh token, el usuario y sus permisos, y deriva con computed si hay sesión iniciada, cuántos permisos tiene el usuario y qué roles le conceden esos permisos. La sesión se guarda en `localStorage` con la clave `wayuutravel.session.v1` y se restaura al crear el servicio, así que sobrevive a una recarga de la página; si lo guardado está dañado, se descarta. El método `canPermission` recibe una clave como `PATCH /api/clients/7` y la compara con la matriz, donde el `:id` reconoce cualquier número y la barra final y los parámetros de consulta se ignoran. El backend sigue siendo la autoridad: este almacén solo sirve para que la interfaz sepa qué mostrar.
+
+**Abrimos:**
+
+```         
+nano src/app/core/services/session-store.ts
+```
+
+Pegamos este código:
+
+``` typescript
+import { Injectable, computed, signal } from '@angular/core';
+
+import {
+  EffectivePermission,
+  SessionUser,
+  TokenPair,
+} from '../models/auth.model';
+
+const STORAGE_KEY = 'wayuutravel.session.v1';
+
+interface StoredSession {
+  access: string;
+  refresh: string;
+  user: SessionUser | null;
+  permissions: EffectivePermission[];
+}
+
+/** Única fuente de verdad de la sesión en el cliente; el backend sigue siendo la autoridad. */
+@Injectable({ providedIn: 'root' })
+export class SessionStore {
+  private readonly _accessToken = signal<string | null>(null);
+  private readonly _refreshToken = signal<string | null>(null);
+  private readonly _user = signal<SessionUser | null>(null);
+  private readonly _permissions = signal<EffectivePermission[]>([]);
+
+  readonly accessToken = this._accessToken.asReadonly();
+  readonly refreshToken = this._refreshToken.asReadonly();
+  readonly user = this._user.asReadonly();
+  readonly permissions = this._permissions.asReadonly();
+
+  readonly isAuthenticated = computed(() => this._accessToken() !== null);
+  readonly permissionCount = computed(() => this._permissions().length);
+
+  /** Roles deducidos de la matriz efectiva: el perfil no trae los roles. */
+  readonly roles = computed(() =>
+    [...new Set(this._permissions().map((p) => p.roleName))].sort()
+  );
+
+  constructor() {
+    this.restore();
+  }
+
+  setTokens(tokens: TokenPair): void {
+    this._accessToken.set(tokens.access);
+    this._refreshToken.set(tokens.refresh);
+    this.persist();
+  }
+
+  setUser(user: SessionUser, permissions: EffectivePermission[]): void {
+    this._user.set(user);
+    this._permissions.set(permissions);
+    this.persist();
+  }
+
+  clear(): void {
+    this._accessToken.set(null);
+    this._refreshToken.set(null);
+    this._user.set(null);
+    this._permissions.set([]);
+
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* sin almacenamiento disponible */
+    }
+  }
+
+  /** canPermission('PATCH /api/clients/7') contra 'PATCH /api/clients/:id/'. */
+  canPermission(key: string): boolean {
+    const separator = key.indexOf(' ');
+    if (separator < 0) {
+      return false;
+    }
+
+    const method = key.slice(0, separator).toUpperCase();
+    const path = key.slice(separator + 1);
+
+    return this._permissions().some(
+      (p) => p.method === method && samePath(p.path, path)
+    );
+  }
+
+  private restore(): void {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+
+      const data = JSON.parse(raw) as StoredSession;
+      if (!Array.isArray(data.permissions)) {
+        this.clear();
+        return;
+      }
+
+      this._accessToken.set(data.access || null);
+      this._refreshToken.set(data.refresh || null);
+      this._user.set(data.user ?? null);
+      this._permissions.set(data.permissions);
+    } catch {
+      this.clear();
+    }
+  }
+
+  private persist(): void {
+    const data: StoredSession = {
+      access: this._accessToken() ?? '',
+      refresh: this._refreshToken() ?? '',
+      user: this._user(),
+      permissions: this._permissions(),
+    };
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch {
+      /* cuota llena o almacenamiento bloqueado */
+    }
+  }
+}
+
+/** El ':id' reconoce el valor real; la consulta y la barra final se ignoran. */
+function samePath(pattern: string, path: string): boolean {
+  const trim = (value: string) => value.split('?')[0].replace(/(.)\/+$/, '$1');
+
+  const body = trim(pattern)
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\/:[^/]+/g, '/[^/]+');
+
+  return new RegExp(`^${body}$`).test(trim(path));
+}
+```
+
+![](images/clipboard-462248314.png)
+
+#### Crear el servicio de autenticación
+
+Creé `AuthService`, el único punto del frontend que habla con `/api/auth/`. Su método central es `login`: envía las credenciales, guarda el par de tokens que devuelve el backend y, con ese access token, pide el perfil y la matriz de permisos en paralelo con `forkJoin`. El login solo emite cuando ya tiene las tres respuestas, así que la pantalla navega con la sesión completa; si el perfil o los permisos fallan, limpia la sesión para no dejar un token sin usuario. El método `me` repite esas dos consultas y sirve también para sincronizar la sesión desde el perfil. `refresh` envía el refresh token guardado y almacena el par nuevo, que el backend rota en cada uso. `logout` invalida el refresh en el servidor y borra la sesión local aunque el backend no responda, para que el usuario siempre pueda salir.
+
+Seguí la convención de nombres del proyecto: el archivo se llama `auth.service.ts`, como los demás servicios.
+
+**Abrimos:**
+
+```         
+nano src/app/core/services/auth.service.ts
+```
+
+Pegamos este código:
+
+``` typescript
+import { HttpClient } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import {
+  Observable,
+  catchError,
+  finalize,
+  forkJoin,
+  map,
+  of,
+  switchMap,
+  tap,
+  throwError,
+} from 'rxjs';
+
+import { environment } from '../../../environments/environment';
+import {
+  LoginRequest,
+  PermissionsResponse,
+  SessionUser,
+  TokenPair,
+} from '../models/auth.model';
+import { SessionStore } from './session-store';
+
+/** Único punto de contacto con /api/auth/. El login solo devuelve el par de tokens. */
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private readonly http = inject(HttpClient);
+  private readonly session = inject(SessionStore);
+  private readonly base = `${environment.apiUrl}/auth`;
+
+  /** Login + perfil + permisos: no emite hasta que la sesión está completa. */
+  login(credentials: LoginRequest): Observable<SessionUser> {
+    return this.http.post<TokenPair>(`${this.base}/login/`, credentials).pipe(
+      tap((tokens) => this.session.setTokens(tokens)),
+      switchMap(() =>
+        this.me().pipe(
+          catchError((error: unknown) => {
+            this.session.clear();
+            return throwError(() => error);
+          })
+        )
+      )
+    );
+  }
+
+  /** GET /auth/profile/ (objeto directo) y GET /auth/permissions/ (envuelto), en paralelo. */
+  me(): Observable<SessionUser> {
+    return forkJoin({
+      user: this.http.get<SessionUser>(`${this.base}/profile/`),
+      permissions: this.http.get<PermissionsResponse>(`${this.base}/permissions/`),
+    }).pipe(
+      tap(({ user, permissions }) =>
+        this.session.setUser(user, permissions.permissions)
+      ),
+      map(({ user }) => user)
+    );
+  }
+
+  /** Renueva el par. El backend rota el refresh: el anterior deja de servir. */
+  refresh(): Observable<TokenPair> {
+    const refresh = this.session.refreshToken();
+
+    if (!refresh) {
+      return throwError(() => new Error('La sesión no tiene refresh token.'));
+    }
+
+    return this.http
+      .post<TokenPair>(`${this.base}/refresh/`, { refresh })
+      .pipe(tap((tokens) => this.session.setTokens(tokens)));
+  }
+
+  /** Invalida el refresh en el servidor y borra la sesión local aunque falle la red. */
+  logout(): Observable<unknown> {
+    const refresh = this.session.refreshToken();
+
+    const request = refresh
+      ? this.http.post(`${this.base}/logout/`, { refresh })
+      : of(null);
+
+    return request.pipe(
+      catchError(() => of(null)),
+      finalize(() => this.session.clear())
+    );
+  }
+}
+```
+
+![](images/clipboard-2798699938.png)
+
+#### Crear el interceptor de sesión
+
+Creé `authInterceptor`, que actúa sobre todas las peticiones HTTP. Si hay sesión, agrega a cada petición la cabecera `Authorization: Bearer <access>`, excepto en login, refresh y logout, que no la necesitan. Cuando una petición recibe un 401 y existe refresh token, pide un par nuevo y repite la petición original con el access renovado. Como el backend rota el refresh y revoca toda la familia si se reutiliza uno ya usado, nunca deben salir dos refresh a la vez: la variable `refreshInFlight` guarda el refresh en curso, y si llegan varios 401 al mismo tiempo todos esperan esa misma respuesta, que `shareReplay` reparte. Si el refresh falla, o no hay refresh token, el interceptor limpia la sesión, avisa que venció y lleva al usuario a `/login` con la dirección a la que intentaba entrar.
+
+**Creamos la carpeta:**
+
+```         
+mkdir -p src/app/core/interceptors
+```
+
+**Abrimos:**
+
+```         
+nano src/app/core/interceptors/auth-interceptor.ts
+```
+
+**Pegamos este código:**
+
+``` typescript
+import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { inject } from '@angular/core';
+import { Router } from '@angular/router';
+import {
+  Observable,
+  catchError,
+  finalize,
+  shareReplay,
+  switchMap,
+  throwError,
+} from 'rxjs';
+
+import { TokenPair } from '../models/auth.model';
+import { AuthService } from '../services/auth.service';
+import { NotificationService } from '../services/notification.service';
+import { SessionStore } from '../services/session-store';
+
+/** Un único refresh en vuelo para todas las peticiones que reciban 401. */
+let refreshInFlight: Observable<TokenPair> | null = null;
+
+/** Rutas que emiten o revocan tokens: no llevan Bearer ni se reintentan. */
+const TOKEN_ENDPOINTS = ['/auth/login/', '/auth/refresh/', '/auth/logout/'];
+
+export const authInterceptor: HttpInterceptorFn = (req, next) => {
+  const session = inject(SessionStore);
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  const notify = inject(NotificationService);
+
+  const isTokenEndpoint = TOKEN_ENDPOINTS.some((endpoint) =>
+    req.url.includes(endpoint)
+  );
+
+  const access = session.accessToken();
+  const request =
+    access && !isTokenEndpoint
+      ? req.clone({ setHeaders: { Authorization: `Bearer ${access}` } })
+      : req;
+
+  return next(request).pipe(
+    catchError((error: unknown) => {
+      if (
+        !(error instanceof HttpErrorResponse) ||
+        error.status !== 401 ||
+        isTokenEndpoint
+      ) {
+        return throwError(() => error);
+      }
+
+      if (!session.refreshToken()) {
+        redirectToLogin(session, router, notify);
+        return throwError(() => error);
+      }
+
+      // Si ya hay un refresh en vuelo se comparte; no se abre otro.
+      refreshInFlight ??= auth.refresh().pipe(
+        catchError((refreshError: unknown) => {
+          redirectToLogin(session, router, notify);
+          return throwError(() => refreshError);
+        }),
+        finalize(() => {
+          refreshInFlight = null;
+        }),
+        shareReplay({ bufferSize: 1, refCount: false })
+      );
+
+      // Reintento con el access nuevo; si vuelve a fallar, el error sigue su curso.
+      return refreshInFlight.pipe(
+        switchMap(() => {
+          const renewed = session.accessToken();
+          return next(
+            renewed
+              ? req.clone({ setHeaders: { Authorization: `Bearer ${renewed}` } })
+              : req
+          );
+        })
+      );
+    })
+  );
+};
+
+function redirectToLogin(
+  session: SessionStore,
+  router: Router,
+  notify: NotificationService
+): void {
+  session.clear();
+  notify.error('Vuelve a iniciar sesión.', 'Sesión vencida');
+
+  const returnUrl = router.url.startsWith('/login') ? '/dashboard' : router.url;
+  void router.navigate(['/login'], { queryParams: { returnUrl } });
+}
+```
+
+![](images/clipboard-4087999715.png)
+
+#### Crear el interceptor de errores
+
+Creé `errorInterceptor` para que los errores generales de la API se anuncien en un solo lugar. Cada código tiene un responsable: el 400 lo explica el formulario que envió los datos, el 401 lo resuelve el interceptor de sesión, y este interceptor avisa del 403 (permiso denegado), el 404 (registro inexistente), el 409 (dato duplicado), la falta de conexión con Django y los errores 5xx. Los errores de login, refresh y logout no generan aviso, porque los muestra la pantalla de inicio de sesión. Si el mismo error se repite varias veces en pocos segundos, se muestra una sola notificación.
+
+**Abrimos:**
+
+```         
+nano src/app/core/interceptors/error-interceptor.ts
+```
+
+**Pegamos este código:**
+
+``` typescript
+import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { inject } from '@angular/core';
+import { catchError, throwError } from 'rxjs';
+
+import { NotificationService } from '../services/notification.service';
+
+/** Rutas de sesión: su error se explica en el formulario, no en una notificación. */
+const AUTH_ENTRY = ['/auth/login/', '/auth/refresh/', '/auth/logout/'];
+
+/** Código HTTP → [mensaje, título], en el orden que recibe NotificationService. */
+const MESSAGES: Record<number, [string, string]> = {
+  0: ['Verifica que Django esté corriendo en http://localhost:8000.', 'Sin conexión con la API'],
+  403: ['Tu rol no tiene el permiso que exige esta operación.', 'Acceso denegado'],
+  404: ['El registro ya no existe.', 'Registro no encontrado'],
+  409: ['Ese valor ya está registrado.', 'Dato duplicado'],
+};
+
+let lastToast = { key: '', at: 0 };
+
+export const errorInterceptor: HttpInterceptorFn = (req, next) => {
+  const notify = inject(NotificationService);
+
+  return next(req).pipe(
+    catchError((error: unknown) => {
+      // 400: lo muestra el formulario. 401: lo resuelve authInterceptor.
+      const isAuthEntry = AUTH_ENTRY.some((endpoint) => req.url.includes(endpoint));
+
+      if (error instanceof HttpErrorResponse && !isAuthEntry) {
+        const message = MESSAGES[error.status];
+
+        if (message) {
+          toastOnce(`${error.status}-${req.url}`, () =>
+            notify.error(message[0], message[1])
+          );
+        } else if (error.status >= 500) {
+          toastOnce(`server-${error.status}`, () =>
+            notify.error('Revisa la consola de Django.', 'Error del servidor')
+          );
+        }
+      }
+
+      return throwError(() => error);
+    })
+  );
+};
+
+/** Un mismo fallo repetido en ráfaga produce un solo aviso. */
+function toastOnce(key: string, show: () => void): void {
+  const now = Date.now();
+
+  if (lastToast.key === key && now - lastToast.at < 4000) {
+    return;
+  }
+
+  lastToast = { key, at: now };
+  show();
+}
+```
+
+![](images/clipboard-317365674.png)
+
+Guardamos y salimos.
+
+#### Registrar los interceptores
+
+Los interceptores solo actúan si se registran al crear el cliente HTTP. Cambié `provideHttpClient()` por su versión con `withInterceptors`, con un orden que importa: primero `authInterceptor`, que agrega el token y reintenta tras el refresh, y después `errorInterceptor`, que avisa de los errores que quedan.
+
+**Abrimos:**
+
+```         
+nano src/app/app.config.ts
+```
+
+**y remplazamos por :**
+
+``` typescript
+import {
+  ApplicationConfig,
+  provideBrowserGlobalErrorListeners
+} from '@angular/core';
+
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { authInterceptor } from './core/interceptors/auth-interceptor';
+import { errorInterceptor } from './core/interceptors/error-interceptor';
+
+import {
+  provideRouter,
+  withComponentInputBinding,
+  withInMemoryScrolling
+} from '@angular/router';
+
+import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
+
+import { providePrimeNG } from 'primeng/config';
+import Aura from '@primeuix/themes/aura';
+
+import { MessageService, ConfirmationService } from 'primeng/api';
+
+import { routes } from './app.routes';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideBrowserGlobalErrorListeners(),
+
+    
+    provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
+
+    provideRouter(
+      routes,
+      withComponentInputBinding(),
+      withInMemoryScrolling({
+        scrollPositionRestoration: 'enabled',
+        anchorScrolling: 'enabled'
+      })
+    ),
+
+    provideAnimationsAsync(),
+
+    providePrimeNG({
+      ripple: true,
+      inputVariant: 'outlined',
+        license: 'eyJpZCI6IjNhYzAzNmFlLWVjZmEtNDY5Zi05NmZkLTVlOTM4NTYzNzA5OCIsInByb2R1Y3QiOiJwcmltZXVpIiwidGllciI6ImNvbW11bml0eSIsInR5cGUiOiJkZXYiLCJpYXQiOjE3OTI2ODc3ODQsImV4cCI6MTgyNDIyMzc4NH0.LPd-gI9YN8sPdni1YHpm0eThRUkA4j-pkuvM3rYtyav9i71fpVIjTBGVj4C8HCRyYdjjRm8qbRZboRysQhREBg',
+
+      theme: {
+        preset: Aura,
+        options: {
+          darkModeSelector: '.app-dark',
+          cssLayer: {
+            name: 'primeng',
+            order: 'theme, base, primeng, utilities'
+          }
+        }
+      }
+    }),
+
+    MessageService,
+    ConfirmationService
+  ]
+};
+```
+
+![](images/clipboard-159526567.png)
+
+#### Crear la pantalla de inicio de sesión
+
+Creé el componente `Login`, que se muestra fuera del Shell, sin menú lateral. Tiene un solo campo para el usuario o el correo y otro para la contraseña. Como el backend acepta `username` o `email` pero no un campo genérico, el componente arma la petición según lo escrito: si el texto contiene `@` lo envía como correo y, si no, como usuario. Mientras espera, el botón muestra un indicador de carga; si las credenciales son incorrectas, el mensaje del backend («Credenciales inválidas.») aparece dentro del formulario. Al iniciar sesión, la pantalla navega a la dirección indicada en `returnUrl`, que escribe el interceptor cuando una sesión vence, o al panel de control si no hay ninguna. Solo se aceptan direcciones internas, para que nadie pueda redirigir a un sitio externo.
+
+**Creamos la carpeta:**
+
+```         
+mkdir -p src/app/features/auth/login src/app/features/auth/profile
+```
+
+**Abrimos:**
+
+```         
+nano src/app/features/auth/login/login.ts
+```
+
+**Pegamos este código:**
+
+``` typescript
+import { Component, inject, signal } from '@angular/core';
+import {
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
+
+import { ButtonModule } from 'primeng/button';
+import { CardModule } from 'primeng/card';
+import { InputTextModule } from 'primeng/inputtext';
+import { MessageModule } from 'primeng/message';
+import { PasswordModule } from 'primeng/password';
+
+import { LoginRequest } from '../../../core/models/auth.model';
+import { AuthService } from '../../../core/services/auth.service';
+import { toApiMessage } from '../../../core/utils/to-api-message';
+
+@Component({
+  selector: 'app-login',
+  standalone: true,
+  host: { class: 'block' },
+  imports: [
+    ReactiveFormsModule,
+    ButtonModule,
+    CardModule,
+    InputTextModule,
+    MessageModule,
+    PasswordModule,
+  ],
+  templateUrl: './login.html',
+  styleUrl: './login.css',
+})
+export class Login {
+  private readonly fb = inject(NonNullableFormBuilder);
+  private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+
+  readonly loading = signal(false);
+  readonly error = signal<string | null>(null);
+
+  readonly form = this.fb.group({
+    identifier: ['', [Validators.required]],
+    password: ['', [Validators.required]],
+  });
+
+  submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    this.loading.set(true);
+    this.error.set(null);
+
+    const { identifier, password } = this.form.getRawValue();
+    const value = identifier.trim();
+
+    // Django acepta username o email: se envía uno de los dos, nunca "identifier".
+    const credentials: LoginRequest = value.includes('@')
+      ? { email: value, password }
+      : { username: value, password };
+
+    this.auth.login(credentials).subscribe({
+      next: () => {
+        void this.router.navigateByUrl(this.returnUrl());
+      },
+      error: (error: unknown) => {
+        this.loading.set(false);
+        this.error.set(toApiMessage(error));
+      },
+    });
+  }
+
+  /** returnUrl lo escribe el interceptor; solo se acepta una ruta interna. */
+  private returnUrl(): string {
+    const requested =
+      this.route.snapshot.queryParamMap.get('returnUrl') ?? '/dashboard';
+
+    return requested.startsWith('/') &&
+      !requested.startsWith('//') &&
+      !requested.startsWith('/login')
+      ? requested
+      : '/dashboard';
+  }
+}
+```
+
+![](images/clipboard-1749427137.png)
+
+Agregué la condición `!requested.startsWith('//')` porque una dirección como `//sitio-externo.com` empieza por `/` pero el navegador la trata como un dominio distinto.
+
+**Abrimos:**
+
+```         
+nano src/app/features/auth/login/login.html
+```
+
+**Pegamos este código:**
+
+``` html
+<main class="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+  <p-card styleClass="w-full max-w-md">
+    <ng-template #title>
+      <div class="text-center">
+        <p class="text-sm font-semibold uppercase tracking-wider text-teal-700">
+          Wayuu Travel
+        </p>
+        <h1 class="mt-1 text-2xl font-bold text-slate-900">Iniciar sesión</h1>
+      </div>
+    </ng-template>
+
+    <form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5">
+      @if (error()) {
+        <p-message severity="error" [text]="error()!" styleClass="w-full" />
+      }
+
+      <div class="space-y-2">
+        <label for="identifier" class="block text-sm font-medium text-slate-700">
+          Usuario o correo electrónico
+        </label>
+
+        <input
+          pInputText
+          id="identifier"
+          formControlName="identifier"
+          autocomplete="username"
+          class="w-full"
+          placeholder="usuario o correo@ejemplo.com"
+        />
+
+        @if (form.controls.identifier.touched && form.controls.identifier.invalid) {
+          <small class="text-red-600">Escribe tu usuario o tu correo.</small>
+        }
+      </div>
+
+      <div class="space-y-2">
+        <label for="password" class="block text-sm font-medium text-slate-700">
+          Contraseña
+        </label>
+
+        <p-password
+          inputId="password"
+          formControlName="password"
+          [toggleMask]="true"
+          [feedback]="false"
+          [fluid]="true"
+          autocomplete="current-password"
+          placeholder="Tu contraseña"
+        />
+
+        @if (form.controls.password.touched && form.controls.password.invalid) {
+          <small class="text-red-600">Escribe tu contraseña.</small>
+        }
+      </div>
+
+      <p-button
+        type="submit"
+        label="Entrar"
+        icon="pi pi-sign-in"
+        styleClass="w-full"
+        [loading]="loading()"
+        [disabled]="loading()"
+      />
+    </form>
+  </p-card>
+</main>
+```
+
+![](images/clipboard-1800910732.png)
+
+**Guardamos y salimos.**
+
+```         
+: > src/app/features/auth/login/login.css
+```
+
+![](images/clipboard-1205683896.png)
+
+`[feedback]="false"` quita el medidor de fortaleza de la contraseña, que solo tiene sentido al crear una, no al iniciar sesión.
+
+#### Crear la pantalla de perfil
+
+Creé el componente `Profile`, que se muestra dentro del Shell en `/perfil` y solo lee el almacén de sesión. Presenta el usuario, su nombre completo, su correo, si es superusuario o staff, los roles que le conceden permisos y la cantidad de permisos, junto con la matriz completa de operaciones autorizadas (método y ruta). Tiene dos acciones: «Refrescar desde el backend», que vuelve a pedir el perfil y los permisos sin cerrar la sesión, y «Salir», que invalida el refresh token en el servidor, borra la sesión local y vuelve a `/login`. Si no hay sesión, la pantalla invita a iniciarla.
+
+**Abrimos:**
+
+```         
+nano src/app/features/auth/profile/profile.ts
+```
+
+**Pegamos este código:**
+
+``` typescript
+import { Component, computed, inject, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
+
+import { ButtonModule } from 'primeng/button';
+import { CardModule } from 'primeng/card';
+import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
+
+import { AuthService } from '../../../core/services/auth.service';
+import { NotificationService } from '../../../core/services/notification.service';
+import { SessionStore } from '../../../core/services/session-store';
+import { PageHeader } from '../../../shared/ui/page-header/page-header';
+
+@Component({
+  selector: 'app-profile',
+  standalone: true,
+  host: { class: 'block' },
+  imports: [
+    RouterLink,
+    ButtonModule,
+    CardModule,
+    TableModule,
+    TagModule,
+    PageHeader,
+  ],
+  templateUrl: './profile.html',
+  styleUrl: './profile.css',
+})
+export class Profile {
+  private readonly auth = inject(AuthService);
+  private readonly notify = inject(NotificationService);
+  private readonly router = inject(Router);
+
+  readonly session = inject(SessionStore);
+  readonly refreshing = signal(false);
+
+  readonly fullName = computed(() => {
+    const user = this.session.user();
+    const name = `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim();
+    return name || 'Sin nombre registrado';
+  });
+
+  /** Vuelve a pedir /auth/profile/ y /auth/permissions/ sin cerrar la sesión. */
+  refresh(): void {
+    this.refreshing.set(true);
+
+    this.auth.me().subscribe({
+      next: () => {
+        this.refreshing.set(false);
+        this.notify.success('Perfil y permisos actualizados.', 'Sesión sincronizada');
+      },
+      error: () => this.refreshing.set(false),
+    });
+  }
+
+  logout(): void {
+    this.auth.logout().subscribe({
+      complete: () => {
+        this.notify.info('Hasta pronto.', 'Sesión cerrada');
+        void this.router.navigate(['/login']);
+      },
+    });
+  }
+}
+```
+
+![](images/clipboard-2064989222.png)
+
+Guardamos y salimos.
+
+En `logout` usé `complete` en lugar de `next`: si el backend no responde, la petición termina sin emitir valores, y con `next` el usuario se quedaría en la pantalla. Con `complete`, siempre vuelve a `/login`.
+
+**Abrimos:**
+
+```         
+nano src/app/features/auth/profile/profile.html
+```
+
+**Pegamos este código:**
+
+``` html
+<div class="space-y-6">
+  <app-page-header
+    title="Mi sesión"
+    description="Usuario, roles y permisos de la sesión actual."
+  />
+
+  @if (session.user(); as user) {
+    <div class="flex flex-wrap justify-end gap-2">
+      <p-button
+        label="Refrescar desde el backend"
+        icon="pi pi-refresh"
+        severity="secondary"
+        [outlined]="true"
+        [loading]="refreshing()"
+        (onClick)="refresh()"
+      />
+
+      <p-button
+        label="Salir"
+        icon="pi pi-sign-out"
+        severity="danger"
+        [outlined]="true"
+        (onClick)="logout()"
+      />
+    </div>
+
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
+      <p-card header="Usuario" styleClass="lg:col-span-2">
+        <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <dt class="text-sm text-slate-500">Usuario</dt>
+            <dd class="font-semibold text-slate-900">{{ user.username }}</dd>
+          </div>
+          <div>
+            <dt class="text-sm text-slate-500">Nombre</dt>
+            <dd class="font-semibold text-slate-900">{{ fullName() }}</dd>
+          </div>
+          <div>
+            <dt class="text-sm text-slate-500">Correo electrónico</dt>
+            <dd class="font-semibold text-slate-900">{{ user.email }}</dd>
+          </div>
+          <div>
+            <dt class="text-sm text-slate-500">Tipo de cuenta</dt>
+            <dd class="flex flex-wrap gap-2">
+              @if (user.isSuperuser) {
+                <p-tag value="Superusuario" severity="warn" [rounded]="true" />
+              }
+              @if (user.isStaff) {
+                <p-tag value="Staff" severity="secondary" [rounded]="true" />
+              }
+              @if (!user.isSuperuser && !user.isStaff) {
+                <span class="text-slate-700">Usuario estándar</span>
+              }
+            </dd>
+          </div>
+        </dl>
+      </p-card>
+
+      <p-card header="Roles y permisos">
+        <p class="m-0 text-sm text-slate-500">
+          {{ user.username }} · {{ session.permissionCount() }} permisos
+        </p>
+
+        <div class="mt-4 flex flex-wrap gap-2">
+          @for (role of session.roles(); track role) {
+            <p-tag [value]="role" severity="info" [rounded]="true" />
+          } @empty {
+            <span class="text-sm text-slate-500">Sin roles asignados.</span>
+          }
+        </div>
+      </p-card>
+    </div>
+
+    <p-card header="Operaciones autorizadas">
+      @if (session.permissionCount() === 0) {
+        <p class="m-0 text-slate-500">
+          Este usuario no tiene permisos asignados.
+        </p>
+      } @else {
+        <div class="overflow-x-auto">
+          <p-table
+            [value]="session.permissions()"
+            [paginator]="true"
+            [rows]="10"
+            [tableStyle]="{ 'min-width': '30rem' }"
+          >
+            <ng-template #header>
+              <tr>
+                <th>Método</th>
+                <th>Ruta</th>
+                <th>Rol</th>
+              </tr>
+            </ng-template>
+
+            <ng-template #body let-permission>
+              <tr>
+                <td class="font-mono text-sm font-semibold">{{ permission.method }}</td>
+                <td class="font-mono text-sm">{{ permission.path }}</td>
+                <td>{{ permission.roleName }}</td>
+              </tr>
+            </ng-template>
+          </p-table>
+        </div>
+      }
+    </p-card>
+  } @else {
+    <p-card>
+      <p class="m-0 text-slate-600">No hay una sesión iniciada.</p>
+      <a
+        routerLink="/login"
+        [queryParams]="{ returnUrl: '/perfil' }"
+        class="mt-3 inline-block font-semibold text-teal-700 hover:text-teal-900"
+      >
+        Iniciar sesión →
+      </a>
+    </p-card>
+  }
+</div>
+```
+
+![](images/clipboard-3872029113.png)
+
+Guardamos y salimos.
+
+```         
+: > src/app/features/auth/profile/profile.css
+```
+
+![](images/clipboard-959011404.png)
+
+#### Conectar las rutas de login y perfil
+
+La ruta `/login` va fuera del Shell, como `/construir`, porque la pantalla de inicio de sesión no lleva menú. La ruta `/perfil` va dentro del Shell. También agregué la entrada «Mi sesión» al menú lateral para llegar al perfil. Las rutas de negocio siguen abiertas: los guards que las protegen son el ISS-09.
+
+**Abrimos:**
+
+```         
+nano src/app/app.routes.ts
+```
+
+Realiza estos cambios:
+
+``` typescript
+import { Routes } from '@angular/router';
+
+export const routes: Routes = [
+  {
+    path: 'construir',
+    loadComponent: () =>
+      import('./features/construir/construir').then((m) => m.Construir),
+  },
+  {
+    path: '',
+    loadComponent: () =>
+      import('./layout/shell/shell').then((m) => m.Shell),
+    children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'clientes',
+      },
+      {
+        path: 'dashboard',
+        loadComponent: () =>
+          import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+        data: {
+          title: 'Panel de control',
+          description: 'Actividad del día en Wayuu Travel.',
+        },
+        
+      },
+            {
+        path: 'perfil',
+        loadComponent: () =>
+          import('./features/auth/profile/profile').then((m) => m.Profile),
+        data: {
+          title: 'Mi sesión',
+          description: 'Usuario, roles y permisos de la sesión actual.',
+        },
+      },
+      {
+        path: 'clientes',
+        loadComponent: () =>
+          import('./features/clients/client-list/client-list').then(
+            (m) => m.ClientList
+          ),
+        data: {
+          title: 'Clientes',
+          description: 'Gestión de los clientes de Wayuu Travel.',
+        },
+      },
+      {
+        path: 'paquetes',
+        loadComponent: () =>
+          import('./features/packages/pages/package-list/package-list').then(
+            (m) => m.PackageList
+          ),
+        data: {
+          title: 'Paquetes turísticos',
+          description: 'Administración de los paquetes turísticos.',
+        },
+      },
+      {
+        path: 'salidas',
+        loadComponent: () =>
+          import('./features/departures/pages/departure-list/departure-list').then(
+            (m) => m.DepartureList
+          ),
+        data: {
+          title: 'Salidas',
+          description: 'Gestión de las salidas y fechas de los paquetes.',
+        },
+      },
+      {
+        path: 'proveedores',
+        loadComponent: () =>
+         import('./features/suppliers/pages/supplier-list/supplier-list').then(
+            (m) => m.SupplierList
+          ),
+        data: {
+          title: 'Proveedores',
+          description: 'Administración de los proveedores turísticos.',
+        },
+      },
+      {
+        path: 'reservas',
+        loadComponent: () =>
+          import('./features/bookings/booking-list/booking-list').then(
+            (m) => m.BookingList
+          ),
+        data: {
+          title: 'Reservas',
+          description: 'Gestión de las reservas de los viajeros.',
+        },
+      },
+      {
+        path: 'reservas/:id',
+        loadComponent: () =>
+          import('./features/bookings/booking-detail/booking-detail').then(
+            (m) => m.BookingDetail
+          ),
+        data: {
+          title: 'Detalle de reserva',
+          description: 'Consulta detallada de una reserva turística.',
+        },
+      },
+      {
+        path: 'pagos',
+        loadComponent: () =>
+          import('./features/payments/payment-list/payment-list').then(
+            (m) => m.PaymentList
+          ),
+        data: {
+          title: 'Pagos',
+          description: 'Pagos registrados y su reserva.',
+        },
+      },
+      {
+        path: 'cancelaciones',
+        loadComponent: () =>
+                    import('./features/cancellations/pages/cancellation-list/cancellation-list').then(
+            (m) => m.CancellationList
+          ),
+        data: {
+          title: 'Cancelaciones',
+          description: 'Administración de las cancelaciones de reservas.',
+        },
+      },
+      {
+        path: 'comprobantes',
+        loadComponent: () =>
+                   import('./features/vouchers/pages/voucher-list/voucher-list').then(
+            (m) => m.VoucherList
+          ),
+        data: {
+          title: 'Comprobantes',
+          description: 'Consulta de los comprobantes de las reservas.',
+        },
+      },
+    ],
+  },
+  {
+    path: '**',
+    redirectTo: 'construir',
+  },
+    {
+    path: 'login',
+    title: 'Iniciar sesión · Wayuu Travel',
+    loadComponent: () =>
+      import('./features/auth/login/login').then((m) => m.Login),
+  },  
+];
+```
+
+**Abrimos:**
+
+```         
+nano src/app/layout/shell/shell.ts
+```
+
+``` typescript
+  import { Component, signal } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+import { MenuItem } from 'primeng/api';
+
+import { Header } from '../header/header';
+import { Aside } from '../aside/aside';
+import { Footer } from '../footer/footer';
+
+@Component({
+  selector: 'app-shell',
+  standalone: true,
+  imports: [
+    RouterOutlet,
+    Header,
+    Aside,
+    Footer
+  ],
+  templateUrl: './shell.html',
+  styleUrl: './shell.css'
+})
+export class Shell {
+  readonly menuOpen = signal(true);
+
+  readonly menuItems: MenuItem[] = [
+    {
+      label: 'Panel de control',
+      icon: 'pi pi-chart-bar',
+      routerLink: '/dashboard'
+    },
+        {
+      label: 'Mi sesión',
+      icon: 'pi pi-user',
+      routerLink: '/perfil'
+    },
+    {
+      separator: true
+    },
+    {
+      label: 'Gestión turística',
+      items: [
+        {
+          label: 'Clientes',
+          icon: 'pi pi-users',
+          routerLink: '/clientes'
+        },
+      
+        {
+          label: 'Paquetes turísticos',
+          icon: 'pi pi-map',
+          routerLink: '/paquetes'
+        },
+        {
+          label: 'Salidas',
+          icon: 'pi pi-calendar',
+          routerLink: '/salidas'
+        },
+        {
+          label: 'Proveedores',
+          icon: 'pi pi-truck',
+          routerLink: '/proveedores'
+        }
+      ]
+    },
+    {
+      label: 'Gestión comercial',
+      items: [
+        {
+          label: 'Reservas',
+          icon: 'pi pi-book',
+          routerLink: '/reservas'
+        },
+        {
+          label: 'Pagos',
+          icon: 'pi pi-wallet',
+          routerLink: '/pagos'
+        },
+        {
+          label: 'Cancelaciones',
+          icon: 'pi pi-times-circle',
+          routerLink: '/cancelaciones'
+        },
+        {
+          label: 'Comprobantes',
+          icon: 'pi pi-file',
+          routerLink: '/comprobantes'
+        }
+      ]
+    }
+  ];
+
+  toggleMenu(): void {
+    this.menuOpen.update((value) => !value);
+  }
+
+  closeMenu(): void {
+    this.menuOpen.set(false);
+  }
+}
+```
+
+![](images/clipboard-1181816398.png)
+
+revisamos la interfaz en el navegador:
+
+![](images/clipboard-1192186893.png)
+
+#### Probar el refresh automático y los avisos de error
+
+Para comprobar el interceptor de sesión sin esperar los 60 minutos que dura el access token, lo reemplazo por un valor inválido en el almacenamiento del navegador. El backend rechaza ese token con 401, el interceptor pide un par nuevo una sola vez y repite las peticiones. También compruebo que una reserva inexistente produzca el aviso de registro no encontrado.
+
+#### Escribir las pruebas de autenticación
+
+Escribí tres archivos de pruebas para la sesión. `auth.service.spec.ts` comprueba que el login guarda el par de tokens y no emite hasta recibir el perfil y los permisos, y que limpia la sesión si una de esas consultas falla. `session-store.spec.ts` comprueba que `canPermission` resuelva el `:id`, tolere la barra final y rechace métodos no concedidos, y que la sesión se restaure desde el almacenamiento al crear de nuevo el servicio. `auth-interceptor.spec.ts` comprueba que las peticiones lleven el token, que dos 401 simultáneos produzcan un solo refresh y dos reintentos con el token nuevo, y que un refresh fallido limpie la sesión.
+
+**Abrimos:**
+
+```         
+nano src/app/core/services/auth.service.spec.ts
+```
+
+**Pegamos este código:**
+
+``` typescript
+import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
+
+import { AuthService } from './auth.service';
+import { SessionStore } from './session-store';
+import {
+  EffectivePermission,
+  SessionUser,
+  TokenPair,
+} from '../models/auth.model';
+
+const API = 'http://localhost:8000/api';
+
+const PAR: TokenPair = {
+  access: 'a1',
+  refresh: 'r1',
+  tokenType: 'Bearer',
+  accessExpiresIn: 3600,
+};
+
+const USER: SessionUser = {
+  id: 1,
+  username: 'gonzalez',
+  email: 'gonzalez@wayuutravel.test',
+  firstName: 'Jaime',
+  lastName: 'González',
+  status: 'active',
+  isSuperuser: false,
+  isStaff: false,
+};
+
+const PERMISO: EffectivePermission = {
+  method: 'GET',
+  path: '/api/clients/',
+  roleId: 1,
+  roleName: 'admin',
+};
+
+describe('AuthService', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+  });
+
+  afterEach(() => TestBed.inject(HttpTestingController).verify());
+
+  it('guarda el par y solo emite después de recibir perfil y permisos', () => {
+    const http = TestBed.inject(HttpTestingController);
+    const session = TestBed.inject(SessionStore);
+    let emitted: SessionUser | undefined;
+
+    TestBed.inject(AuthService)
+      .login({ username: 'gonzalez', password: 'secreta' })
+      .subscribe((user) => (emitted = user));
+
+    const login = http.expectOne(`${API}/auth/login/`);
+    expect(login.request.body).toEqual({ username: 'gonzalez', password: 'secreta' });
+    login.flush(PAR);
+
+    // El par ya está guardado, pero login() todavía no emite.
+    expect(session.accessToken()).toBe('a1');
+    expect(emitted).toBeUndefined();
+
+    http.expectOne(`${API}/auth/profile/`).flush(USER);
+    http.expectOne(`${API}/auth/permissions/`).flush({ permissions: [PERMISO] });
+
+    expect(emitted).toEqual(USER);
+    expect(session.user()).toEqual(USER);
+    expect(session.permissionCount()).toBe(1);
+  });
+
+  it('limpia la sesión si falla la carga del perfil', () => {
+    const http = TestBed.inject(HttpTestingController);
+    const session = TestBed.inject(SessionStore);
+    let failed = false;
+
+    TestBed.inject(AuthService)
+      .login({ email: 'gonzalez@wayuutravel.test', password: 'secreta' })
+      .subscribe({ error: () => (failed = true) });
+
+    http.expectOne(`${API}/auth/login/`).flush(PAR);
+    http.expectOne(`${API}/auth/permissions/`).flush({ permissions: [PERMISO] });
+    http
+      .expectOne(`${API}/auth/profile/`)
+      .flush({ detail: 'Error' }, { status: 500, statusText: 'Server Error' });
+
+    expect(failed).toBe(true);
+    expect(session.isAuthenticated()).toBe(false);
+    expect(localStorage.getItem('wayuutravel.session.v1')).toBeNull();
+  });
+});
+```
+
+![](images/clipboard-3653680192.png)
+
+**Abrimos:**
+
+```         
+nano src/app/core/services/session-store.spec.ts
+```
+
+**Pegamos este código:**
+
+```         
+import { TestBed } from '@angular/core/testing';
+
+import { SessionStore } from './session-store';
+import {
+  EffectivePermission,
+  SessionUser,
+  TokenPair,
+} from '../models/auth.model';
+
+const PAR: TokenPair = {
+  access: 'a1',
+  refresh: 'r1',
+  tokenType: 'Bearer',
+  accessExpiresIn: 3600,
+};
+
+const USER: SessionUser = {
+  id: 1,
+  username: 'gonzalez',
+  email: 'gonzalez@wayuutravel.test',
+  firstName: 'Jaime',
+  lastName: 'González',
+  status: 'active',
+  isSuperuser: false,
+  isStaff: false,
+};
+
+const PERMISO: EffectivePermission = {
+  method: 'GET',
+  path: '/api/clients/',
+  roleId: 1,
+  roleName: 'admin',
+};
+
+describe('SessionStore', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.configureTestingModule({});
+  });
+
+  it('resuelve :id, tolera la barra final y restaura la sesión', () => {
+    const store = TestBed.inject(SessionStore);
+
+    store.setTokens(PAR);
+    store.setUser(USER, [
+      PERMISO,
+      { ...PERMISO, method: 'PATCH', path: '/api/clients/:id/' },
+    ]);
+
+    expect(store.isAuthenticated()).toBe(true);
+    expect(store.permissionCount()).toBe(2);
+    expect(store.roles()).toEqual(['admin']);
+
+    expect(store.canPermission('GET /api/clients')).toBe(true);
+    expect(store.canPermission('PATCH /api/clients/7')).toBe(true);
+    expect(store.canPermission('PATCH /api/clients/7/')).toBe(true);
+    expect(store.canPermission('DELETE /api/clients/7')).toBe(false);
+    expect(store.canPermission('sin-espacio')).toBe(false);
+
+    // Una instancia nueva restaura la sesión desde localStorage (como tras F5).
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+    const restored = TestBed.inject(SessionStore);
+
+    expect(restored.accessToken()).toBe('a1');
+    expect(restored.user()?.username).toBe('gonzalez');
+    expect(restored.canPermission('GET /api/clients/')).toBe(true);
+  });
+
+  it('clear borra la sesión y el almacenamiento', () => {
+    const store = TestBed.inject(SessionStore);
+    store.setTokens(PAR);
+
+    store.clear();
+
+    expect(store.isAuthenticated()).toBe(false);
+    expect(store.refreshToken()).toBeNull();
+    expect(localStorage.getItem('wayuutravel.session.v1')).toBeNull();
+  });
+});
+```
+
+![](images/clipboard-1521673026.png)
+
+**Abrimos:**
+
+```         
+nano src/app/core/interceptors/auth-interceptor.spec.ts
+```
+
+**Pegamos este código:**
+
+```         
+import { TestBed } from '@angular/core/testing';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
+import { MessageService } from 'primeng/api';
+
+import { authInterceptor } from './auth-interceptor';
+import { ClientService } from '../services/client.service';
+import { SessionStore } from '../services/session-store';
+import { TokenPair } from '../models/auth.model';
+
+const API = 'http://localhost:8000/api';
+
+const PAR: TokenPair = {
+  access: 'a1',
+  refresh: 'r1',
+  tokenType: 'Bearer',
+  accessExpiresIn: 3600,
+};
+
+const UNAUTHORIZED = { status: 401, statusText: 'Unauthorized' };
+
+describe('authInterceptor', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withInterceptors([authInterceptor])),
+        provideHttpClientTesting(),
+        provideRouter([{ path: 'login', children: [] }]),
+        MessageService,
+      ],
+    });
+  });
+
+  afterEach(() => TestBed.inject(HttpTestingController).verify());
+
+  it('adjunta Bearer y refresca una sola vez ante dos 401 simultáneos', () => {
+    const store = TestBed.inject(SessionStore);
+    store.setTokens({ ...PAR, access: 'viejo' });
+
+    const clients = TestBed.inject(ClientService);
+    const http = TestBed.inject(HttpTestingController);
+
+    clients.list().subscribe();
+    clients.list().subscribe();
+
+    const original = http.match(`${API}/clients/`);
+    expect(original.length).toBe(2);
+    expect(original[0].request.headers.get('Authorization')).toBe('Bearer viejo');
+
+    original[0].flush({ detail: 'vencido' }, UNAUTHORIZED);
+    original[1].flush({ detail: 'vencido' }, UNAUTHORIZED);
+
+    // Single-flight: una sola llamada al refresh para las dos peticiones.
+    const refresh = http.expectOne(`${API}/auth/refresh/`);
+    expect(refresh.request.headers.has('Authorization')).toBe(false);
+    expect(refresh.request.body).toEqual({ refresh: 'r1' });
+    refresh.flush({ ...PAR, access: 'nuevo', refresh: 'r2' });
+
+    const retried = http.match(`${API}/clients/`);
+    expect(retried.length).toBe(2);
+    retried.forEach((request) => {
+      expect(request.request.headers.get('Authorization')).toBe('Bearer nuevo');
+      request.flush([]);
+    });
+
+    expect(store.refreshToken()).toBe('r2');
+  });
+
+  it('si el refresh falla, limpia la sesión', () => {
+    const store = TestBed.inject(SessionStore);
+    store.setTokens({ ...PAR, access: 'viejo' });
+
+    const http = TestBed.inject(HttpTestingController);
+    let failed = false;
+
+    TestBed.inject(ClientService).list().subscribe({ error: () => (failed = true) });
+
+    http.expectOne(`${API}/clients/`).flush({ detail: 'vencido' }, UNAUTHORIZED);
+    http
+      .expectOne(`${API}/auth/refresh/`)
+      .flush({ detail: 'Refresh token inválido o no vigente.' }, UNAUTHORIZED);
+
+    expect(failed).toBe(true);
+    expect(store.isAuthenticated()).toBe(false);
+    expect(localStorage.getItem('wayuutravel.session.v1')).toBeNull();
+  });
+});
+```
+
+![](images/clipboard-854723989.png)
+
+#### Escribir las pruebas de autenticación
+
+Escribí tres archivos de pruebas para la sesión. `auth.service.spec.ts` comprueba que el login guarda el par de tokens y no emite hasta recibir el perfil y los permisos, y que limpia la sesión si una de esas consultas falla. `session-store.spec.ts` comprueba que `canPermission` resuelva el `:id`, tolere la barra final y rechace los métodos no concedidos, y que una instancia nueva del almacén restaure la sesión desde `localStorage`, como ocurre al recargar la página. `auth-interceptor.spec.ts` comprueba que las peticiones lleven el token, que dos 401 simultáneos produzcan un solo refresh y dos reintentos con el token nuevo, y que un refresh fallido limpie la sesión. La prueba del interceptor no se ejecutaba al principio porque su archivo no llegó a guardarse; tras eliminar el bloqueo que había dejado el editor y crearla de nuevo, la suite completa pasó con 19 pruebas en 7 archivos.
+
+![](images/clipboard-632442155.png)

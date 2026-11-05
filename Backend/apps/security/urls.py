@@ -5,6 +5,7 @@ from rest_framework.routers import SimpleRouter
 from apps.security.auth_views import (
     LoginAPIView,
     LogoutAPIView,
+    PermissionsAPIView,
     RefreshAPIView,
 )
 from apps.security.rbac_views import (
@@ -35,6 +36,7 @@ urlpatterns = [
     path("auth/refresh/", RefreshAPIView.as_view(), name="auth-refresh"),
     path("auth/logout/", LogoutAPIView.as_view(), name="auth-logout"),
     path("auth/profile/", ProfileAPIView.as_view(), name="auth-profile"),
+        path("auth/permissions/", PermissionsAPIView.as_view(), name="auth-permissions"),
 ]
 
 urlpatterns += router.urls

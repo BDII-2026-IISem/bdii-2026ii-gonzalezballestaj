@@ -7,6 +7,12 @@ export const routes: Routes = [
       import('./features/construir/construir').then((m) => m.Construir),
   },
   {
+    path: 'login',
+    title: 'Iniciar sesión · Wayuu Travel',
+    loadComponent: () =>
+      import('./features/auth/login/login').then((m) => m.Login),
+  },
+  {
     path: '',
     loadComponent: () =>
       import('./layout/shell/shell').then((m) => m.Shell),
@@ -23,6 +29,15 @@ export const routes: Routes = [
         data: {
           title: 'Panel de control',
           description: 'Actividad del día en Wayuu Travel.',
+        },
+      },
+      {
+        path: 'perfil',
+        loadComponent: () =>
+          import('./features/auth/profile/profile').then((m) => m.Profile),
+        data: {
+          title: 'Mi sesión',
+          description: 'Usuario, roles y permisos de la sesión actual.',
         },
       },
       {
@@ -61,7 +76,7 @@ export const routes: Routes = [
       {
         path: 'proveedores',
         loadComponent: () =>
-         import('./features/suppliers/pages/supplier-list/supplier-list').then(
+          import('./features/suppliers/pages/supplier-list/supplier-list').then(
             (m) => m.SupplierList
           ),
         data: {
@@ -105,23 +120,23 @@ export const routes: Routes = [
       {
         path: 'cancelaciones',
         loadComponent: () =>
-                    import('./features/cancellations/pages/cancellation-list/cancellation-list').then(
+          import('./features/cancellations/pages/cancellation-list/cancellation-list').then(
             (m) => m.CancellationList
           ),
         data: {
           title: 'Cancelaciones',
-          description: 'Administración de las cancelaciones de reservas.',
+          description: 'Consulta de las cancelaciones de reservas.',
         },
       },
       {
         path: 'comprobantes',
         loadComponent: () =>
-                   import('./features/vouchers/pages/voucher-list/voucher-list').then(
+          import('./features/vouchers/pages/voucher-list/voucher-list').then(
             (m) => m.VoucherList
           ),
         data: {
           title: 'Comprobantes',
-          description: 'Consulta de los comprobantes de las reservas.',
+          description: 'Emisión y consulta de los comprobantes de las reservas.',
         },
       },
     ],

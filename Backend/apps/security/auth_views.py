@@ -1,10 +1,10 @@
 
 import uuid
-
+import re
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import AccessToken
@@ -13,7 +13,7 @@ from django.db import transaction
 from django.utils import timezone
 from apps.security.serializers import RefreshSerializer
 from apps.common.status import RecordStatus
-from apps.security.models import RefreshToken
+from apps.security.models import RefreshToken, ResourceRole
 from apps.security.serializers import LoginSerializer, TokenPairSerializer
 from apps.security.tokens import generate_refresh_value, hash_token
 from apps.security.serializers import LogoutSerializer
@@ -234,3 +234,62 @@ class LogoutAPIView(APIView):
             )
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+_CONVERTER = re.compile(r"<[^>]+>")
+_NAMED_GROUP = re.compile(r"\(\?P<[^>]+>[^)]*\)")
+
+
+def to_client_path(route):
+    """
+    Traduce la ruta guardada en Resource a la forma que usa el frontend.
+
+    'api/clients/<int:pk>/'                  -> '/api/clients/:id/'
+    'api/product/packages/(?P<pk>[^/.]+)/$'  -> '/api/product/packages/:id/'
+    """
+    path = _CONVERTER.sub(":id", route)
+    path = _NAMED_GROUP.sub(":id", path)
+    path = path.replace("^", "").replace("$", "")
+    return "/" + path.lstrip("/")
+
+
+class PermissionsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        description=(
+            "Devuelve la matriz de permisos efectivos del usuario autenticado: "
+            "método, ruta y rol que concede cada operación."
+        ),
+        tags=["Autenticación"],
+    )
+    def get(self, request):
+        user = request.user
+
+        if getattr(user, "status", None) != RecordStatus.ACTIVE:
+            return Response({"permissions": []}, status=status.HTTP_200_OK)
+
+        grants = (
+            ResourceRole.objects.filter(
+                status=RecordStatus.ACTIVE,
+                resource__status=RecordStatus.ACTIVE,
+                role__status=RecordStatus.ACTIVE,
+                role__assignments__user=user,
+                role__assignments__status=RecordStatus.ACTIVE,
+            )
+            .select_related("resource", "role")
+            .distinct()
+            .order_by("resource__route", "resource__method", "role__name")
+        )
+
+        permissions = [
+            {
+                "method": grant.resource.method.upper(),
+                "path": to_client_path(grant.resource.route),
+                "role_id": grant.role_id,
+                "role_name": grant.role.name,
+            }
+            for grant in grants
+        ]
+
+        return Response({"permissions": permissions}, status=status.HTTP_200_OK)

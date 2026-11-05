@@ -27,6 +27,11 @@ export class Shell {
       icon: 'pi pi-chart-bar',
       routerLink: '/dashboard'
     },
+        {
+      label: 'Mi sesión',
+      icon: 'pi pi-user',
+      routerLink: '/perfil'
+    },
     {
       separator: true
     },
