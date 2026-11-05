@@ -1,9 +1,16 @@
 
 from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import IsAuthenticated
-
+from django.shortcuts import get_object_or_404
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from apps.security.auth_views import effective_permissions
 from apps.security.serializers import ProfileSerializer
-
+from rest_framework import viewsets
+from apps.common.status import RecordStatus
+from apps.security.models import ( Resource,ResourceRole,Role,RoleUser,User,)
+from apps.security.permissions import HasResourceAccess
+from apps.security.serializers import (ResourceRoleSerializer,ResourceSerializer, RoleSerializer, RoleUserSerializer, UserSerializer,)
 
 class ProfileAPIView(RetrieveUpdateAPIView):
     serializer_class = ProfileSerializer
@@ -13,26 +20,7 @@ class ProfileAPIView(RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
- 
-from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
 
-from apps.common.status import RecordStatus
-from apps.security.models import (
-    Resource,
-    ResourceRole,
-    Role,
-    RoleUser,
-    User,
-)
-from apps.security.permissions import HasResourceAccess
-from apps.security.serializers import (
-    ResourceRoleSerializer,
-    ResourceSerializer,
-    RoleSerializer,
-    RoleUserSerializer,
-    UserSerializer,
-)
 
 
 class SoftDeleteModelViewSet(viewsets.ModelViewSet):
@@ -51,6 +39,10 @@ class SoftDeleteModelViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         status_value = self.request.query_params.get("status")
 
+            
+        if status_value == "all":
+            return queryset
+
         if status_value:
             return queryset.filter(status=status_value)
 
@@ -65,6 +57,11 @@ class UserViewSet(SoftDeleteModelViewSet):
     queryset = User.objects.all().order_by("id")
     serializer_class = UserSerializer
 
+    @action(detail=True, methods=["get"], url_path="permissions")
+    def user_permissions(self, request, pk=None):
+        """Permisos efectivos de un usuario, activo o no."""
+        user = get_object_or_404(User, pk=pk)
+        return Response({"permissions": effective_permissions(user)})
 
 class RoleViewSet(SoftDeleteModelViewSet):
     queryset = Role.objects.all().order_by("id")

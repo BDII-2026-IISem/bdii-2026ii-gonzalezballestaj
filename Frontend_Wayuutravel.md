@@ -13335,3 +13335,3272 @@ print('\n'.join(sorted({p['method'] + ' ' + p['path'] for p in perms if 'cancel'
 ![](images/clipboard-4288256470.png)
 
 ![![](images/clipboard-2269127106.png)](images/clipboard-829290288.png)
+
+**ISS-10 · Administración RBAC**
+
+En esta etapa cierro la Fase II de Wayuutravel con la administración de la seguridad desde la propia aplicación. Hasta ahora la interfaz obedece la matriz de permisos, pero los usuarios, roles, recursos, asignaciones y concesiones solo se pueden cambiar desde el administrador de Django. Construiré cinco pantallas en un grupo nuevo del menú, «Seguridad», que leen y escriben esas tablas con la misma API del negocio, protegidas con sus permisos como las demás rutas. La pantalla de concesiones demuestra la idea central del RBAC: conceder un permiso es insertar una fila y retirarlo es dejarla inactiva, sin escribir código ni condicionar por el nombre del rol. Además, agregaré la consulta de permisos efectivos por usuario para diagnosticar rápidamente un 403, y verificaré todo con pruebas, compilaciones y los dos usuarios del sistema.
+
+#### Compartir la consulta de permisos efectivos
+
+La matriz de permisos de un usuario se calculaba dentro de la vista de `/api/auth/permissions/`. Como ahora también la necesita la administración de usuarios, la extraje a la función `effective_permissions(user)`. Las dos vistas la usan, así que la matriz que ve el usuario y la que ve el administrador salen de la misma consulta.
+
+```         
+nano apps/security/auth_views.py
+```
+
+**Remplazamos por:**
+
+``` python
+
+import uuid
+import re
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import AccessToken
+from drf_spectacular.utils import extend_schema
+from django.db import transaction
+from django.utils import timezone
+from apps.security.serializers import RefreshSerializer
+from apps.common.status import RecordStatus
+from apps.security.models import RefreshToken, ResourceRole
+from apps.security.serializers import LoginSerializer, TokenPairSerializer
+from apps.security.tokens import generate_refresh_value, hash_token
+from apps.security.serializers import LogoutSerializer
+
+User = get_user_model()
+
+
+def token_payload(user, raw_refresh):
+    access = AccessToken.for_user(user)
+    lifetime = int(
+        settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()
+    )
+
+    return {
+        "access": str(access),
+        "refresh": raw_refresh,
+        "token_type": "Bearer",
+        "access_expires_in": lifetime,
+    }
+
+
+def issue_refresh(user, family_id=None):
+    raw_refresh = generate_refresh_value()
+
+    stored = RefreshToken.objects.create(
+        user=user,
+        token_hash=hash_token(raw_refresh),
+        family_id=family_id or uuid.uuid4(),
+        expires_at=RefreshToken.default_expiry(),
+        status=RecordStatus.ACTIVE,
+    )
+
+    return stored, raw_refresh
+
+
+class LoginAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=LoginSerializer,
+        responses={200: TokenPairSerializer},
+        description=(
+            "Inicia sesión mediante username o email y devuelve "
+            "un access token y un refresh token."
+        ),
+        tags=["Autenticación"],
+    )
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        user = _find_user(data.get("username"), data.get("email"))
+
+        invalid = Response(
+            {"detail": "Credenciales inválidas."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+        if user is None or user.status != RecordStatus.ACTIVE:
+            return invalid
+
+        if not user.check_password(data["password"]):
+            return invalid
+
+        _stored, raw_refresh = issue_refresh(user)
+
+        return Response(
+            token_payload(user, raw_refresh),
+            status=status.HTTP_200_OK,
+        )
+
+
+def _find_user(username, email):
+    if username and email:
+        return User.objects.filter(
+            username=username,
+            email__iexact=email,
+        ).first()
+
+    if username:
+        return User.objects.filter(username=username).first()
+
+    if email:
+        return User.objects.filter(email__iexact=email).first()
+
+    return None
+
+class RefreshAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=RefreshSerializer,
+        responses={200: TokenPairSerializer},
+        description=(
+            "Renueva los tokens mediante un refresh token, "
+            "aplica rotación y revoca la familia si detecta reutilización."
+        ),
+        tags=["Autenticación"],
+    )
+    def post(self, request):
+        serializer = RefreshSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        raw_refresh = serializer.validated_data["refresh"]
+
+        invalid = Response(
+            {"detail": "Refresh token inválido o no vigente."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+        with transaction.atomic():
+            stored = (
+                RefreshToken.objects
+                .select_for_update()
+                .filter(token_hash=hash_token(raw_refresh))
+                .first()
+            )
+
+            if stored is None:
+                return invalid
+
+            # Un token reemplazado indica posible reutilización.
+            if (
+                stored.replaced_by_id is not None
+                or stored.status != RecordStatus.ACTIVE
+            ):
+                RefreshToken.objects.filter(
+                    family_id=stored.family_id
+                ).update(status=RecordStatus.INACTIVE)
+
+                return invalid
+
+            # Un token vencido no provoca la revocación de la familia.
+            if stored.expires_at <= timezone.now():
+                stored.status = RecordStatus.INACTIVE
+                stored.save(update_fields=["status"])
+                return invalid
+
+            # No se permite renovar la sesión de un usuario inactiv o.
+            if stored.user.status != RecordStatus.ACTIVE:
+                stored.status = RecordStatus.INACTIVE
+                stored.save(update_fields=["status"])
+                return invalid
+
+            # Emite el nuevo refresh dentro de la misma familia.
+            new_stored, new_raw_refresh = issue_refresh(
+                stored.user,
+                family_id=stored.family_id,
+            )
+
+            # Marca el token anterior como reemplazado.
+            stored.replaced_by = new_stored
+            stored.status = RecordStatus.INACTIVE
+            stored.save(
+                update_fields=["replaced_by", "status"]
+            )
+
+            payload = token_payload(
+                stored.user,
+                new_raw_refresh,
+            )
+
+        return Response(payload, status=status.HTTP_200_OK)
+
+class LogoutAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=LogoutSerializer,
+        responses={204: None, 401: None},
+        description=(
+            "Cierra la sesión invalidando el refresh token presentado. "
+            "Si detecta un token reemplazado, revoca su familia."
+        ),
+        tags=["Autenticación"],
+    )
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        raw_refresh = serializer.validated_data["refresh"]
+
+        invalid = Response(
+            {"detail": "Refresh token inválido."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+        with transaction.atomic():
+            stored = (
+                RefreshToken.objects
+                .select_for_update()
+                .filter(token_hash=hash_token(raw_refresh))
+                .first()
+            )
+
+            if stored is None:
+                return invalid
+
+            now = timezone.now()
+
+            # Un token ya reemplazado indica posible reutilización.
+            if stored.replaced_by_id is not None:
+                RefreshToken.objects.filter(
+                    family_id=stored.family_id
+                ).update(
+                    status=RecordStatus.INACTIVE,
+                    revoked_at=now,
+                )
+                return invalid
+
+            # Invalidar el refresh presentado.
+            stored.status = RecordStatus.INACTIVE
+            stored.revoked_at = now
+            stored.save(
+                update_fields=["status", "revoked_at"]
+            )
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+_CONVERTER = re.compile(r"<[^>]+>")
+_NAMED_GROUP = re.compile(r"\(\?P<[^>]+>[^)]*\)")
+
+
+def to_client_path(route):
+    """
+    Traduce la ruta guardada en Resource a la forma que usa el frontend.
+
+    'api/clients/<int:pk>/'                  -> '/api/clients/:id/'
+    'api/product/packages/(?P<pk>[^/.]+)/$'  -> '/api/product/packages/:id/'
+    """
+    path = _NAMED_GROUP.sub(":id", route)
+    path = _CONVERTER.sub(":id", path)
+    path = path.replace("^", "").replace("$", "")
+    return "/" + path.lstrip("/")
+
+
+def effective_permissions(user):
+    """Matriz de permisos efectivos: los mismos filtros que aplica HasResourceAccess."""
+    if getattr(user, "status", None) != RecordStatus.ACTIVE:
+        return []
+
+    grants = (
+        ResourceRole.objects.filter(
+            status=RecordStatus.ACTIVE,
+            resource__status=RecordStatus.ACTIVE,
+            role__status=RecordStatus.ACTIVE,
+            role__assignments__user=user,
+            role__assignments__status=RecordStatus.ACTIVE,
+        )
+        .select_related("resource", "role")
+        .distinct()
+        .order_by("resource__route", "resource__method", "role__name")
+    )
+
+    return [
+        {
+            "method": grant.resource.method.upper(),
+            "path": to_client_path(grant.resource.route),
+            "role_id": grant.role_id,
+            "role_name": grant.role.name,
+        }
+        for grant in grants
+    ]
+
+
+class PermissionsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        description=(
+            "Devuelve la matriz de permisos efectivos del usuario autenticado: "
+            "método, ruta y rol que concede cada operación."
+        ),
+        tags=["Autenticación"],
+    )
+    def get(self, request):
+        return Response(
+            {"permissions": effective_permissions(request.user)},
+            status=status.HTTP_200_OK,
+        )
+    def get(self, request):
+        user = request.user
+
+        if getattr(user, "status", None) != RecordStatus.ACTIVE:
+            return Response({"permissions": []}, status=status.HTTP_200_OK)
+
+        grants = (
+            ResourceRole.objects.filter(
+                status=RecordStatus.ACTIVE,
+                resource__status=RecordStatus.ACTIVE,
+                role__status=RecordStatus.ACTIVE,
+                role__assignments__user=user,
+                role__assignments__status=RecordStatus.ACTIVE,
+            )
+            .select_related("resource", "role")
+            .distinct()
+            .order_by("resource__route", "resource__method", "role__name")
+        )
+
+        permissions = [
+            {
+                "method": grant.resource.method.upper(),
+                "path": to_client_path(grant.resource.route),
+                "role_id": grant.role_id,
+                "role_name": grant.role.name,
+            }
+            for grant in grants
+        ]
+
+        return Response({"permissions": permissions}, status=status.HTTP_200_OK)
+```
+
+![](images/clipboard-3192306255.png)
+
+#### Agregar la consulta de permisos por usuario y el listado completo
+
+En las vistas de seguridad hice dos cambios. Primero, los listados aceptan `?status=all` para devolver también las filas inactivas: sin eso, una asignación o concesión retirada desaparecía y no se podía reactivar. Sin el parámetro, siguen devolviendo solo las activas. Segundo, agregué a la vista de usuarios la acción `GET /api/users/{id}/permissions/`, que devuelve la matriz efectiva de cualquier usuario envuelta en `{permissions: [...]}`; es la forma más rápida de diagnosticar un 403.
+
+```         
+nano apps/security/rbac_views.py
+```
+
+``` python
+
+from rest_framework.generics import RetrieveUpdateAPIView
+from rest_framework.permissions import IsAuthenticated
+from django.shortcuts import get_object_or_404
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from apps.security.auth_views import effective_permissions
+from apps.security.serializers import ProfileSerializer
+from rest_framework import viewsets
+from apps.common.status import RecordStatus
+from apps.security.models import ( Resource,ResourceRole,Role,RoleUser,User,)
+from apps.security.permissions import HasResourceAccess
+from apps.security.serializers import (ResourceRoleSerializer,ResourceSerializer, RoleSerializer, RoleUserSerializer, UserSerializer,)
+
+class ProfileAPIView(RetrieveUpdateAPIView):
+    serializer_class = ProfileSerializer
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_object(self):
+        return self.request.user
+
+
+
+
+class SoftDeleteModelViewSet(viewsets.ModelViewSet):
+    http_method_names = [
+        "get",
+        "post",
+        "put",
+        "patch",
+        "delete",
+        "head",
+        "options",
+    ]
+    permission_classes = [IsAuthenticated, HasResourceAccess]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        status_value = self.request.query_params.get("status")
+
+            
+        if status_value == "all":
+            return queryset
+
+        if status_value:
+            return queryset.filter(status=status_value)
+
+        return queryset.filter(status=RecordStatus.ACTIVE)
+
+    def perform_destroy(self, instance):
+        instance.status = RecordStatus.INACTIVE
+        instance.save()
+
+
+class UserViewSet(SoftDeleteModelViewSet):
+    queryset = User.objects.all().order_by("id")
+    serializer_class = UserSerializer
+
+    @action(detail=True, methods=["get"], url_path="permissions")
+    def user_permissions(self, request, pk=None):
+        """Permisos efectivos de un usuario, activo o no."""
+        user = get_object_or_404(User, pk=pk)
+        return Response({"permissions": effective_permissions(user)})
+
+class RoleViewSet(SoftDeleteModelViewSet):
+    queryset = Role.objects.all().order_by("id")
+    serializer_class = RoleSerializer
+
+
+class RoleUserViewSet(SoftDeleteModelViewSet):
+    queryset = RoleUser.objects.all().order_by("id")
+    serializer_class = RoleUserSerializer
+
+
+class ResourceViewSet(SoftDeleteModelViewSet):
+    queryset = Resource.objects.all().order_by("id")
+    serializer_class = ResourceSerializer
+
+
+class ResourceRoleViewSet(SoftDeleteModelViewSet):
+    queryset = ResourceRole.objects.all().order_by("id")
+    serializer_class = ResourceRoleSerializer
+   
+```
+
+**Verificamos:**
+
+```         
+python3 manage.py check
+```
+
+#### Registrar el recurso de la nueva consulta
+
+Como las vistas de seguridad también usan `HasResourceAccess`, la acción nueva necesita su propio recurso y una concesión al rol `admin`. Si no, el administrador recibiría 403 al consultarla.
+
+``` python
+python3 manage.py shell -c "
+from django.urls import resolve
+from apps.security.models import Resource, ResourceRole, Role
+from apps.common.status import RecordStatus as S
+
+route = resolve('/api/users/1/permissions/').route
+print('ruta resuelta:', route)
+
+resource, created = Resource.objects.get_or_create(
+    method='GET', route=route,
+    defaults={'name': 'GET ' + route, 'status': S.ACTIVE},
+)
+ResourceRole.objects.get_or_create(
+    resource=resource, role=Role.objects.get(name='admin'), defaults={'status': S.ACTIVE},
+)
+print('recurso creado:', created, '| id:', resource.id)
+"
+```
+
+#### Probar el backend de administración
+
+```         
+API=http://localhost:8000/api
+ADMIN=$(curl -s -X POST $API/auth/login/ -H "Content-Type: application/json" \
+  -d "{\"username\": \"gonzalez\", \"password\": \"$WT_PASS\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['access'])")
+SELLER=$(curl -s -X POST $API/auth/login/ -H "Content-Type: application/json" \
+  -d '{"username": "Rafael", "password": "Vendedor2026!"}' | python3 -c "import json,sys; print(json.load(sys.stdin)['access'])")
+check() { curl -s -o /dev/null -w "$1 → HTTP %{http_code}\n" "${@:2}"; }
+
+curl -s $API/users/3/permissions/ -H "Authorization: Bearer $ADMIN" | python3 -c "
+import json, sys
+perms = json.load(sys.stdin)['permissions']
+print('permisos de Rafael:', len(perms), '| roles:', sorted({p['roleName'] for p in perms}))
+print(perms[0])
+"
+
+for r in role-users resource-roles; do
+  curl -s "$API/$r/?status=all" -H "Authorization: Bearer $ADMIN" | python3 -c "
+import json, sys
+rows = json.load(sys.stdin)
+print('$r ?status=all:', len(rows), '| inactivas:', sum(1 for x in rows if x['status'] == 'inactive'))
+"
+done
+
+check "vendedor GET users           " $API/users/ -H "Authorization: Bearer $SELLER"
+check "vendedor GET users/3/permisos" $API/users/3/permissions/ -H "Authorization: Bearer $SELLER"
+```
+
+![](images/clipboard-3363793296.png)
+
+#### Declarar los modelos de seguridad
+
+Creé los modelos de las cinco tablas de seguridad con los campos reales de Wayuutravel, que difieren de la guía: los usuarios no tienen avatar pero sí nombre y apellido, los recursos guardan `name`, `method` y `route` (la ruta con el formato de Django), y las asignaciones y concesiones relacionan sus extremos con los campos `user`, `role` y `resource`. El modelo de lectura del usuario no declara contraseña: solo existe en el payload, y únicamente al crear. Para no confundirlo con el usuario de la sesión, este se llama `User` y el de la sesión sigue siendo `SessionUser`.
+
+```         
+ nano src/app/core/models/security.model.ts
+```
+
+``` typescript
+import type { HttpMethod, Status, Timestamps } from './api.model';
+
+/** Tabla users — /api/users/. La respuesta NUNCA trae password. */
+export interface User extends Timestamps {
+  id: number;
+  username: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: Status;
+}
+
+/** password es de solo escritura y viaja únicamente en el alta. */
+export interface UserPayload {
+  username: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: Status;
+  password?: string;
+}
+
+/** Tabla roles — /api/roles/. name es único. */
+export interface Role extends Timestamps {
+  id: number;
+  name: string;
+  description: string | null;
+  status: Status;
+}
+
+export interface RolePayload {
+  name: string;
+  description: string | null;
+  status: Status;
+}
+
+/** Tabla resources — /api/resources/. route usa el formato de Django; (method, route) es único. */
+export interface Resource extends Timestamps {
+  id: number;
+  name: string;
+  method: HttpMethod;
+  route: string;
+  status: Status;
+}
+
+export interface ResourcePayload {
+  name: string;
+  method: HttpMethod;
+  route: string;
+  status: Status;
+}
+
+/** Tabla role_users — /api/role-users/. A quién se le da un rol. */
+export interface RoleUser extends Timestamps {
+  id: number;
+  user: number;
+  role: number;
+  status: Status;
+}
+
+export interface RoleUserPayload {
+  user: number;
+  role: number;
+  status: Status;
+}
+
+/** Tabla resource_roles — /api/resource-roles/. ESTA fila es el permiso. */
+export interface ResourceRole extends Timestamps {
+  id: number;
+  resource: number;
+  role: number;
+  status: Status;
+}
+
+export interface ResourceRolePayload {
+  resource: number;
+  role: number;
+  status: Status;
+}
+```
+
+![](images/clipboard-2126219578.png)
+
+**Agregamos las opciones de estado al modelo base:**
+
+```         
+nano src/app/core/models/api.model.ts
+```
+
+**Al final del archivo, agregamos:**
+
+``` typescript
+
+/** Opciones de los selectores de estado: optionLabel="label" y optionValue="value". */
+export const STATUS_OPTIONS: Array<{ label: string; value: Status }> = [
+  { label: 'Activo', value: 'active' },
+  { label: 'Inactivo', value: 'inactive' },
+];
+```
+
+![](images/clipboard-3511005739.png)
+
+#### Crear las ayudas de métodos y rutas
+
+Creé `http-method.ts` con tres ayudas de presentación: la lista de los cinco métodos para el selector, el color de cada método en las etiquetas (lectura en azul, creación en verde, edición en amarillo y borrado en rojo) y `toClientPath`, que traduce la ruta de Django a la forma `/api/clients/:id/` con la misma regla que usa el backend, para mostrar los recursos de forma legible.
+
+```         
+nano src/app/core/utils/http-method.ts
+```
+
+``` typescript
+import type { HttpMethod } from '../models/api.model';
+
+/** Opciones del selector de método: el valor es el propio verbo. */
+export const HTTP_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+
+const SEVERITY: Record<HttpMethod, 'info' | 'success' | 'warn' | 'danger'> = {
+  GET: 'info',
+  POST: 'success',
+  PUT: 'warn',
+  PATCH: 'warn',
+  DELETE: 'danger',
+};
+
+/** Lectura informativa, creación en verde, edición en aviso y borrado en peligro. */
+export function methodSeverity(method?: string): 'info' | 'success' | 'warn' | 'danger' | 'secondary' {
+  return method && method in SEVERITY ? SEVERITY[method as HttpMethod] : 'secondary';
+}
+
+/**
+ * Misma traducción que el backend (to_client_path):
+ * 'api/product/packages/(?P<pk>[^/.]+)/$' → '/api/product/packages/:id/'
+ */
+export function toClientPath(route: string): string {
+  const path = route
+    .replace(/\(\?P<[^>]+>[^)]*\)/g, ':id')
+    .replace(/<[^>]+>/g, ':id')
+    .replace(/[\^$]/g, '');
+  return '/' + path.replace(/^\/+/, '');
+}
+```
+
+![](images/clipboard-369292456.png)
+
+#### Crear el cliente HTTP de administración
+
+Las cinco tablas de seguridad publican el mismo CRUD, así que escribí el cliente una sola vez en la clase abstracta `CrudService`, con listar, crear, actualizar con `PATCH` y desactivar con `DELETE`. El listado pide `?status=all` para incluir las filas inactivas y poder reactivarlas. Cada tabla tiene su servicio, que solo indica su endpoint; el de usuarios agrega la consulta de permisos efectivos de un usuario.
+
+```         
+mkdir -p src/app/features/admin/users/user-list nano src/app/features/admin/security-api.ts
+```
+
+``` typescript
+import { HttpClient } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import { Observable, map } from 'rxjs';
+
+import { environment } from '../../../environments/environment';
+import { EffectivePermission } from '../../core/models/auth.model';
+import {
+  Resource,
+  ResourcePayload,
+  ResourceRole,
+  ResourceRolePayload,
+  Role,
+  RolePayload,
+  RoleUser,
+  RoleUserPayload,
+  User,
+  UserPayload,
+} from '../../core/models/security.model';
+
+/** CRUD común de las cinco tablas de seguridad. endpoint va SIN barra final. */
+export abstract class CrudService<T, P> {
+  protected readonly http = inject(HttpClient);
+
+  protected constructor(protected readonly endpoint: string) {}
+
+  /** ?status=all incluye las filas inactivas, para poder reactivarlas. */
+  list(): Observable<T[]> {
+    return this.http.get<T[]>(`${this.endpoint}/`, { params: { status: 'all' } });
+  }
+
+  create(payload: P): Observable<T> {
+    return this.http.post<T>(`${this.endpoint}/`, payload);
+  }
+
+  update(id: number, payload: Partial<P>): Observable<T> {
+    return this.http.patch<T>(`${this.endpoint}/${id}/`, payload);
+  }
+
+  /** DELETE es baja lógica: 204 y la fila queda inactive. */
+  remove(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.endpoint}/${id}/`);
+  }
+}
+
+@Injectable({ providedIn: 'root' })
+export class UserApi extends CrudService<User, UserPayload> {
+  constructor() {
+    super(`${environment.apiUrl}/users`);
+  }
+
+  /** GET /api/users/{id}/permissions/: el cuerpo llega envuelto en permissions. */
+  permissions(id: number): Observable<EffectivePermission[]> {
+    return this.http
+      .get<{ permissions: EffectivePermission[] }>(`${this.endpoint}/${id}/permissions/`)
+      .pipe(map((response) => response.permissions));
+  }
+}
+
+@Injectable({ providedIn: 'root' })
+export class RoleApi extends CrudService<Role, RolePayload> {
+  constructor() {
+    super(`${environment.apiUrl}/roles`);
+  }
+}
+
+@Injectable({ providedIn: 'root' })
+export class ResourceApi extends CrudService<Resource, ResourcePayload> {
+  constructor() {
+    super(`${environment.apiUrl}/resources`);
+  }
+}
+
+@Injectable({ providedIn: 'root' })
+export class RoleUserApi extends CrudService<RoleUser, RoleUserPayload> {
+  constructor() {
+    super(`${environment.apiUrl}/role-users`);
+  }
+}
+
+@Injectable({ providedIn: 'root' })
+export class ResourceRoleApi extends CrudService<ResourceRole, ResourceRolePayload> {
+  constructor() {
+    super(`${environment.apiUrl}/resource-roles`);
+  }
+}
+```
+
+![](images/clipboard-2596732222.png)
+
+#### Crear la pantalla de usuarios
+
+Creé `UserList`, la primera pantalla de seguridad, con el mismo diseño de las pantallas de negocio. Lista los usuarios activos e inactivos con su nombre, correo y estado, y un buscador local. El formulario pide usuario, correo, nombre, apellido, estado y contraseña; la contraseña solo existe al crear: al editar se deshabilita y no viaja en el `PATCH`. Cada fila tiene cuatro acciones protegidas con su permiso: ver permisos, editar, desactivar o reactivar. «Ver permisos» abre un diálogo con la matriz efectiva del usuario (método, ruta y rol), que es la forma más rápida de diagnosticar por qué alguien recibe un 403.
+
+```         
+nano src/app/features/admin/users/user-list/user-list.ts
+```
+
+``` typescript
+import { Component, computed, inject, signal } from '@angular/core';
+import {
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
+import { FormsModule } from '@angular/forms';
+import { ConfirmationService } from 'primeng/api';
+
+import { ButtonModule } from 'primeng/button';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { PasswordModule } from 'primeng/password';
+import { SelectModule } from 'primeng/select';
+import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
+
+import { STATUS_OPTIONS, Status } from '../../../../core/models/api.model';
+import { EffectivePermission } from '../../../../core/models/auth.model';
+import { User, UserPayload } from '../../../../core/models/security.model';
+import { NotificationService } from '../../../../core/services/notification.service';
+import { filterRows } from '../../../../core/utils/filter-rows';
+import { methodSeverity } from '../../../../core/utils/http-method';
+import { toApiMessage } from '../../../../core/utils/to-api-message';
+import { HasPermission } from '../../../../shared/directives/has-permission';
+import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
+import { UserApi } from '../../security-api';
+
+@Component({
+  selector: 'app-user-list',
+  standalone: true,
+  host: { class: 'block' },
+  imports: [
+    FormsModule,
+    ReactiveFormsModule,
+    ButtonModule,
+    ConfirmDialogModule,
+    DialogModule,
+    InputTextModule,
+    PasswordModule,
+    SelectModule,
+    TableModule,
+    TagModule,
+    EmptyState,
+    PageHeader,
+    StatusTag,
+    HasPermission,
+  ],
+  templateUrl: './user-list.html',
+  styleUrl: './user-list.css',
+})
+export class UserList {
+  private readonly api = inject(UserApi);
+  private readonly notify = inject(NotificationService);
+  private readonly confirmation = inject(ConfirmationService);
+  private readonly fb = inject(NonNullableFormBuilder);
+
+  readonly statusOptions = STATUS_OPTIONS;
+  readonly methodSeverity = methodSeverity;
+
+  readonly rows = signal<User[]>([]);
+  readonly loading = signal(true);
+  readonly saving = signal(false);
+  readonly filter = signal('');
+
+  readonly dialogVisible = signal(false);
+  readonly editing = signal<User | null>(null);
+
+  readonly permissionsUser = signal<User | null>(null);
+  readonly permissions = signal<EffectivePermission[]>([]);
+  readonly permissionsLoading = signal(false);
+
+  readonly form = this.fb.group({
+    username: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(150)]],
+    email: ['', [Validators.required, Validators.email]],
+    firstName: [''],
+    lastName: [''],
+    password: ['', [Validators.required, Validators.minLength(8)]],
+    status: ['active' as Status, [Validators.required]],
+  });
+
+  /** computed: escribir en el buscador no genera peticiones. */
+  readonly visibleRows = computed(() =>
+    filterRows(this.rows(), this.filter(), (row) => [
+      row.username,
+      row.email,
+      row.firstName,
+      row.lastName,
+    ])
+  );
+
+  constructor() {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+
+    this.api.list().subscribe({
+      next: (rows) => {
+        this.rows.set(rows);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.notify.error('No fue posible cargar los usuarios.');
+      },
+    });
+  }
+
+  fullName(row: User): string {
+    return `${row.firstName} ${row.lastName}`.trim() || 'Sin nombre';
+  }
+
+  openCreate(): void {
+    this.editing.set(null);
+    this.resetForm(null);
+    this.dialogVisible.set(true);
+  }
+
+  openEdit(row: User): void {
+    this.editing.set(row);
+    this.resetForm(row);
+    this.dialogVisible.set(true);
+  }
+
+  /** Al editar, la contraseña se deshabilita: el PATCH no la lleva. */
+  private resetForm(row: User | null): void {
+    this.form.reset({
+      username: row?.username ?? '',
+      email: row?.email ?? '',
+      firstName: row?.firstName ?? '',
+      lastName: row?.lastName ?? '',
+      password: '',
+      status: row?.status ?? 'active',
+    });
+
+    if (row) {
+      this.form.controls.password.disable();
+    } else {
+      this.form.controls.password.enable();
+    }
+  }
+
+  submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const value = this.form.getRawValue();
+    const payload: UserPayload = {
+      username: value.username.trim(),
+      email: value.email.trim(),
+      firstName: value.firstName.trim(),
+      lastName: value.lastName.trim(),
+      status: value.status,
+    };
+
+    if (!this.editing()) {
+      payload.password = value.password;
+    }
+
+    this.save(payload);
+  }
+
+  private save(payload: UserPayload): void {
+    const current = this.editing();
+    this.saving.set(true);
+
+    const request = current
+      ? this.api.update(current.id, payload)
+      : this.api.create(payload);
+
+    request.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.dialogVisible.set(false);
+        this.notify.success(current ? 'Usuario actualizado.' : 'Usuario creado.');
+        this.load();
+      },
+      error: (error: unknown) => {
+        this.saving.set(false);
+        this.notify.error(toApiMessage(error), 'No se pudo guardar');
+      },
+    });
+  }
+
+  confirmDeactivate(row: User): void {
+    this.confirmation.confirm({
+      header: 'Confirmar desactivación',
+      message: `¿Desactivar al usuario "${row.username}"? No podrá iniciar sesión.`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Desactivar',
+      rejectLabel: 'Cancelar',
+      acceptButtonStyleClass: 'p-button-danger',
+      accept: () =>
+        this.api.remove(row.id).subscribe({
+          next: () => {
+            this.notify.success('Usuario desactivado.');
+            this.load();
+          },
+          error: (error: unknown) => this.notify.error(toApiMessage(error)),
+        }),
+    });
+  }
+
+  reactivate(row: User): void {
+    this.api.update(row.id, { status: 'active' }).subscribe({
+      next: () => {
+        this.notify.success('Usuario reactivado.');
+        this.load();
+      },
+      error: (error: unknown) => this.notify.error(toApiMessage(error)),
+    });
+  }
+
+  /** Qué filas sostienen a este usuario: la forma más rápida de diagnosticar un 403. */
+  openPermissions(row: User): void {
+    this.permissionsUser.set(row);
+    this.permissions.set([]);
+    this.permissionsLoading.set(true);
+
+    this.api.permissions(row.id).subscribe({
+      next: (rows) => {
+        this.permissions.set(rows);
+        this.permissionsLoading.set(false);
+      },
+      error: (error: unknown) => {
+        this.permissionsLoading.set(false);
+        this.notify.error(toApiMessage(error), 'No se pudieron leer los permisos');
+      },
+    });
+  }
+
+  closePermissions(visible: boolean): void {
+    if (!visible) {
+      this.permissionsUser.set(null);
+    }
+  }
+}
+```
+
+![](images/clipboard-1002708294.png)
+
+```         
+nano src/app/features/admin/users/user-list/user-list.html
+```
+
+``` html
+<div class="space-y-6">
+  <app-page-header
+    title="Usuarios"
+    description="Personas que pueden iniciar sesión en Wayuu Travel."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar por usuario, correo o nombre..."
+      aria-label="Buscar usuarios"
+      [ngModel]="filter()"
+      (ngModelChange)="filter.set($event)"
+    />
+
+    <ng-container *appHasPermission="'POST /api/users'">
+      <p-button label="Nuevo usuario" icon="pi pi-plus" (onClick)="openCreate()" />
+    </ng-container>
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">Cargando usuarios...</div>
+  } @else if (visibleRows().length === 0) {
+    <app-empty-state title="Sin usuarios" description="No se encontraron usuarios para mostrar." />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table [value]="visibleRows()" [paginator]="true" [rows]="10" [tableStyle]="{ 'min-width': '45rem' }">
+        <ng-template #header>
+          <tr>
+            <th>Usuario</th>
+            <th>Nombre</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-row>
+          <tr>
+            <td>
+              <p class="m-0 font-medium text-slate-800">{{ row.username }}</p>
+              <p class="m-0 text-xs text-slate-400">#{{ row.id }} · {{ row.email }}</p>
+            </td>
+            <td>{{ fullName(row) }}</td>
+            <td><app-status-tag [status]="row.status" /></td>
+            <td>
+              <div class="flex justify-center gap-1">
+                <ng-container *appHasPermission="'GET /api/users/:id/permissions'">
+                  <p-button
+                    icon="pi pi-key"
+                    severity="secondary"
+                    [text]="true"
+                    [rounded]="true"
+                    ariaLabel="Ver permisos"
+                    (onClick)="openPermissions(row)"
+                  />
+                </ng-container>
+
+                <ng-container *appHasPermission="'PATCH /api/users/:id'">
+                  <p-button
+                    icon="pi pi-pencil"
+                    severity="secondary"
+                    [text]="true"
+                    [rounded]="true"
+                    ariaLabel="Editar usuario"
+                    (onClick)="openEdit(row)"
+                  />
+
+                  @if (row.status === 'inactive') {
+                    <p-button
+                      icon="pi pi-replay"
+                      severity="success"
+                      [text]="true"
+                      [rounded]="true"
+                      ariaLabel="Reactivar usuario"
+                      (onClick)="reactivate(row)"
+                    />
+                  }
+                </ng-container>
+
+                @if (row.status === 'active') {
+                  <ng-container *appHasPermission="'DELETE /api/users/:id'">
+                    <p-button
+                      icon="pi pi-ban"
+                      severity="danger"
+                      [text]="true"
+                      [rounded]="true"
+                      ariaLabel="Desactivar usuario"
+                      (onClick)="confirmDeactivate(row)"
+                    />
+                  </ng-container>
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+
+<p-dialog
+  [header]="editing() ? 'Editar usuario' : 'Nuevo usuario'"
+  [modal]="true"
+  [visible]="dialogVisible()"
+  (visibleChange)="dialogVisible.set($event)"
+  [style]="{ width: '42rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <form [formGroup]="form" (ngSubmit)="submit()" class="grid gap-4 sm:grid-cols-2">
+    <div class="flex flex-col gap-2">
+      <label for="u-name" class="text-sm font-medium text-slate-700">Usuario *</label>
+      <input id="u-name" pInputText formControlName="username" class="w-full" />
+      @if (form.controls.username.touched && form.controls.username.invalid) {
+        <small class="text-red-600">Entre 3 y 150 caracteres.</small>
+      }
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="u-mail" class="text-sm font-medium text-slate-700">Correo *</label>
+      <input id="u-mail" type="email" pInputText formControlName="email" class="w-full" />
+      @if (form.controls.email.touched && form.controls.email.invalid) {
+        <small class="text-red-600">Ingresa un correo válido.</small>
+      }
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="u-first" class="text-sm font-medium text-slate-700">Nombre</label>
+      <input id="u-first" pInputText formControlName="firstName" class="w-full" />
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="u-last" class="text-sm font-medium text-slate-700">Apellido</label>
+      <input id="u-last" pInputText formControlName="lastName" class="w-full" />
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="u-pass" class="text-sm font-medium text-slate-700">
+        Contraseña {{ editing() ? '(sin cambios)' : '*' }}
+      </label>
+      <p-password inputId="u-pass" formControlName="password" [feedback]="false" [toggleMask]="true" [fluid]="true" />
+      @if (form.controls.password.touched && form.controls.password.invalid) {
+        <small class="text-red-600">Mínimo 8 caracteres.</small>
+      }
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="u-status" class="text-sm font-medium text-slate-700">Estado</label>
+      <p-select
+        inputId="u-status"
+        formControlName="status"
+        [options]="statusOptions"
+        optionLabel="label"
+        optionValue="value"
+        [fluid]="true"
+      />
+    </div>
+
+    <div class="flex justify-end gap-2 border-t border-slate-200 pt-4 sm:col-span-2">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" (onClick)="dialogVisible.set(false)" />
+      <p-button label="Guardar" icon="pi pi-check" type="submit" [loading]="saving()" [disabled]="saving()" />
+    </div>
+  </form>
+</p-dialog>
+
+<p-dialog
+  [header]="'Permisos de ' + (permissionsUser()?.username ?? '')"
+  [modal]="true"
+  [visible]="permissionsUser() !== null"
+  (visibleChange)="closePermissions($event)"
+  [style]="{ width: '42rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <p-table
+    data-testid="permisos"
+    [value]="permissions()"
+    [loading]="permissionsLoading()"
+    [paginator]="permissions().length > 10"
+    [rows]="10"
+  >
+    <ng-template #header>
+      <tr>
+        <th>Método</th>
+        <th>Ruta</th>
+        <th>Rol</th>
+      </tr>
+    </ng-template>
+
+    <ng-template #body let-row>
+      <tr>
+        <td><p-tag [value]="row.method" [severity]="methodSeverity(row.method)" [rounded]="true" /></td>
+        <td><code class="text-xs">{{ row.path }}</code></td>
+        <td class="text-sm text-slate-600">{{ row.roleName }}</td>
+      </tr>
+    </ng-template>
+
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="3" class="py-6 text-center text-slate-500">
+          Sin permisos: toda operación de negocio le responderá 403.
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</p-dialog>
+
+<p-confirmdialog />
+```
+
+![](images/clipboard-3960800106.png)
+
+```         
+: > src/app/features/admin/users/user-list/user-list.css
+```
+
+![](images/clipboard-2823172683.png)
+
+#### Conectar la ruta y el grupo Seguridad
+
+Agregué la ruta `/admin/usuarios` dentro del Shell, protegida con `permissionGuard` y la clave `GET /api/users`, y estrené en el menú el grupo «Seguridad». Las demás pantallas del grupo se agregan al construirlas.
+
+```         
+nano src/app/app.routes.ts
+```
+
+**Modificamos app.routes.ts:**
+
+```         
+import { Routes } from '@angular/router';
+
+import { authGuard } from './core/guards/auth-guard';
+import { authOnlyGuard } from './core/guards/auth-only-guard';
+import { guestGuard } from './core/guards/guest-guard';
+import { permissionGuard } from './core/guards/permission-guard';
+
+export const routes: Routes = [
+  {
+    path: 'construir',
+    loadComponent: () =>
+      import('./features/construir/construir').then((m) => m.Construir),
+  },
+  {
+    path: 'login',
+    title: 'Iniciar sesión · Wayuu Travel',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./features/auth/login/login').then((m) => m.Login),
+  },
+  {
+    path: '',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./layout/shell/shell').then((m) => m.Shell),
+    children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'dashboard',
+      },
+      {
+        path: 'dashboard',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+        data: {
+          permission: 'GET /api/sale/bookings',
+          title: 'Panel de control',
+          description: 'Actividad del día en Wayuu Travel.',
+        },
+      },
+      {
+        path: 'perfil',
+        canActivate: [authOnlyGuard],
+        loadComponent: () =>
+          import('./features/auth/profile/profile').then((m) => m.Profile),
+        data: {
+          title: 'Mi sesión',
+          description: 'Usuario, roles y permisos de la sesión actual.',
+        },
+      },
+      {
+        path: 'forbidden',
+        loadComponent: () =>
+          import('./features/auth/forbidden/forbidden').then((m) => m.Forbidden),
+        data: {
+          title: 'Acceso denegado',
+          description: 'Falta un permiso para abrir esta pantalla.',
+        },
+      },
+      {
+        path: 'clientes',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/clients/client-list/client-list').then(
+            (m) => m.ClientList
+          ),
+        data: {
+          permission: 'GET /api/clients',
+          title: 'Clientes',
+          description: 'Gestión de los clientes de Wayuu Travel.',
+        },
+      },
+      {
+        path: 'paquetes',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/packages/pages/package-list/package-list').then(
+            (m) => m.PackageList
+          ),
+        data: {
+          permission: 'GET /api/product/packages',
+          title: 'Paquetes turísticos',
+          description: 'Administración de los paquetes turísticos.',
+        },
+      },
+      {
+        path: 'salidas',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/departures/pages/departure-list/departure-list').then(
+            (m) => m.DepartureList
+          ),
+        data: {
+          permission: 'GET /api/product/departures',
+          title: 'Salidas',
+          description: 'Gestión de las salidas y fechas de los paquetes.',
+        },
+      },
+      {
+        path: 'proveedores',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/suppliers/pages/supplier-list/supplier-list').then(
+            (m) => m.SupplierList
+          ),
+        data: {
+          permission: 'GET /api/product/suppliers',
+          title: 'Proveedores',
+          description: 'Administración de los proveedores turísticos.',
+        },
+      },
+      {
+        path: 'reservas',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/bookings/booking-list/booking-list').then(
+            (m) => m.BookingList
+          ),
+        data: {
+          permission: 'GET /api/sale/bookings',
+          title: 'Reservas',
+          description: 'Gestión de las reservas de los viajeros.',
+        },
+      },
+      {
+        path: 'reservas/:id',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/bookings/booking-detail/booking-detail').then(
+            (m) => m.BookingDetail
+          ),
+        data: {
+          permission: 'GET /api/sale/bookings/:id',
+          title: 'Detalle de reserva',
+          description: 'Consulta detallada de una reserva turística.',
+        },
+      },
+      {
+        path: 'pagos',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/payments/payment-list/payment-list').then(
+            (m) => m.PaymentList
+          ),
+        data: {
+          permission: 'GET /api/sale/payments',
+          title: 'Pagos',
+          description: 'Pagos registrados y su reserva.',
+        },
+      },
+      {
+        path: 'cancelaciones',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/cancellations/pages/cancellation-list/cancellation-list').then(
+            (m) => m.CancellationList
+          ),
+        data: {
+          permission: 'GET /api/sale/cancellations',
+          title: 'Cancelaciones',
+          description: 'Consulta de las cancelaciones de reservas.',
+        },
+      },
+      {
+        path: 'comprobantes',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/vouchers/pages/voucher-list/voucher-list').then(
+            (m) => m.VoucherList
+          ),
+        data: {
+          permission: 'GET /api/sale/vouchers',
+          title: 'Comprobantes',
+          description: 'Emisión y consulta de los comprobantes de las reservas.',
+        },
+      },
+      {
+        path: 'admin/usuarios',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/admin/users/user-list/user-list').then(
+            (m) => m.UserList
+          ),
+        data: {
+          permission: 'GET /api/users',
+          title: 'Usuarios',
+          description: 'Personas que pueden iniciar sesión en Wayuu Travel.',
+        },
+      },
+    ],
+  },
+  {
+    path: '**',
+    redirectTo: 'dashboard',
+  },
+];
+```
+
+```         
+nano src/app/layout/shell/nav.config.ts
+```
+
+Al final del arreglo `NAV`, después del grupo «Gestión comercial» (antes del `];`), agregamos:
+
+```         
+  {
+    label: 'Seguridad',
+    items: [
+      { label: 'Usuarios', icon: 'pi pi-user-edit', routerLink: '/admin/usuarios', permission: 'GET /api/users' },
+    ],
+  },
+```
+
+![](images/clipboard-2415297662.png)
+
+realizamos las pruebas:\
+\
+![](images/clipboard-91904632.png)
+
+#### Crear la pantalla de roles
+
+Creé `RoleList`, que administra los roles: agrupaciones de permisos con nombre, descripción y estado. Sigue el mismo patrón de la pantalla de usuarios: tabla con buscador local, diálogo de alta y edición, y acciones de editar, desactivar y reactivar, protegidas con su permiso. El nombre se guarda en minúsculas, igual que los roles existentes (`admin` y `vendedor`), para evitar duplicados que solo difieran en mayúsculas. Un rol por sí solo no autoriza nada: sus permisos son las concesiones activas que tiene.
+
+```         
+mkdir -p src/app/features/admin/roles/role-list src/app/features/admin/resources/resource-list nano src/app/features/admin/roles/role-list/role-list.ts
+```
+
+``` typescript
+import { Component, computed, inject, signal } from '@angular/core';
+import {
+  FormsModule,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
+import { ConfirmationService } from 'primeng/api';
+
+import { ButtonModule } from 'primeng/button';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { SelectModule } from 'primeng/select';
+import { TableModule } from 'primeng/table';
+
+import { STATUS_OPTIONS, Status } from '../../../../core/models/api.model';
+import { Role, RolePayload } from '../../../../core/models/security.model';
+import { NotificationService } from '../../../../core/services/notification.service';
+import { filterRows } from '../../../../core/utils/filter-rows';
+import { toApiMessage } from '../../../../core/utils/to-api-message';
+import { HasPermission } from '../../../../shared/directives/has-permission';
+import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
+import { RoleApi } from '../../security-api';
+
+@Component({
+  selector: 'app-role-list',
+  standalone: true,
+  host: { class: 'block' },
+  imports: [
+    FormsModule,
+    ReactiveFormsModule,
+    ButtonModule,
+    ConfirmDialogModule,
+    DialogModule,
+    InputTextModule,
+    SelectModule,
+    TableModule,
+    EmptyState,
+    PageHeader,
+    StatusTag,
+    HasPermission,
+  ],
+  templateUrl: './role-list.html',
+  styleUrl: './role-list.css',
+})
+export class RoleList {
+  private readonly api = inject(RoleApi);
+  private readonly notify = inject(NotificationService);
+  private readonly confirmation = inject(ConfirmationService);
+  private readonly fb = inject(NonNullableFormBuilder);
+
+  readonly statusOptions = STATUS_OPTIONS;
+
+  readonly rows = signal<Role[]>([]);
+  readonly loading = signal(true);
+  readonly saving = signal(false);
+  readonly filter = signal('');
+
+  readonly dialogVisible = signal(false);
+  readonly editing = signal<Role | null>(null);
+
+  readonly form = this.fb.group({
+    name: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]],
+    description: ['', [Validators.maxLength(255)]],
+    status: ['active' as Status, [Validators.required]],
+  });
+
+  readonly visibleRows = computed(() =>
+    filterRows(this.rows(), this.filter(), (row) => [row.name, row.description])
+  );
+
+  constructor() {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+
+    this.api.list().subscribe({
+      next: (rows) => {
+        this.rows.set(rows);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.notify.error('No fue posible cargar los roles.');
+      },
+    });
+  }
+
+  openCreate(): void {
+    this.editing.set(null);
+    this.form.reset({ name: '', description: '', status: 'active' });
+    this.dialogVisible.set(true);
+  }
+
+  openEdit(row: Role): void {
+    this.editing.set(row);
+    this.form.reset({
+      name: row.name,
+      description: row.description ?? '',
+      status: row.status,
+    });
+    this.dialogVisible.set(true);
+  }
+
+  submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const value = this.form.getRawValue();
+    const payload: RolePayload = {
+      name: value.name.trim().toLowerCase(),
+      description: value.description.trim() || null,
+      status: value.status,
+    };
+
+    const current = this.editing();
+    this.saving.set(true);
+
+    const request = current
+      ? this.api.update(current.id, payload)
+      : this.api.create(payload);
+
+    request.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.dialogVisible.set(false);
+        this.notify.success(current ? 'Rol actualizado.' : 'Rol creado.');
+        this.load();
+      },
+      error: (error: unknown) => {
+        this.saving.set(false);
+        this.notify.error(toApiMessage(error), 'No se pudo guardar');
+      },
+    });
+  }
+
+  confirmDeactivate(row: Role): void {
+    this.confirmation.confirm({
+      header: 'Confirmar desactivación',
+      message: `¿Desactivar el rol "${row.name}"? Sus usuarios perderán los permisos que concede.`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Desactivar',
+      rejectLabel: 'Cancelar',
+      acceptButtonStyleClass: 'p-button-danger',
+      accept: () =>
+        this.api.remove(row.id).subscribe({
+          next: () => {
+            this.notify.success('Rol desactivado.');
+            this.load();
+          },
+          error: (error: unknown) => this.notify.error(toApiMessage(error)),
+        }),
+    });
+  }
+
+  reactivate(row: Role): void {
+    this.api.update(row.id, { status: 'active' }).subscribe({
+      next: () => {
+        this.notify.success('Rol reactivado.');
+        this.load();
+      },
+      error: (error: unknown) => this.notify.error(toApiMessage(error)),
+    });
+  }
+}
+```
+
+![](images/clipboard-3939721206.png)
+
+```         
+nano src/app/features/admin/roles/role-list/role-list.html
+```
+
+``` html
+<div class="space-y-6">
+  <app-page-header
+    title="Roles"
+    description="Agrupaciones de permisos que se asignan a los usuarios."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar por nombre o descripción..."
+      aria-label="Buscar roles"
+      [ngModel]="filter()"
+      (ngModelChange)="filter.set($event)"
+    />
+
+    <ng-container *appHasPermission="'POST /api/roles'">
+      <p-button label="Nuevo rol" icon="pi pi-plus" (onClick)="openCreate()" />
+    </ng-container>
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">Cargando roles...</div>
+  } @else if (visibleRows().length === 0) {
+    <app-empty-state title="Sin roles" description="No se encontraron roles para mostrar." />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table [value]="visibleRows()" [paginator]="true" [rows]="10" [tableStyle]="{ 'min-width': '40rem' }">
+        <ng-template #header>
+          <tr>
+            <th>Rol</th>
+            <th>Descripción</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-row>
+          <tr>
+            <td>
+              <p class="m-0 font-medium text-slate-800">{{ row.name }}</p>
+              <p class="m-0 text-xs text-slate-400">#{{ row.id }}</p>
+            </td>
+            <td>{{ row.description || '—' }}</td>
+            <td><app-status-tag [status]="row.status" /></td>
+            <td>
+              <div class="flex justify-center gap-1">
+                <ng-container *appHasPermission="'PATCH /api/roles/:id'">
+                  <p-button
+                    icon="pi pi-pencil"
+                    severity="secondary"
+                    [text]="true"
+                    [rounded]="true"
+                    ariaLabel="Editar rol"
+                    (onClick)="openEdit(row)"
+                  />
+
+                  @if (row.status === 'inactive') {
+                    <p-button
+                      icon="pi pi-replay"
+                      severity="success"
+                      [text]="true"
+                      [rounded]="true"
+                      ariaLabel="Reactivar rol"
+                      (onClick)="reactivate(row)"
+                    />
+                  }
+                </ng-container>
+
+                @if (row.status === 'active') {
+                  <ng-container *appHasPermission="'DELETE /api/roles/:id'">
+                    <p-button
+                      icon="pi pi-ban"
+                      severity="danger"
+                      [text]="true"
+                      [rounded]="true"
+                      ariaLabel="Desactivar rol"
+                      (onClick)="confirmDeactivate(row)"
+                    />
+                  </ng-container>
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+
+<p-dialog
+  [header]="editing() ? 'Editar rol' : 'Nuevo rol'"
+  [modal]="true"
+  [visible]="dialogVisible()"
+  (visibleChange)="dialogVisible.set($event)"
+  [style]="{ width: '36rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <form [formGroup]="form" (ngSubmit)="submit()" class="grid gap-4">
+    <div class="flex flex-col gap-2">
+      <label for="r-name" class="text-sm font-medium text-slate-700">Nombre *</label>
+      <input id="r-name" pInputText formControlName="name" class="w-full" placeholder="ej. guia" />
+      @if (form.controls.name.touched && form.controls.name.invalid) {
+        <small class="text-red-600">Entre 2 y 100 caracteres.</small>
+      }
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="r-desc" class="text-sm font-medium text-slate-700">Descripción</label>
+      <input id="r-desc" pInputText formControlName="description" class="w-full" />
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="r-status" class="text-sm font-medium text-slate-700">Estado</label>
+      <p-select
+        inputId="r-status"
+        formControlName="status"
+        [options]="statusOptions"
+        optionLabel="label"
+        optionValue="value"
+        [fluid]="true"
+      />
+    </div>
+
+    <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" (onClick)="dialogVisible.set(false)" />
+      <p-button label="Guardar" icon="pi pi-check" type="submit" [loading]="saving()" [disabled]="saving()" />
+    </div>
+  </form>
+</p-dialog>
+
+<p-confirmdialog />
+```
+
+![](images/clipboard-2953830368.png)
+
+```         
+: > src/app/features/admin/roles/role-list/role-list.css
+```
+
+![](images/clipboard-2552368099.png)
+
+#### Crear la pantalla de recursos
+
+Creé `ResourceList`, que administra los recursos: cada operación de la API, definida por un método y una ruta. La tabla muestra el método en una etiqueta de color, la ruta legible (por ejemplo, `/api/clients/:id/`) y, debajo, la ruta tal como la guarda Django, que es la que compara `HasResourceAccess`. Al crear o editar, la ruta debe escribirse con el formato de Django, igual que las existentes (por ejemplo, `api/clients/<int:pk>/`), porque si no coincide con la que resuelve Django, ninguna concesión sobre ese recurso tendrá efecto. El nombre del recurso se arma automáticamente con el método y la ruta, como los del seeder. El buscador filtra por método, ruta o nombre.
+
+```         
+nano src/app/features/admin/resources/resource-list/resource-list.ts
+```
+
+``` typescript
+import { Component, computed, inject, signal } from '@angular/core';
+import {
+  FormsModule,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
+import { ConfirmationService } from 'primeng/api';
+
+import { ButtonModule } from 'primeng/button';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { SelectModule } from 'primeng/select';
+import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
+
+import { HttpMethod, STATUS_OPTIONS, Status } from '../../../../core/models/api.model';
+import { Resource, ResourcePayload } from '../../../../core/models/security.model';
+import { NotificationService } from '../../../../core/services/notification.service';
+import { filterRows } from '../../../../core/utils/filter-rows';
+import { HTTP_METHODS, methodSeverity, toClientPath } from '../../../../core/utils/http-method';
+import { toApiMessage } from '../../../../core/utils/to-api-message';
+import { HasPermission } from '../../../../shared/directives/has-permission';
+import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
+import { ResourceApi } from '../../security-api';
+
+@Component({
+  selector: 'app-resource-list',
+  standalone: true,
+  host: { class: 'block' },
+  imports: [
+    FormsModule,
+    ReactiveFormsModule,
+    ButtonModule,
+    ConfirmDialogModule,
+    DialogModule,
+    InputTextModule,
+    SelectModule,
+    TableModule,
+    TagModule,
+    EmptyState,
+    PageHeader,
+    StatusTag,
+    HasPermission,
+  ],
+  templateUrl: './resource-list.html',
+  styleUrl: './resource-list.css',
+})
+export class ResourceList {
+  private readonly api = inject(ResourceApi);
+  private readonly notify = inject(NotificationService);
+  private readonly confirmation = inject(ConfirmationService);
+  private readonly fb = inject(NonNullableFormBuilder);
+
+  readonly statusOptions = STATUS_OPTIONS;
+  readonly methods = HTTP_METHODS;
+  readonly methodSeverity = methodSeverity;
+  readonly toClientPath = toClientPath;
+
+  readonly rows = signal<Resource[]>([]);
+  readonly loading = signal(true);
+  readonly saving = signal(false);
+  readonly filter = signal('');
+
+  readonly dialogVisible = signal(false);
+  readonly editing = signal<Resource | null>(null);
+
+  readonly form = this.fb.group({
+    method: ['GET' as HttpMethod, [Validators.required]],
+    // Formato de Django, sin barra inicial: api/clients/ o api/clients/<int:pk>/
+    route: ['', [Validators.required, Validators.pattern(/^api\//), Validators.maxLength(255)]],
+    status: ['active' as Status, [Validators.required]],
+  });
+
+  readonly visibleRows = computed(() =>
+    filterRows(this.rows(), this.filter(), (row) => [
+      row.method,
+      row.route,
+      toClientPath(row.route),
+      row.name,
+    ])
+  );
+
+  constructor() {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+
+    this.api.list().subscribe({
+      next: (rows) => {
+        this.rows.set(rows);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.notify.error('No fue posible cargar los recursos.');
+      },
+    });
+  }
+
+  openCreate(): void {
+    this.editing.set(null);
+    this.form.reset({ method: 'GET', route: '', status: 'active' });
+    this.dialogVisible.set(true);
+  }
+
+  openEdit(row: Resource): void {
+    this.editing.set(row);
+    this.form.reset({ method: row.method, route: row.route, status: row.status });
+    this.dialogVisible.set(true);
+  }
+
+  submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const value = this.form.getRawValue();
+    const route = value.route.trim();
+
+    const payload: ResourcePayload = {
+      name: `${value.method} ${route}`,
+      method: value.method,
+      route,
+      status: value.status,
+    };
+
+    const current = this.editing();
+    this.saving.set(true);
+
+    const request = current
+      ? this.api.update(current.id, payload)
+      : this.api.create(payload);
+
+    request.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.dialogVisible.set(false);
+        this.notify.success(current ? 'Recurso actualizado.' : 'Recurso creado.');
+        this.load();
+      },
+      error: (error: unknown) => {
+        this.saving.set(false);
+        this.notify.error(toApiMessage(error), 'No se pudo guardar');
+      },
+    });
+  }
+
+  confirmDeactivate(row: Resource): void {
+    this.confirmation.confirm({
+      header: 'Confirmar desactivación',
+      message: `¿Desactivar ${row.method} ${toClientPath(row.route)}? Nadie podrá ejecutar esa operación.`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Desactivar',
+      rejectLabel: 'Cancelar',
+      acceptButtonStyleClass: 'p-button-danger',
+      accept: () =>
+        this.api.remove(row.id).subscribe({
+          next: () => {
+            this.notify.success('Recurso desactivado.');
+            this.load();
+          },
+          error: (error: unknown) => this.notify.error(toApiMessage(error)),
+        }),
+    });
+  }
+
+  reactivate(row: Resource): void {
+    this.api.update(row.id, { status: 'active' }).subscribe({
+      next: () => {
+        this.notify.success('Recurso reactivado.');
+        this.load();
+      },
+      error: (error: unknown) => this.notify.error(toApiMessage(error)),
+    });
+  }
+}
+```
+
+![](images/clipboard-391986744.png)
+
+```         
+nano src/app/features/admin/resources/resource-list/resource-list.html
+```
+
+``` html
+<div class="space-y-6">
+  <app-page-header
+    title="Recursos"
+    description="Operaciones de la API, definidas por método y ruta."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar por método o ruta..."
+      aria-label="Buscar recursos"
+      [ngModel]="filter()"
+      (ngModelChange)="filter.set($event)"
+    />
+
+    <ng-container *appHasPermission="'POST /api/resources'">
+      <p-button label="Nuevo recurso" icon="pi pi-plus" (onClick)="openCreate()" />
+    </ng-container>
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">Cargando recursos...</div>
+  } @else if (visibleRows().length === 0) {
+    <app-empty-state title="Sin recursos" description="No se encontraron recursos para mostrar." />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table [value]="visibleRows()" [paginator]="true" [rows]="10" [tableStyle]="{ 'min-width': '45rem' }">
+        <ng-template #header>
+          <tr>
+            <th>Método</th>
+            <th>Ruta</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-row>
+          <tr>
+            <td><p-tag [value]="row.method" [severity]="methodSeverity(row.method)" [rounded]="true" /></td>
+            <td>
+              <code class="text-sm text-slate-800">{{ toClientPath(row.route) }}</code>
+              <p class="m-0 text-xs text-slate-400">#{{ row.id }} · {{ row.route }}</p>
+            </td>
+            <td><app-status-tag [status]="row.status" /></td>
+            <td>
+              <div class="flex justify-center gap-1">
+                <ng-container *appHasPermission="'PATCH /api/resources/:id'">
+                  <p-button
+                    icon="pi pi-pencil"
+                    severity="secondary"
+                    [text]="true"
+                    [rounded]="true"
+                    ariaLabel="Editar recurso"
+                    (onClick)="openEdit(row)"
+                  />
+
+                  @if (row.status === 'inactive') {
+                    <p-button
+                      icon="pi pi-replay"
+                      severity="success"
+                      [text]="true"
+                      [rounded]="true"
+                      ariaLabel="Reactivar recurso"
+                      (onClick)="reactivate(row)"
+                    />
+                  }
+                </ng-container>
+
+                @if (row.status === 'active') {
+                  <ng-container *appHasPermission="'DELETE /api/resources/:id'">
+                    <p-button
+                      icon="pi pi-ban"
+                      severity="danger"
+                      [text]="true"
+                      [rounded]="true"
+                      ariaLabel="Desactivar recurso"
+                      (onClick)="confirmDeactivate(row)"
+                    />
+                  </ng-container>
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+
+<p-dialog
+  [header]="editing() ? 'Editar recurso' : 'Nuevo recurso'"
+  [modal]="true"
+  [visible]="dialogVisible()"
+  (visibleChange)="dialogVisible.set($event)"
+  [style]="{ width: '40rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <form [formGroup]="form" (ngSubmit)="submit()" class="grid gap-4 sm:grid-cols-3">
+    <div class="flex flex-col gap-2">
+      <label for="res-method" class="text-sm font-medium text-slate-700">Método *</label>
+      <p-select inputId="res-method" formControlName="method" [options]="methods" [fluid]="true" />
+    </div>
+
+    <div class="flex flex-col gap-2 sm:col-span-2">
+      <label for="res-route" class="text-sm font-medium text-slate-700">Ruta de Django *</label>
+      <input id="res-route" pInputText formControlName="route" class="w-full" placeholder="api/clients/<int:pk>/" />
+      @if (form.controls.route.touched && form.controls.route.invalid) {
+        <small class="text-red-600">Debe empezar por api/ (sin barra inicial).</small>
+      }
+    </div>
+
+    <p class="m-0 rounded-lg bg-slate-50 p-3 text-xs text-slate-600 sm:col-span-3">
+      La ruta debe coincidir con la que resuelve Django, igual que las de esta tabla
+      (por ejemplo, <code>api/clients/&lt;int:pk&gt;/</code> o
+      <code>api/sale/bookings/(?P&lt;pk&gt;[^/.]+)/$</code>). Si no coincide, las concesiones sobre este recurso no tendrán efecto.
+    </p>
+
+    <div class="flex flex-col gap-2">
+      <label for="res-status" class="text-sm font-medium text-slate-700">Estado</label>
+      <p-select
+        inputId="res-status"
+        formControlName="status"
+        [options]="statusOptions"
+        optionLabel="label"
+        optionValue="value"
+        [fluid]="true"
+      />
+    </div>
+
+    <div class="flex items-end justify-end gap-2 sm:col-span-2">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" (onClick)="dialogVisible.set(false)" />
+      <p-button label="Guardar" icon="pi pi-check" type="submit" [loading]="saving()" [disabled]="saving()" />
+    </div>
+  </form>
+</p-dialog>
+
+<p-confirmdialog />
+```
+
+![](images/clipboard-2943556371.png)
+
+```         
+: > src/app/features/admin/resources/resource-list/resource-list.css
+```
+
+![](images/clipboard-1743856169.png)
+
+#### Conectar las rutas y el menú de roles y recursos
+
+```         
+nano src/app/app.routes.ts
+```
+
+Dentro de `children`, debajo del bloque de `admin/usuarios`, agregamos:
+
+``` typescript
+      {
+        path: 'admin/roles',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/admin/roles/role-list/role-list').then((m) => m.RoleList),
+        data: {
+          permission: 'GET /api/roles',
+          title: 'Roles',
+          description: 'Agrupaciones de permisos.',
+        },
+      },
+      {
+        path: 'admin/recursos',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/admin/resources/resource-list/resource-list').then(
+            (m) => m.ResourceList
+          ),
+        data: {
+          permission: 'GET /api/resources',
+          title: 'Recursos',
+          description: 'Operaciones de la API protegidas por el RBAC.',
+        },
+      },
+```
+
+![](images/clipboard-1881550857.png)
+
+```         
+nano src/app/layout/shell/nav.config.ts
+```
+
+**Agregamso:**
+
+``` typescript
+        { label: 'Roles', icon: 'pi pi-id-card', routerLink: '/admin/roles', permission: 'GET /api/roles' },
+      { label: 'Recursos', icon: 'pi pi-server', routerLink: '/admin/recursos', permission: 'GET /api/resources' },
+```
+
+![](images/clipboard-4153496011.png)
+
+#### Crear la pantalla de asignaciones
+
+Creé `RoleUserList`, que administra a quién se le da cada rol. Carga en paralelo las asignaciones, los usuarios y los roles, para mostrar nombres en lugar de números y para llenar los dos selectores del formulario, que solo ofrecen usuarios y roles activos y envían su `id`. Cada fila puede retirarse, lo que la deja inactiva, o reactivarse. Como cada pareja de usuario y rol es única, al asignar una pareja que ya existe el formulario no inserta otra fila: si estaba retirada, la reactiva, y si ya estaba activa, avisa.
+
+```         
+mkdir -p src/app/features/admin/role-users/role-user-list src/app/features/admin/resource-roles/resource-role-list 
+nano src/app/features/admin/role-users/role-user-list/role-user-list.ts
+```
+
+``` typescript
+import { Component, computed, inject, signal } from '@angular/core';
+import {
+  FormsModule,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
+import { ConfirmationService } from 'primeng/api';
+import { forkJoin } from 'rxjs';
+
+import { ButtonModule } from 'primeng/button';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { SelectModule } from 'primeng/select';
+import { TableModule } from 'primeng/table';
+
+import { Role, RoleUser, User } from '../../../../core/models/security.model';
+import { NotificationService } from '../../../../core/services/notification.service';
+import { filterRows } from '../../../../core/utils/filter-rows';
+import { toApiMessage } from '../../../../core/utils/to-api-message';
+import { HasPermission } from '../../../../shared/directives/has-permission';
+import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
+import { RoleApi, RoleUserApi, UserApi } from '../../security-api';
+
+@Component({
+  selector: 'app-role-user-list',
+  standalone: true,
+  host: { class: 'block' },
+  imports: [
+    FormsModule,
+    ReactiveFormsModule,
+    ButtonModule,
+    ConfirmDialogModule,
+    DialogModule,
+    InputTextModule,
+    SelectModule,
+    TableModule,
+    EmptyState,
+    PageHeader,
+    StatusTag,
+    HasPermission,
+  ],
+  templateUrl: './role-user-list.html',
+  styleUrl: './role-user-list.css',
+})
+export class RoleUserList {
+  private readonly api = inject(RoleUserApi);
+  private readonly userApi = inject(UserApi);
+  private readonly roleApi = inject(RoleApi);
+  private readonly notify = inject(NotificationService);
+  private readonly confirmation = inject(ConfirmationService);
+  private readonly fb = inject(NonNullableFormBuilder);
+
+  readonly rows = signal<RoleUser[]>([]);
+  readonly users = signal<User[]>([]);
+  readonly roles = signal<Role[]>([]);
+  readonly loading = signal(true);
+  readonly saving = signal(false);
+  readonly filter = signal('');
+  readonly dialogVisible = signal(false);
+
+  readonly form = this.fb.group({
+    user: [null as number | null, [Validators.required]],
+    role: [null as number | null, [Validators.required]],
+  });
+
+  /** Solo usuarios y roles activos se pueden asignar. */
+  readonly activeUsers = computed(() => this.users().filter((u) => u.status === 'active'));
+  readonly activeRoles = computed(() => this.roles().filter((r) => r.status === 'active'));
+
+  readonly visibleRows = computed(() =>
+    filterRows(this.rows(), this.filter(), (row) => [
+      this.userLabel(row.user),
+      this.roleLabel(row.role),
+    ])
+  );
+
+  constructor() {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+
+    forkJoin({
+      rows: this.api.list(),
+      users: this.userApi.list(),
+      roles: this.roleApi.list(),
+    }).subscribe({
+      next: ({ rows, users, roles }) => {
+        this.rows.set(rows);
+        this.users.set(users);
+        this.roles.set(roles);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.notify.error('No fue posible cargar las asignaciones.');
+      },
+    });
+  }
+
+  userLabel(id: number): string {
+    return this.users().find((u) => u.id === id)?.username ?? `#${id}`;
+  }
+
+  roleLabel(id: number): string {
+    return this.roles().find((r) => r.id === id)?.name ?? `#${id}`;
+  }
+
+  openCreate(): void {
+    this.form.reset({ user: null, role: null });
+    this.dialogVisible.set(true);
+  }
+
+  submit(): void {
+    const value = this.form.getRawValue();
+
+    if (!value.user || !value.role) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    // La pareja usuario + rol es única: reactivar en lugar de insertar otra fila.
+    const existing = this.rows().find((r) => r.user === value.user && r.role === value.role);
+
+    if (existing?.status === 'active') {
+      this.notify.warning('Ese usuario ya tiene ese rol.');
+      return;
+    }
+
+    if (existing) {
+      this.dialogVisible.set(false);
+      this.reactivate(existing);
+      return;
+    }
+
+    this.saving.set(true);
+
+    this.api.create({ user: value.user, role: value.role, status: 'active' }).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.dialogVisible.set(false);
+        this.notify.success('Rol asignado.');
+        this.load();
+      },
+      error: (error: unknown) => {
+        this.saving.set(false);
+        this.notify.error(toApiMessage(error), 'No se pudo asignar');
+      },
+    });
+  }
+
+  confirmRevoke(row: RoleUser): void {
+    this.confirmation.confirm({
+      header: 'Retirar rol',
+      message: `¿Retirar el rol "${this.roleLabel(row.role)}" a "${this.userLabel(row.user)}"?`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Retirar',
+      rejectLabel: 'Cancelar',
+      acceptButtonStyleClass: 'p-button-danger',
+      accept: () =>
+        this.api.remove(row.id).subscribe({
+          next: () => {
+            this.notify.success('Rol retirado.');
+            this.load();
+          },
+          error: (error: unknown) => this.notify.error(toApiMessage(error)),
+        }),
+    });
+  }
+
+  /** Retirar y volver a conceder es cambiar status: no se inserta otra fila. */
+  reactivate(row: RoleUser): void {
+    this.api.update(row.id, { status: 'active' }).subscribe({
+      next: () => {
+        this.notify.success('Asignación reactivada.');
+        this.load();
+      },
+      error: (error: unknown) => this.notify.error(toApiMessage(error)),
+    });
+  }
+}
+```
+
+![](images/clipboard-893756035.png)
+
+```         
+nano src/app/features/admin/role-users/role-user-list/role-user-list.html
+```
+
+``` html
+<div class="space-y-6">
+  <app-page-header
+    title="Asignaciones"
+    description="A quién se le da cada rol."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar por usuario o rol..."
+      aria-label="Buscar asignaciones"
+      [ngModel]="filter()"
+      (ngModelChange)="filter.set($event)"
+    />
+
+    <ng-container *appHasPermission="'POST /api/role-users'">
+      <p-button label="Asignar rol" icon="pi pi-plus" (onClick)="openCreate()" />
+    </ng-container>
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">Cargando asignaciones...</div>
+  } @else if (visibleRows().length === 0) {
+    <app-empty-state title="Sin asignaciones" description="No se encontraron asignaciones para mostrar." />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table [value]="visibleRows()" [paginator]="true" [rows]="10" [tableStyle]="{ 'min-width': '36rem' }">
+        <ng-template #header>
+          <tr>
+            <th>Usuario</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-row>
+          <tr>
+            <td class="font-medium text-slate-800">{{ userLabel(row.user) }}</td>
+            <td>{{ roleLabel(row.role) }}</td>
+            <td><app-status-tag [status]="row.status" /></td>
+            <td>
+              <div class="flex justify-center gap-1">
+                @if (row.status === 'active') {
+                  <ng-container *appHasPermission="'DELETE /api/role-users/:id'">
+                    <p-button
+                      label="Retirar"
+                      icon="pi pi-minus-circle"
+                      severity="danger"
+                      [text]="true"
+                      (onClick)="confirmRevoke(row)"
+                    />
+                  </ng-container>
+                } @else {
+                  <ng-container *appHasPermission="'PATCH /api/role-users/:id'">
+                    <p-button
+                      label="Reactivar"
+                      icon="pi pi-replay"
+                      severity="success"
+                      [text]="true"
+                      (onClick)="reactivate(row)"
+                    />
+                  </ng-container>
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+
+<p-dialog
+  header="Asignar rol"
+  [modal]="true"
+  [visible]="dialogVisible()"
+  (visibleChange)="dialogVisible.set($event)"
+  [style]="{ width: '34rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <form [formGroup]="form" (ngSubmit)="submit()" class="grid gap-4">
+    <div class="flex flex-col gap-2">
+      <label for="a-user" class="text-sm font-medium text-slate-700">Usuario *</label>
+      <p-select
+        inputId="a-user"
+        formControlName="user"
+        [options]="activeUsers()"
+        optionLabel="username"
+        optionValue="id"
+        [filter]="true"
+        placeholder="Selecciona un usuario"
+        [fluid]="true"
+        appendTo="body"
+      />
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="a-role" class="text-sm font-medium text-slate-700">Rol *</label>
+      <p-select
+        inputId="a-role"
+        formControlName="role"
+        [options]="activeRoles()"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="Selecciona un rol"
+        [fluid]="true"
+        appendTo="body"
+      />
+    </div>
+
+    @if (form.touched && form.invalid) {
+      <small class="text-red-600">Selecciona el usuario y el rol.</small>
+    }
+
+    <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" (onClick)="dialogVisible.set(false)" />
+      <p-button label="Asignar" icon="pi pi-check" type="submit" [loading]="saving()" [disabled]="saving()" />
+    </div>
+  </form>
+</p-dialog>
+
+<p-confirmdialog />
+```
+
+![](images/clipboard-1305061342.png)
+
+```         
+: > src/app/features/admin/role-users/role-user-list/role-user-list.css
+```
+
+![](images/clipboard-1455777458.png)
+
+`optionValue="id"` hace que el selector entregue el número y no el objeto completo; sin él, el `POST` viajaría como `{"role": {"id": 2, "name": "admin", …}}` y Django lo rechazaría.
+
+#### Crear la pantalla de concesiones
+
+Creé `ResourceRoleList`, la pantalla que administra el RBAC: cada fila es un permiso, la unión de un rol con un recurso. Carga en paralelo las concesiones, los roles y los recursos. La tabla muestra el método en una etiqueta de color, la ruta legible y el rol, y se puede filtrar por rol para ver de un vistazo todo lo que un rol puede hacer. Conceder un permiso es crear una fila con el rol y el recurso elegidos; retirarlo la deja inactiva, y reactivarla la vuelve a activar sin insertar otra. El selector de recursos muestra `MÉTODO /ruta` y envía el `id`. Ningún cambio necesita código: basta con escribir o desactivar una fila.
+
+```         
+nano src/app/features/admin/resource-roles/resource-role-list/resource-role-list.ts
+```
+
+``` typescript
+import { Component, computed, inject, signal } from '@angular/core';
+import {
+  FormsModule,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
+import { ConfirmationService } from 'primeng/api';
+import { forkJoin } from 'rxjs';
+
+import { ButtonModule } from 'primeng/button';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { SelectModule } from 'primeng/select';
+import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
+
+import { Resource, ResourceRole, Role } from '../../../../core/models/security.model';
+import { NotificationService } from '../../../../core/services/notification.service';
+import { filterRows } from '../../../../core/utils/filter-rows';
+import { methodSeverity, toClientPath } from '../../../../core/utils/http-method';
+import { toApiMessage } from '../../../../core/utils/to-api-message';
+import { HasPermission } from '../../../../shared/directives/has-permission';
+import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { StatusTag } from '../../../../shared/ui/status-tag/status-tag';
+import { ResourceApi, ResourceRoleApi, RoleApi } from '../../security-api';
+
+@Component({
+  selector: 'app-resource-role-list',
+  standalone: true,
+  host: { class: 'block' },
+  imports: [
+    FormsModule,
+    ReactiveFormsModule,
+    ButtonModule,
+    ConfirmDialogModule,
+    DialogModule,
+    InputTextModule,
+    SelectModule,
+    TableModule,
+    TagModule,
+    EmptyState,
+    PageHeader,
+    StatusTag,
+    HasPermission,
+  ],
+  templateUrl: './resource-role-list.html',
+  styleUrl: './resource-role-list.css',
+})
+export class ResourceRoleList {
+  private readonly api = inject(ResourceRoleApi);
+  private readonly roleApi = inject(RoleApi);
+  private readonly resourceApi = inject(ResourceApi);
+  private readonly notify = inject(NotificationService);
+  private readonly confirmation = inject(ConfirmationService);
+  private readonly fb = inject(NonNullableFormBuilder);
+
+  readonly methodSeverity = methodSeverity;
+
+  readonly rows = signal<ResourceRole[]>([]);
+  readonly roles = signal<Role[]>([]);
+  readonly resources = signal<Resource[]>([]);
+  readonly loading = signal(true);
+  readonly saving = signal(false);
+  readonly filter = signal('');
+  readonly roleFilter = signal<number | null>(null);
+  readonly dialogVisible = signal(false);
+
+  readonly form = this.fb.group({
+    role: [null as number | null, [Validators.required]],
+    resource: [null as number | null, [Validators.required]],
+  });
+
+  readonly activeRoles = computed(() => this.roles().filter((r) => r.status === 'active'));
+
+  /** MÉTODO /ruta para leer; el valor enviado es el id. */
+  readonly resourceOptions = computed(() =>
+    this.resources()
+      .filter((r) => r.status === 'active')
+      .map((r) => ({ id: r.id, label: `${r.method} ${toClientPath(r.route)}` }))
+  );
+
+  readonly visibleRows = computed(() => {
+    const role = this.roleFilter();
+    const rows = role ? this.rows().filter((r) => r.role === role) : this.rows();
+
+    return filterRows(rows, this.filter(), (row) => [
+      this.resourceLabel(row.resource),
+      this.roleLabel(row.role),
+    ]);
+  });
+
+  constructor() {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+
+    forkJoin({
+      rows: this.api.list(),
+      roles: this.roleApi.list(),
+      resources: this.resourceApi.list(),
+    }).subscribe({
+      next: ({ rows, roles, resources }) => {
+        this.rows.set(rows);
+        this.roles.set(roles);
+        this.resources.set(resources);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.notify.error('No fue posible cargar las concesiones.');
+      },
+    });
+  }
+
+  resource(id: number): Resource | undefined {
+    return this.resources().find((r) => r.id === id);
+  }
+
+  resourceMethod(id: number): string {
+    return this.resource(id)?.method ?? '—';
+  }
+
+  resourcePath(id: number): string {
+    const row = this.resource(id);
+    return row ? toClientPath(row.route) : `#${id}`;
+  }
+
+  resourceLabel(id: number): string {
+    return `${this.resourceMethod(id)} ${this.resourcePath(id)}`;
+  }
+
+  roleLabel(id: number): string {
+    return this.roles().find((r) => r.id === id)?.name ?? `#${id}`;
+  }
+
+  openCreate(): void {
+    this.form.reset({ role: this.roleFilter(), resource: null });
+    this.dialogVisible.set(true);
+  }
+
+  submit(): void {
+    const value = this.form.getRawValue();
+
+    if (!value.role || !value.resource) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    // La pareja rol + recurso es única: reactivar en lugar de insertar otra fila.
+    const existing = this.rows().find(
+      (r) => r.role === value.role && r.resource === value.resource
+    );
+
+    if (existing?.status === 'active') {
+      this.notify.warning('Ese rol ya tiene ese permiso.');
+      return;
+    }
+
+    if (existing) {
+      this.dialogVisible.set(false);
+      this.reactivate(existing);
+      return;
+    }
+
+    this.saving.set(true);
+
+    this.api.create({ role: value.role, resource: value.resource, status: 'active' }).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.dialogVisible.set(false);
+        this.notify.success('Permiso concedido.');
+        this.load();
+      },
+      error: (error: unknown) => {
+        this.saving.set(false);
+        this.notify.error(toApiMessage(error), 'No se pudo conceder');
+      },
+    });
+  }
+
+  confirmRevoke(row: ResourceRole): void {
+    this.confirmation.confirm({
+      header: 'Retirar permiso',
+      message: `¿Retirar ${this.resourceLabel(row.resource)} al rol "${this.roleLabel(row.role)}"?`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Retirar',
+      rejectLabel: 'Cancelar',
+      acceptButtonStyleClass: 'p-button-danger',
+      accept: () =>
+        this.api.remove(row.id).subscribe({
+          next: () => {
+            this.notify.success('Permiso retirado.');
+            this.load();
+          },
+          error: (error: unknown) => this.notify.error(toApiMessage(error)),
+        }),
+    });
+  }
+
+  reactivate(row: ResourceRole): void {
+    this.api.update(row.id, { status: 'active' }).subscribe({
+      next: () => {
+        this.notify.success('Permiso reactivado.');
+        this.load();
+      },
+      error: (error: unknown) => this.notify.error(toApiMessage(error)),
+    });
+  }
+}
+```
+
+![](images/clipboard-373134214.png)
+
+```         
+nano src/app/features/admin/resource-roles/resource-role-list/resource-role-list.html
+```
+
+``` html
+<div class="space-y-6">
+  <app-page-header
+    title="Concesiones"
+    description="Qué puede hacer cada rol. Cada fila es un permiso."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap gap-2">
+      <p-select
+        [options]="roles()"
+        optionLabel="name"
+        optionValue="id"
+        [ngModel]="roleFilter()"
+        (ngModelChange)="roleFilter.set($event)"
+        [showClear]="true"
+        placeholder="Todos los roles"
+        ariaLabel="Filtrar por rol"
+      />
+
+      <input
+        pInputText
+        type="text"
+        placeholder="Buscar por método o ruta..."
+        aria-label="Buscar concesiones"
+        [ngModel]="filter()"
+        (ngModelChange)="filter.set($event)"
+      />
+    </div>
+
+    <ng-container *appHasPermission="'POST /api/resource-roles'">
+      <p-button label="Conceder permiso" icon="pi pi-plus" (onClick)="openCreate()" />
+    </ng-container>
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">Cargando concesiones...</div>
+  } @else if (visibleRows().length === 0) {
+    <app-empty-state title="Sin concesiones" description="No se encontraron permisos para mostrar." />
+  } @else {
+    <p class="m-0 text-sm text-slate-500">{{ visibleRows().length }} concesiones</p>
+
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table [value]="visibleRows()" [paginator]="true" [rows]="10" [tableStyle]="{ 'min-width': '45rem' }">
+        <ng-template #header>
+          <tr>
+            <th>Método</th>
+            <th>Ruta</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-row>
+          <tr>
+            <td>
+              <p-tag
+                [value]="resourceMethod(row.resource)"
+                [severity]="methodSeverity(resourceMethod(row.resource))"
+                [rounded]="true"
+              />
+            </td>
+            <td><code class="text-xs">{{ resourcePath(row.resource) }}</code></td>
+            <td class="text-sm font-medium text-slate-700">{{ roleLabel(row.role) }}</td>
+            <td><app-status-tag [status]="row.status" /></td>
+            <td>
+              <div class="flex justify-center gap-1">
+                @if (row.status === 'active') {
+                  <ng-container *appHasPermission="'DELETE /api/resource-roles/:id'">
+                    <p-button
+                      label="Retirar"
+                      icon="pi pi-minus-circle"
+                      severity="danger"
+                      [text]="true"
+                      (onClick)="confirmRevoke(row)"
+                    />
+                  </ng-container>
+                } @else {
+                  <ng-container *appHasPermission="'PATCH /api/resource-roles/:id'">
+                    <p-button
+                      label="Reactivar"
+                      icon="pi pi-replay"
+                      severity="success"
+                      [text]="true"
+                      (onClick)="reactivate(row)"
+                    />
+                  </ng-container>
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+
+<p-dialog
+  header="Conceder permiso"
+  [modal]="true"
+  [visible]="dialogVisible()"
+  (visibleChange)="dialogVisible.set($event)"
+  [style]="{ width: '38rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <form [formGroup]="form" (ngSubmit)="submit()" class="grid gap-4">
+    <div class="flex flex-col gap-2">
+      <label for="g-role" class="text-sm font-medium text-slate-700">Rol *</label>
+      <p-select
+        inputId="g-role"
+        formControlName="role"
+        [options]="activeRoles()"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="Selecciona un rol"
+        [fluid]="true"
+        appendTo="body"
+      />
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="g-resource" class="text-sm font-medium text-slate-700">Recurso *</label>
+      <p-select
+        inputId="g-resource"
+        formControlName="resource"
+        [options]="resourceOptions()"
+        optionLabel="label"
+        optionValue="id"
+        [filter]="true"
+        placeholder="Busca MÉTODO /ruta"
+        [fluid]="true"
+        appendTo="body"
+      />
+    </div>
+
+    @if (form.touched && form.invalid) {
+      <small class="text-red-600">Selecciona el rol y el recurso.</small>
+    }
+
+    <div class="flex justify-end gap-2 border-t border-slate-200 pt-4">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" (onClick)="dialogVisible.set(false)" />
+      <p-button label="Conceder" icon="pi pi-check" type="submit" [loading]="saving()" [disabled]="saving()" />
+    </div>
+  </form>
+</p-dialog>
+
+<p-confirmdialog />
+```
+
+![](images/clipboard-4137709067.png)
+
+```         
+: > src/app/features/admin/resource-roles/resource-role-list/resource-role-list.css
+```
+
+![](images/clipboard-581397268.png)
+
+#### Conectar las rutas y el menú de las matrices
+
+Agregué las rutas `/admin/asignaciones` y `/admin/permisos`, protegidas con `GET /api/role-users` y `GET /api/resource-roles`, y completé el grupo «Seguridad» del menú con sus cinco entradas.
+
+```         
+nano src/app/app.routes.ts
+```
+
+**Agregamos:**
+
+``` typescript
+import { Routes } from '@angular/router';
+
+import { authGuard } from './core/guards/auth-guard';
+import { authOnlyGuard } from './core/guards/auth-only-guard';
+import { guestGuard } from './core/guards/guest-guard';
+import { permissionGuard } from './core/guards/permission-guard';
+
+export const routes: Routes = [
+  {
+    path: 'construir',
+    loadComponent: () =>
+      import('./features/construir/construir').then((m) => m.Construir),
+  },
+  {
+    path: 'login',
+    title: 'Iniciar sesión · WayuuTravel',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./features/auth/login/login').then((m) => m.Login),
+  },
+  {
+    path: '',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./layout/shell/shell').then((m) => m.Shell),
+    children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'dashboard',
+      },
+      {
+        path: 'dashboard',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+        data: {
+          permission: 'GET /api/sale/bookings',
+          title: 'Panel de control',
+          description: 'Actividad del día en Wayuu Travel.',
+        },
+      },
+      {
+        path: 'perfil',
+        canActivate: [authOnlyGuard],
+        loadComponent: () =>
+          import('./features/auth/profile/profile').then((m) => m.Profile),
+        data: {
+          title: 'Mi sesión',
+          description: 'Usuario, roles y permisos de la sesión actual.',
+        },
+      },
+      {
+        path: 'forbidden',
+        loadComponent: () =>
+          import('./features/auth/forbidden/forbidden').then((m) => m.Forbidden),
+        data: {
+          title: 'Acceso denegado',
+          description: 'Falta un permiso para abrir esta pantalla.',
+        },
+      },
+      {
+        path: 'clientes',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/clients/client-list/client-list').then(
+            (m) => m.ClientList
+          ),
+        data: {
+          permission: 'GET /api/clients',
+          title: 'Clientes',
+          description: 'Gestión de los clientes de WayuuTravel.',
+        },
+      },
+      {
+        path: 'paquetes',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/packages/pages/package-list/package-list').then(
+            (m) => m.PackageList
+          ),
+        data: {
+          permission: 'GET /api/product/packages',
+          title: 'Paquetes turísticos',
+          description: 'Administración de los paquetes turísticos.',
+        },
+      },
+      {
+        path: 'salidas',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/departures/pages/departure-list/departure-list').then(
+            (m) => m.DepartureList
+          ),
+        data: {
+          permission: 'GET /api/product/departures',
+          title: 'Salidas',
+          description: 'Gestión de las salidas y fechas de los paquetes.',
+        },
+      },
+      {
+        path: 'proveedores',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/suppliers/pages/supplier-list/supplier-list').then(
+            (m) => m.SupplierList
+          ),
+        data: {
+          permission: 'GET /api/product/suppliers',
+          title: 'Proveedores',
+          description: 'Administración de los proveedores turísticos.',
+        },
+      },
+      {
+        path: 'reservas',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/bookings/booking-list/booking-list').then(
+            (m) => m.BookingList
+          ),
+        data: {
+          permission: 'GET /api/sale/bookings',
+          title: 'Reservas',
+          description: 'Gestión de las reservas de los viajeros.',
+        },
+      },
+      {
+        path: 'reservas/:id',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/bookings/booking-detail/booking-detail').then(
+            (m) => m.BookingDetail
+          ),
+        data: {
+          permission: 'GET /api/sale/bookings/:id',
+          title: 'Detalle de reserva',
+          description: 'Consulta detallada de una reserva turística.',
+        },
+      },
+      {
+        path: 'pagos',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/payments/payment-list/payment-list').then(
+            (m) => m.PaymentList
+          ),
+        data: {
+          permission: 'GET /api/sale/payments',
+          title: 'Pagos',
+          description: 'Pagos registrados y su reserva.',
+        },
+      },
+      {
+        path: 'cancelaciones',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/cancellations/pages/cancellation-list/cancellation-list').then(
+            (m) => m.CancellationList
+          ),
+        data: {
+          permission: 'GET /api/sale/cancellations',
+          title: 'Cancelaciones',
+          description: 'Consulta de las cancelaciones de reservas.',
+        },
+      },
+      {
+        path: 'comprobantes',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/vouchers/pages/voucher-list/voucher-list').then(
+            (m) => m.VoucherList
+          ),
+        data: {
+          permission: 'GET /api/sale/vouchers',
+          title: 'Comprobantes',
+          description: 'Emisión y consulta de los comprobantes de las reservas.',
+        },
+      },
+      {
+        path: 'admin/usuarios',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/admin/users/user-list/user-list').then(
+            (m) => m.UserList
+          ),
+        data: {
+          permission: 'GET /api/users',
+          title: 'Usuarios',
+          description: 'Personas que pueden iniciar sesión en Wayuu Travel.',
+        },
+      },
+      {
+        path: 'admin/roles',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/admin/roles/role-list/role-list').then(
+            (m) => m.RoleList
+          ),
+        data: {
+          permission: 'GET /api/roles',
+          title: 'Roles',
+          description: 'Agrupaciones de permisos que se asignan a los usuarios.',
+        },
+      },
+      {
+        path: 'admin/recursos',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/admin/resources/resource-list/resource-list').then(
+            (m) => m.ResourceList
+          ),
+        data: {
+          permission: 'GET /api/resources',
+          title: 'Recursos',
+          description: 'Operaciones de la API protegidas por el RBAC.',
+        },
+      },
+      {
+        path: 'admin/asignaciones',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/admin/role-users/role-user-list/role-user-list').then(
+            (m) => m.RoleUserList
+          ),
+        data: {
+          permission: 'GET /api/role-users',
+          title: 'Asignaciones',
+          description: 'A quién se le da cada rol.',
+        },
+      },
+      {
+        path: 'admin/permisos',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/admin/resource-roles/resource-role-list/resource-role-list').then(
+            (m) => m.ResourceRoleList
+          ),
+        data: {
+          permission: 'GET /api/resource-roles',
+          title: 'Concesiones',
+          description: 'Qué puede hacer cada rol. Cada fila es un permiso.',
+        },
+      },
+    ],
+  },
+  {
+    path: '**',
+    redirectTo: 'dashboard',
+  },
+];
+```
+
+![](images/clipboard-534698736.png)
+
+```         
+nano src/app/layout/shell/nav.config.ts
+```
+
+**Agregamos:**
+
+``` typescript
+   export interface NavItem {
+  label: string;
+  icon: string;
+  routerLink: string;
+  /** Clave MÉTODO /api/recurso; sin permiso, la entrada siempre se ve. */
+  permission?: string;
+}
+
+export interface NavGroup {
+  /** Sin etiqueta: sus entradas van sueltas al principio del menú. */
+  label?: string;
+  items: NavItem[];
+}
+
+export const NAV: NavGroup[] = [
+  {
+    items: [
+      { label: 'Panel de control', icon: 'pi pi-chart-bar', routerLink: '/dashboard', permission: 'GET /api/sale/bookings' },
+      { label: 'Mi sesión', icon: 'pi pi-user', routerLink: '/perfil' },
+    ],
+  },
+  {
+    label: 'Gestión turística',
+    items: [
+      { label: 'Clientes', icon: 'pi pi-users', routerLink: '/clientes', permission: 'GET /api/clients' },
+      { label: 'Paquetes turísticos', icon: 'pi pi-map', routerLink: '/paquetes', permission: 'GET /api/product/packages' },
+      { label: 'Salidas', icon: 'pi pi-calendar', routerLink: '/salidas', permission: 'GET /api/product/departures' },
+      { label: 'Proveedores', icon: 'pi pi-truck', routerLink: '/proveedores', permission: 'GET /api/product/suppliers' },
+    ],
+  },
+  {
+    label: 'Gestión comercial',
+    items: [
+      { label: 'Reservas', icon: 'pi pi-book', routerLink: '/reservas', permission: 'GET /api/sale/bookings' },
+      { label: 'Pagos', icon: 'pi pi-wallet', routerLink: '/pagos', permission: 'GET /api/sale/payments' },
+      { label: 'Cancelaciones', icon: 'pi pi-times-circle', routerLink: '/cancelaciones', permission: 'GET /api/sale/cancellations' },
+      { label: 'Comprobantes', icon: 'pi pi-file', routerLink: '/comprobantes', permission: 'GET /api/sale/vouchers' },
+    ],
+  },
+  {
+    label: 'Seguridad',
+    items: [
+      { label: 'Usuarios', icon: 'pi pi-user-edit', routerLink: '/admin/usuarios', permission: 'GET /api/users' },
+      { label: 'Roles', icon: 'pi pi-id-card', routerLink: '/admin/roles', permission: 'GET /api/roles' },
+      { label: 'Recursos', icon: 'pi pi-server', routerLink: '/admin/recursos', permission: 'GET /api/resources' },
+      { label: 'Asignaciones', icon: 'pi pi-link', routerLink: '/admin/asignaciones', permission: 'GET /api/role-users' },
+      { label: 'Concesiones', icon: 'pi pi-key', routerLink: '/admin/permisos', permission: 'GET /api/resource-roles' },
+    ],
+  },
+];
+
+/** Filtra el catálogo con el predicado de la sesión; sin Angular, para poder probarlo. */
+export function visibleNav(can: (permission: string) => boolean): NavGroup[] {
+  return NAV.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !item.permission || can(item.permission)),
+  })).filter((group) => group.items.length > 0);
+}
+```
+
+![](images/clipboard-4222192094.png)
+
+**Realizamos las pruebas:**
+
+![![](images/clipboard-2729781087.png)](images/clipboard-3421521484.png)
+
+![![](images/clipboard-2776698724.png)](images/clipboard-1529926524.png)
+
+![](images/clipboard-53524096.png)

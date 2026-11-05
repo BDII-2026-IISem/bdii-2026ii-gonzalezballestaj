@@ -253,6 +253,35 @@ def to_client_path(route):
     return "/" + path.lstrip("/")
 
 
+def effective_permissions(user):
+    """Matriz de permisos efectivos: los mismos filtros que aplica HasResourceAccess."""
+    if getattr(user, "status", None) != RecordStatus.ACTIVE:
+        return []
+
+    grants = (
+        ResourceRole.objects.filter(
+            status=RecordStatus.ACTIVE,
+            resource__status=RecordStatus.ACTIVE,
+            role__status=RecordStatus.ACTIVE,
+            role__assignments__user=user,
+            role__assignments__status=RecordStatus.ACTIVE,
+        )
+        .select_related("resource", "role")
+        .distinct()
+        .order_by("resource__route", "resource__method", "role__name")
+    )
+
+    return [
+        {
+            "method": grant.resource.method.upper(),
+            "path": to_client_path(grant.resource.route),
+            "role_id": grant.role_id,
+            "role_name": grant.role.name,
+        }
+        for grant in grants
+    ]
+
+
 class PermissionsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -263,6 +292,11 @@ class PermissionsAPIView(APIView):
         ),
         tags=["Autenticación"],
     )
+    def get(self, request):
+        return Response(
+            {"permissions": effective_permissions(request.user)},
+            status=status.HTTP_200_OK,
+        )
     def get(self, request):
         user = request.user
 

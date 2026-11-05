@@ -13,7 +13,7 @@ export const routes: Routes = [
   },
   {
     path: 'login',
-    title: 'Iniciar sesión · Wayuu Travel',
+    title: 'Iniciar sesión · WayuuTravel',
     canActivate: [guestGuard],
     loadComponent: () =>
       import('./features/auth/login/login').then((m) => m.Login),
@@ -69,7 +69,7 @@ export const routes: Routes = [
         data: {
           permission: 'GET /api/clients',
           title: 'Clientes',
-          description: 'Gestión de los clientes de Wayuu Travel.',
+          description: 'Gestión de los clientes de WayuuTravel.',
         },
       },
       {
@@ -174,6 +174,71 @@ export const routes: Routes = [
           permission: 'GET /api/sale/vouchers',
           title: 'Comprobantes',
           description: 'Emisión y consulta de los comprobantes de las reservas.',
+        },
+      },
+      {
+        path: 'admin/usuarios',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/admin/users/user-list/user-list').then(
+            (m) => m.UserList
+          ),
+        data: {
+          permission: 'GET /api/users',
+          title: 'Usuarios',
+          description: 'Personas que pueden iniciar sesión en Wayuu Travel.',
+        },
+      },
+      {
+        path: 'admin/roles',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/admin/roles/role-list/role-list').then(
+            (m) => m.RoleList
+          ),
+        data: {
+          permission: 'GET /api/roles',
+          title: 'Roles',
+          description: 'Agrupaciones de permisos que se asignan a los usuarios.',
+        },
+      },
+      {
+        path: 'admin/recursos',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/admin/resources/resource-list/resource-list').then(
+            (m) => m.ResourceList
+          ),
+        data: {
+          permission: 'GET /api/resources',
+          title: 'Recursos',
+          description: 'Operaciones de la API protegidas por el RBAC.',
+        },
+      },
+      {
+        path: 'admin/asignaciones',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/admin/role-users/role-user-list/role-user-list').then(
+            (m) => m.RoleUserList
+          ),
+        data: {
+          permission: 'GET /api/role-users',
+          title: 'Asignaciones',
+          description: 'A quién se le da cada rol.',
+        },
+      },
+      {
+        path: 'admin/permisos',
+        canActivate: [permissionGuard],
+        loadComponent: () =>
+          import('./features/admin/resource-roles/resource-role-list/resource-role-list').then(
+            (m) => m.ResourceRoleList
+          ),
+        data: {
+          permission: 'GET /api/resource-roles',
+          title: 'Concesiones',
+          description: 'Qué puede hacer cada rol. Cada fila es un permiso.',
         },
       },
     ],

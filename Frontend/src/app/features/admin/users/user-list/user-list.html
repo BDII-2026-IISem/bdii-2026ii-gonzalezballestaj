@@ -1,0 +1,207 @@
+<div class="space-y-6">
+  <app-page-header
+    title="Usuarios"
+    description="Personas que pueden iniciar sesión en Wayuu Travel."
+  />
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <input
+      pInputText
+      type="text"
+      placeholder="Buscar por usuario, correo o nombre..."
+      aria-label="Buscar usuarios"
+      [ngModel]="filter()"
+      (ngModelChange)="filter.set($event)"
+    />
+
+    <ng-container *appHasPermission="'POST /api/users'">
+      <p-button label="Nuevo usuario" icon="pi pi-plus" (onClick)="openCreate()" />
+    </ng-container>
+  </div>
+
+  @if (loading()) {
+    <div class="py-10 text-center text-slate-500">Cargando usuarios...</div>
+  } @else if (visibleRows().length === 0) {
+    <app-empty-state title="Sin usuarios" description="No se encontraron usuarios para mostrar." />
+  } @else {
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <p-table [value]="visibleRows()" [paginator]="true" [rows]="10" [tableStyle]="{ 'min-width': '45rem' }">
+        <ng-template #header>
+          <tr>
+            <th>Usuario</th>
+            <th>Nombre</th>
+            <th>Estado</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-row>
+          <tr>
+            <td>
+              <p class="m-0 font-medium text-slate-800">{{ row.username }}</p>
+              <p class="m-0 text-xs text-slate-400">#{{ row.id }} · {{ row.email }}</p>
+            </td>
+            <td>{{ fullName(row) }}</td>
+            <td><app-status-tag [status]="row.status" /></td>
+            <td>
+              <div class="flex justify-center gap-1">
+                <ng-container *appHasPermission="'GET /api/users/:id/permissions'">
+                  <p-button
+                    icon="pi pi-key"
+                    severity="secondary"
+                    [text]="true"
+                    [rounded]="true"
+                    ariaLabel="Ver permisos"
+                    (onClick)="openPermissions(row)"
+                  />
+                </ng-container>
+
+                <ng-container *appHasPermission="'PATCH /api/users/:id'">
+                  <p-button
+                    icon="pi pi-pencil"
+                    severity="secondary"
+                    [text]="true"
+                    [rounded]="true"
+                    ariaLabel="Editar usuario"
+                    (onClick)="openEdit(row)"
+                  />
+
+                  @if (row.status === 'inactive') {
+                    <p-button
+                      icon="pi pi-replay"
+                      severity="success"
+                      [text]="true"
+                      [rounded]="true"
+                      ariaLabel="Reactivar usuario"
+                      (onClick)="reactivate(row)"
+                    />
+                  }
+                </ng-container>
+
+                @if (row.status === 'active') {
+                  <ng-container *appHasPermission="'DELETE /api/users/:id'">
+                    <p-button
+                      icon="pi pi-ban"
+                      severity="danger"
+                      [text]="true"
+                      [rounded]="true"
+                      ariaLabel="Desactivar usuario"
+                      (onClick)="confirmDeactivate(row)"
+                    />
+                  </ng-container>
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+</div>
+
+<p-dialog
+  [header]="editing() ? 'Editar usuario' : 'Nuevo usuario'"
+  [modal]="true"
+  [visible]="dialogVisible()"
+  (visibleChange)="dialogVisible.set($event)"
+  [style]="{ width: '42rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <form [formGroup]="form" (ngSubmit)="submit()" class="grid gap-4 sm:grid-cols-2">
+    <div class="flex flex-col gap-2">
+      <label for="u-name" class="text-sm font-medium text-slate-700">Usuario *</label>
+      <input id="u-name" pInputText formControlName="username" class="w-full" />
+      @if (form.controls.username.touched && form.controls.username.invalid) {
+        <small class="text-red-600">Entre 3 y 150 caracteres.</small>
+      }
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="u-mail" class="text-sm font-medium text-slate-700">Correo *</label>
+      <input id="u-mail" type="email" pInputText formControlName="email" class="w-full" />
+      @if (form.controls.email.touched && form.controls.email.invalid) {
+        <small class="text-red-600">Ingresa un correo válido.</small>
+      }
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="u-first" class="text-sm font-medium text-slate-700">Nombre</label>
+      <input id="u-first" pInputText formControlName="firstName" class="w-full" />
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="u-last" class="text-sm font-medium text-slate-700">Apellido</label>
+      <input id="u-last" pInputText formControlName="lastName" class="w-full" />
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="u-pass" class="text-sm font-medium text-slate-700">
+        Contraseña {{ editing() ? '(sin cambios)' : '*' }}
+      </label>
+      <p-password inputId="u-pass" formControlName="password" [feedback]="false" [toggleMask]="true" [fluid]="true" />
+      @if (form.controls.password.touched && form.controls.password.invalid) {
+        <small class="text-red-600">Mínimo 8 caracteres.</small>
+      }
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="u-status" class="text-sm font-medium text-slate-700">Estado</label>
+      <p-select
+        inputId="u-status"
+        formControlName="status"
+        [options]="statusOptions"
+        optionLabel="label"
+        optionValue="value"
+        [fluid]="true"
+      />
+    </div>
+
+    <div class="flex justify-end gap-2 border-t border-slate-200 pt-4 sm:col-span-2">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" type="button" (onClick)="dialogVisible.set(false)" />
+      <p-button label="Guardar" icon="pi pi-check" type="submit" [loading]="saving()" [disabled]="saving()" />
+    </div>
+  </form>
+</p-dialog>
+
+<p-dialog
+  [header]="'Permisos de ' + (permissionsUser()?.username ?? '')"
+  [modal]="true"
+  [visible]="permissionsUser() !== null"
+  (visibleChange)="closePermissions($event)"
+  [style]="{ width: '42rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  <p-table
+    data-testid="permisos"
+    [value]="permissions()"
+    [loading]="permissionsLoading()"
+    [paginator]="permissions().length > 10"
+    [rows]="10"
+  >
+    <ng-template #header>
+      <tr>
+        <th>Método</th>
+        <th>Ruta</th>
+        <th>Rol</th>
+      </tr>
+    </ng-template>
+
+    <ng-template #body let-row>
+      <tr>
+        <td><p-tag [value]="row.method" [severity]="methodSeverity(row.method)" [rounded]="true" /></td>
+        <td><code class="text-xs">{{ row.path }}</code></td>
+        <td class="text-sm text-slate-600">{{ row.roleName }}</td>
+      </tr>
+    </ng-template>
+
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="3" class="py-6 text-center text-slate-500">
+          Sin permisos: toda operación de negocio le responderá 403.
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</p-dialog>
+
+<p-confirmdialog />
